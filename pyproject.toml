@@ -1,0 +1,69 @@
+[project]
+name = "ai-footprint"
+version = "0.1.0"
+description = "Local footprint and exposure audit for AI coding CLIs: Claude Code, Codex CLI, OpenCode."
+authors = [
+    { name = "mykalseceng", email = "165401443+mykalseceng@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+ai-footprint = "ai_footprint.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.10.9,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "hypothesis==6.169.0",
+    "pytest==9.1.1",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "UP", "C90", "D", "PL", "S", "SIM", "RUF", "TID",
+    "PTH", "N", "ANN", "T20", "BLE", "RET", "ARG", "PERF", "FBT",
+]
+ignore = [
+    "D105",    # magic methods are self-describing
+    "D107",    # __init__ args are documented on the class
+    "PLR2004", # small literal thresholds read better inline than as named constants
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.pylint]
+# Positional parameters stay <= 5 by convention; keyword-only options may add a few more.
+max-args = 8
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "D", "ANN", "S108", "PLR0913", "FBT"]  # fake secrets are fixtures
+"tests/rsa_test_key.py" = ["E501"]
+"src/ai_footprint/cli.py" = ["T201"]
+"scripts/layout_check.py" = ["T201"]  # a CLI: its output is the report
+# Inline SVG path data and CSS are long single-line literals by nature.
+"src/ai_footprint/report_html.py" = ["E501"]
+
+[tool.ty.environment]
+python-version = "3.13"
+
+[tool.ty.rules]
+possibly-unresolved-reference = "error"
+unused-ignore-comment = "error"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
