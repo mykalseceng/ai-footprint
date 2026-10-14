@@ -100,13 +100,22 @@ def confirmed_settings(ctx: Context, binary: str, rows: list[tuple[Setting, str]
 def search_file(
     path: Path, markers: Iterable[str], *, chunk_bytes: int = SEARCH_CHUNK_BYTES
 ) -> dict[str, bool]:
-    """Report which markers occur in ``path``, reading it in overlapping chunks.
+    """Report which markers occur in ``path`` (a file, or every file under a directory).
 
     The file is read rather than memory-mapped. macOS kills a process with SIGKILL when it
     faults in a page of a signed binary whose hash does not match the code signature, and
     Bun-built executables such as OpenCode ship such pages. Plain reads are not checked.
     """
     result = dict.fromkeys(markers, False)
+    if path.is_dir():
+        for file in sorted(p for p in path.rglob("*") if p.is_file()):
+            found = search_file(
+                file, [m for m, ok in result.items() if not ok], chunk_bytes=chunk_bytes
+            )
+            result.update({m: True for m, ok in found.items() if ok})
+            if all(result.values()):
+                break
+        return result
     needles = {marker: marker.encode() for marker in result}
     overlap = max((len(n) for n in needles.values()), default=1) - 1
     tail = b""

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ai_footprint import __version__, accounts, daemons, hostscan, rules, validate
-from ai_footprint.collectors import claude, codex, opencode
+from ai_footprint.collectors import claude, codex, opencode, pi
 from ai_footprint.collectors.common import Claim, Context
 from ai_footprint.host import collect_host
 from ai_footprint.model import AuditReport, ToolPresence, ToolReport
@@ -38,6 +38,7 @@ TOOLS: dict[str, ToolSpec] = {
         ToolSpec(
             opencode.NAME, opencode.DISPLAY, opencode.collect, opencode.detect, opencode.CLAIMS
         ),
+        ToolSpec(pi.NAME, pi.DISPLAY, pi.collect, pi.detect, pi.CLAIMS),
     )
 }
 

@@ -386,7 +386,61 @@ def opencode(ctx: Context, report: ToolReport, facts: dict[str, Any]) -> list[Ac
     return notes
 
 
-COLLECTORS = {"claude": claude, "codex": codex, "opencode": opencode}
+def pi(ctx: Context, report: ToolReport, facts: dict[str, Any]) -> list[AccountNote]:
+    """Account evidence for pi: analytics settings, sharing, and whether logout revokes."""
+    settings = facts.get("settings", {})
+    binary = report.binaries[0].resolved if report.binaries else ""
+    viewer = ctx.binary_has(binary, ["https://pi.dev/session/"]) if binary else {}
+    notes = [
+        _note(
+            "data",
+            f"enableAnalytics = {settings.get('enableAnalytics', 'not set')}; "
+            f"enableInstallTelemetry = {settings.get('enableInstallTelemetry', 'not set')}.",
+            "~/.pi/agent/settings.json",
+            concern=bool(settings.get("enableAnalytics")),
+        )
+    ]
+    if viewer.get("https://pi.dev/session/"):
+        notes.append(
+            _note(
+                "data",
+                "/share uploads a session to a gist and links the viewer at "
+                "https://pi.dev/session/ (PI_SHARE_VIEWER_URL overrides the viewer).",
+                "pi binary",
+            )
+        )
+    notes.append(
+        _note(
+            "revoke",
+            "Whether pi's /logout revokes anything at the provider is not something this audit "
+            "can observe. Revoke at each provider: sign out of all devices in ChatGPT security "
+            "settings and delete API keys in each provider's console.",
+            "pi credential model",
+        )
+    )
+    now = datetime.datetime.now(datetime.UTC).isoformat()
+    idle = sorted(
+        {
+            f"{cred.provider} (last refreshed before {token.expires_at[:10]})"
+            for cred in report.credentials
+            for token in cred.tokens
+            if token.field == "access" and token.expires_at and token.expires_at < now
+        }
+    )
+    if idle:
+        notes.append(
+            _note(
+                "detect",
+                f"Stored logins that pi has not refreshed recently: {', '.join(idle)}. Their "
+                "refresh tokens have no recorded expiry, and nothing local records use elsewhere.",
+                "access-token expiry fields",
+                concern=True,
+            )
+        )
+    return notes
+
+
+COLLECTORS = {"claude": claude, "codex": codex, "opencode": opencode, "pi": pi}
 
 
 def collect(ctx: Context, report: ToolReport, facts: dict[str, Any]) -> list[AccountNote]:

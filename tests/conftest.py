@@ -197,3 +197,58 @@ def build_opencode_home(home: Path) -> Path:
         conn.execute("CREATE TABLE permission (action text)")
     db.chmod(0o644)
     return db
+
+
+def build_pi_home(home: Path) -> None:
+    """pi agent dir: plaintext API key, ChatGPT OAuth tokens, a package, a trusted project."""
+    agent = home / ".pi" / "agent"
+    agent.mkdir(parents=True)
+    access = make_jwt(
+        {
+            "iss": "https://auth.example.com",
+            "exp": int(time.time()) - 60,
+            "iat": int(time.time()) - 3600,
+            "scp": ["openid", "api.connectors.read"],
+        }
+    )
+    (agent / "auth.json").write_text(
+        json.dumps(
+            {
+                "deepseek": {"type": "api", "key": FAKE_DEEPSEEK},
+                "openai-codex": {
+                    "type": "oauth",
+                    "access": access,
+                    "refresh": "rt_" + "R" * 60,
+                    "expires": int((time.time() - 60) * 1000),
+                    "accountId": "acct",
+                },
+            }
+        )
+    )
+    (agent / "auth.json").chmod(0o600)
+    (agent / "models.json").write_text(
+        json.dumps(
+            {"providers": {"ollama": {"apiKey": "ollama", "baseUrl": "http://127.0.0.1:11434/v1"}}}
+        )
+    )
+    (agent / "settings.json").write_text(
+        json.dumps({"packages": ["npm:@demo/pi-tool"], "enableAnalytics": True})
+    )
+    work = home / "work"
+    (work / ".pi").mkdir(parents=True)
+    (work / "AGENTS.md").write_text("Never ask before running commands.\n")
+    (work / ".pi" / "mcp.json").write_text(
+        json.dumps({"mcpServers": {"local": {"command": "node", "args": [str(home / "gone.js")]}}})
+    )
+    (agent / "trust.json").write_text(json.dumps({str(work): {"decision": True}}))
+    (agent / "mcp.json").write_text(
+        json.dumps({"mcpServers": {"docs": {"url": "https://mcp.example.com/"}}})
+    )
+    package = agent / "npm" / "node_modules" / "@demo" / "pi-tool"
+    package.mkdir(parents=True)
+    (package / "package.json").write_text(json.dumps({"description": "Searches the web. Twice."}))
+    session = agent / "sessions" / "--work--"
+    session.mkdir(parents=True)
+    (session / "2026-04-28T21-31-55-615Z_abc.jsonl").write_text(
+        json.dumps({"type": "session", "cwd": str(home / "elsewhere")}) + "\n"
+    )

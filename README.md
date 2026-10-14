@@ -1,7 +1,7 @@
 # ai-footprint
 
 Audits what local AI coding tools leave on your machine and what that exposes. It covers
-Claude Code, Codex CLI and OpenCode.
+Claude Code, Codex CLI, OpenCode and pi.
 
 The report is a narrative, not a list of rated findings. It states what an attacker gets
 from each position: holding a stolen token, running code as you, steering the model through
@@ -56,7 +56,7 @@ uv run ai-footprint --validate             # verify probes, fix commands, tool c
 uv run ai-footprint claude --live          # opt-in network checks (see below)
 ```
 
-Tool names are `claude`, `codex` and `opencode`. Naming a tool that is not installed is an
+Tool names are `claude`, `codex`, `opencode` and `pi`. Naming a tool that is not installed is an
 error that lists what is installed. Without a terminal (scripts, CI, agents) and without
 names, every installed tool is audited.
 
