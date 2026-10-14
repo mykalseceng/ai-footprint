@@ -23,7 +23,7 @@ from ai_footprint.model import HostFact, ProcessInfo, ToolReport
 from ai_footprint.system import System
 
 SECRET_ENV = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.IGNORECASE)
-TOOL_WORDS = ("claude", "codex", "opencode", "anthropic", "openai", "cursor")
+TOOL_WORDS = ("claude", "codex", "opencode", "pi-coding-agent", "anthropic", "openai", "cursor")
 TCC_SERVICES = {
     "kTCCServiceSystemPolicyAllFiles": "Full Disk Access",
     "kTCCServiceAccessibility": "Accessibility (control the computer)",
@@ -508,6 +508,7 @@ DATA_ROOTS = {
     "claude": (".claude",),
     "codex": (".codex",),
     "opencode": (".local/share/opencode", ".config/opencode"),
+    "pi": (".pi/agent",),
 }
 
 

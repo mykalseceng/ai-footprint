@@ -411,6 +411,19 @@ def _plaintext_fix(report: ToolReport) -> Fix:
                 FixCommand("opencode auth logout", help_probe=("opencode", "auth", "logout")),
             ],
         )
+    if report.name == "pi":
+        return Fix(
+            "Remove provider credentials you no longer use",
+            [
+                FixCommand(
+                    "Run /logout for the provider in pi, or delete its entry from "
+                    "~/.pi/agent/auth.json",
+                    manual=True,
+                    markers=('"auth.json"',),
+                    marker_tool="pi",
+                )
+            ],
+        )
     return Fix(
         "Keep credentials in the OS credential store",
         [FixCommand("Prefer OAuth login stored in the Keychain over keys in files", manual=True)],
@@ -479,7 +492,7 @@ def rule_autostart(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             report,
             "autostart",
             Lens.CODE,
-            f"{report.display_name} runs code automatically from {len(auto)} places "
+            f"{report.display_name} runs code automatically from {plural(len(auto), 'place')} "
             f"({_join_words(_kind_counts(auto))}). Each is a file you can write, so anything "
             "running as you can hide a persistent payload there.",
             evidence=[f"{e.kind}: {e.name} → {e.detail[:120]}" for e in auto[:12]],
@@ -639,6 +652,11 @@ def _dangling_fix(report: ToolReport, name: str, source: str, home: Path) -> Fix
             "Remove the server entry",
             [FixCommand(f"codex mcp remove {_q(name)}", help_probe=("codex", "mcp", "remove"))],
         )
+    if report.name == "pi":
+        return Fix(
+            "Remove the server entry",
+            [FixCommand(f"pi mcp remove {_q(name)}", help_probe=("pi", "mcp", "remove"))],
+        )
     return Fix(
         "Remove the server entry",
         [FixCommand(f"Delete mcp.{name} from the opencode config", manual=True)],
@@ -771,6 +789,8 @@ FOLDER_CARRIERS = (
     ".claude/settings.json",
     ".claude/settings.local.json",
     ".codex/config.toml",
+    ".pi/settings.json",
+    ".pi/mcp.json",
 )
 
 
@@ -808,6 +828,13 @@ def rule_trust(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
 
 
 def _trust_fix(report: ToolReport) -> FixCommand:
+    if report.name == "pi":
+        return FixCommand(
+            "Set those projects' decision to false in ~/.pi/agent/trust.json, or delete the entry",
+            manual=True,
+            markers=("trust.json",),
+            marker_tool="pi",
+        )
     if report.name == "codex":
         return FixCommand(
             'Set trust_level = "untrusted" for those [projects."…"] entries in '

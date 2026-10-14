@@ -23,6 +23,7 @@ from tests.conftest import (
     build_claude_home,
     build_codex_home,
     build_opencode_home,
+    build_pi_home,
 )
 
 
@@ -47,6 +48,7 @@ def audited(open_home: Path) -> tuple[AuditReport, list, str]:
     build_claude_home(open_home)
     access = build_codex_home(open_home)
     build_opencode_home(open_home)
+    build_pi_home(open_home)
     system = QuietFakeSystem(other_users=("guest",))
     audit, checklist = run_audit(system=system, home=open_home, scan=True, workers=1)
     return audit, checklist, access
@@ -72,6 +74,11 @@ def test_expected_exposures_for_each_tool(audited):
         "codex:token-reach",
         "opencode:creds-readable",
         "opencode:creds-plaintext",
+        "pi:creds-plaintext",
+        "pi:instructions",
+        "pi:token-reach",
+        "pi:trust",
+        "pi:dangling",
         "host:other-accounts",
     } <= ids(audit)
 
