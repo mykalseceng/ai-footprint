@@ -13,9 +13,10 @@ from typing import Any
 
 from ai_footprint.collectors import claude as claude_cli
 from ai_footprint.collectors import codex as codex_cli
+from ai_footprint.collectors import pi as pi_cli
 from ai_footprint.collectors.common import Context, load_json
 from ai_footprint.model import AccountNote, ToolReport
-from ai_footprint.surface import when
+from ai_footprint.surface import join, when
 from ai_footprint.tokens import iso_time
 
 MAX_LOG_BYTES = 400 * 1024 * 1024
@@ -359,38 +360,61 @@ def opencode(ctx: Context, report: ToolReport, facts: dict[str, Any]) -> list[Ac
         _note(
             "revoke",
             "Whether `opencode auth logout` revokes anything at the provider is not something "
-            "this audit can observe. Revoke at each provider: sign out of all sessions at "
-            "claude.ai and in ChatGPT security settings, and delete API keys in each "
-            "provider's console.",
+            f"this audit can observe. {_revoke_advice(providers)}",
             "OpenCode credential model",
         ),
     ]
+    return notes + _unused_logins(report)
+
+
+REVOKE_STEPS = {
+    "Anthropic": "sign out of all sessions at claude.ai",
+    "OpenAI": "sign out of all devices in ChatGPT security settings",
+}
+
+
+def _revoke_advice(providers: list[str]) -> str:
+    """Where to revoke each stored provider credential."""
+    steps = [REVOKE_STEPS[p] for p in providers if p in REVOKE_STEPS]
+    keys = [p for p in providers if p not in REVOKE_STEPS]
+    if keys:
+        steps.append(f"delete each API key in its provider's console ({join(keys)})")
+    return f"Revoke at each provider: {'; '.join(steps)}." if steps else ""
+
+
+def _unused_logins(report: ToolReport) -> list[AccountNote]:
+    """Stored logins whose access token expired and was never replaced on disk."""
     now = datetime.datetime.now(datetime.UTC).isoformat()
-    idle = [
-        f"{cred.provider} (last refreshed before {token.expires_at[:10]})"
-        for cred in report.credentials
-        for token in cred.tokens
-        if token.field == "access" and token.expires_at and token.expires_at < now
-    ]
-    if idle:
-        notes.append(
-            _note(
-                "detect",
-                "Stored logins that OpenCode has not refreshed recently: "
-                f"{', '.join(sorted(set(idle)))}. Their refresh tokens have no recorded "
-                "expiry, and nothing local records use elsewhere.",
-                "access-token expiry fields",
-                concern=True,
-            )
+    stale = sorted(
+        {
+            f"{cred.provider} access token"
+            + (f" issued {token.issued_at[:10]}," if token.issued_at else "")
+            + f" expired {token.expires_at[:10]}"
+            for cred in report.credentials
+            for token in cred.tokens
+            if token.field == "access" and token.expires_at and token.expires_at < now
+        }
+    )
+    if not stale:
+        return []
+    return [
+        _note(
+            "detect",
+            f"Stored {report.display_name} logins whose access token expired and was not "
+            f"replaced: {'; '.join(stale)}. Their refresh tokens have no recorded expiry.",
+            "access-token issue and expiry claims",
+            concern=True,
         )
-    return notes
+    ]
 
 
 def pi(ctx: Context, report: ToolReport, facts: dict[str, Any]) -> list[AccountNote]:
     """Account evidence for pi: analytics settings, sharing, and whether logout revokes."""
     settings = facts.get("settings", {})
     binary = report.binaries[0].resolved if report.binaries else ""
-    viewer = ctx.binary_has(binary, ["https://pi.dev/session/"]) if binary else {}
+    viewer_url = pi_cli.ENDPOINT_MARKERS["pi.dev"]
+    viewer = ctx.binary_has(binary, [viewer_url]) if binary else {}
+    providers = sorted({c.provider for c in report.credentials})
     notes = [
         _note(
             "data",
@@ -400,12 +424,12 @@ def pi(ctx: Context, report: ToolReport, facts: dict[str, Any]) -> list[AccountN
             concern=bool(settings.get("enableAnalytics")),
         )
     ]
-    if viewer.get("https://pi.dev/session/"):
+    if viewer.get(viewer_url):
         notes.append(
             _note(
                 "data",
-                "/share uploads a session to a gist and links the viewer at "
-                "https://pi.dev/session/ (PI_SHARE_VIEWER_URL overrides the viewer).",
+                f"/share uploads a session to a gist and links the viewer at {viewer_url} "
+                "(PI_SHARE_VIEWER_URL overrides the viewer).",
                 "pi binary",
             )
         )
@@ -413,31 +437,11 @@ def pi(ctx: Context, report: ToolReport, facts: dict[str, Any]) -> list[AccountN
         _note(
             "revoke",
             "Whether pi's /logout revokes anything at the provider is not something this audit "
-            "can observe. Revoke at each provider: sign out of all devices in ChatGPT security "
-            "settings and delete API keys in each provider's console.",
+            f"can observe. {_revoke_advice(providers)}",
             "pi credential model",
         )
     )
-    now = datetime.datetime.now(datetime.UTC).isoformat()
-    idle = sorted(
-        {
-            f"{cred.provider} (last refreshed before {token.expires_at[:10]})"
-            for cred in report.credentials
-            for token in cred.tokens
-            if token.field == "access" and token.expires_at and token.expires_at < now
-        }
-    )
-    if idle:
-        notes.append(
-            _note(
-                "detect",
-                f"Stored logins that pi has not refreshed recently: {', '.join(idle)}. Their "
-                "refresh tokens have no recorded expiry, and nothing local records use elsewhere.",
-                "access-token expiry fields",
-                concern=True,
-            )
-        )
-    return notes
+    return notes + _unused_logins(report)
 
 
 COLLECTORS = {"claude": claude, "codex": codex, "opencode": opencode, "pi": pi}

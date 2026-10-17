@@ -11,18 +11,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ai_footprint.fsinfo import describe, mode_string, owner_name, tree_stats
+from ai_footprint.fsinfo import describe, mode_string, owner_name, readable_by_others, tree_stats
 from ai_footprint.model import (
     Artifact,
     BinaryInfo,
     Category,
+    Credential,
     Endpoint,
     FingerprintItem,
     Setting,
     ToolPresence,
 )
 from ai_footprint.system import System
+from ai_footprint.tokens import inspect_token
 
+AD_HOC = "ad-hoc signed (no signing identity)"
 HOST_RE = re.compile(rb"https?://([a-z0-9][a-z0-9.-]*\.[a-z]{2,})(?=[/:\"'\s?)\\]|$)")
 INTERPRETERS = frozenset({"node", "python", "python3", "bun", "deno", "uv", "npx", "uvx"})
 SHELLS = frozenset({"bash", "sh", "zsh", "/bin/bash", "/bin/sh", "/bin/zsh"})
@@ -195,11 +198,65 @@ def binary_info(system: System, path: str, *, version: str = "") -> BinaryInfo:
             info.writable_dirs.append(str(directory))
     if system.has_probe("codesign"):
         result = system.run("codesign", ["-dv", "--verbose=2", str(resolved)])
-        authorities = re.findall(r"^Authority=(.+)$", result.stderr, re.MULTILINE)
+        info.signer = signer(result.stderr)
         team = re.search(r"^TeamIdentifier=(.+)$", result.stderr, re.MULTILINE)
-        info.signer = authorities[0] if authorities else "unsigned or not a Mach-O binary"
-        info.team_id = team.group(1) if team else ""
+        info.team_id = team.group(1) if team and team.group(1) != "not set" else ""
     return info
+
+
+def signer(codesign_output: str) -> str:
+    """Who signed a binary, from ``codesign -dv`` output: an authority, ad-hoc, or unsigned."""
+    authorities = re.findall(r"^Authority=(.+)$", codesign_output, re.MULTILINE)
+    if authorities:
+        return authorities[0]
+    if re.search(r"^Signature=adhoc$", codesign_output, re.MULTILINE):
+        return AD_HOC
+    return "unsigned or not a Mach-O binary"
+
+
+def provider_credential(
+    ctx: Context,
+    entry: dict[str, Any],
+    *,
+    tool: str,
+    provider: str,
+    store: str,
+    path: Path,
+    fingerprints: dict[str, str],
+    label: str,
+) -> Credential:
+    """A provider login or key stored as ``{type, access, refresh, key, expires}``.
+
+    Args:
+        ctx: Collector inputs.
+        entry: The stored entry.
+        tool: Tool id.
+        provider: Provider name as shown in the report.
+        store: How the entry is stored, e.g. ``plaintext file``.
+        path: File holding the entry.
+        fingerprints: Known credential fingerprints, extended with this entry's values.
+        label: How a copy of a value found elsewhere is named, e.g. ``pi openai``.
+    """
+    cred = Credential(
+        tool,
+        provider,
+        store,
+        str(path),
+        f"{entry.get('type', '?')} credential; file mode {mode_string(path.stat().st_mode)}",
+        readable_by_others=readable_by_others(path),
+    )
+    for name in ("access", "refresh", "key"):
+        value = entry.get(name)
+        if isinstance(value, str) and value:
+            info = inspect_token(
+                name,
+                value,
+                now=ctx.now,
+                expires_at=entry.get("expires") if name == "access" else None,
+            )
+            cred.tokens.append(info)
+            fingerprints.setdefault(info.fingerprint, f"{label} {name}")
+    return cred
 
 
 def _dir_writable(mode: int) -> bool:

@@ -165,7 +165,7 @@ def render_summary(audit: AuditReport, style: Style, outputs: list[tuple[str, st
         if not tool.installed:
             out.append(f"  {tool.display_name:<12} not installed")
             continue
-        version = tool.binaries[0].version if tool.binaries else "?"
+        version = surface.join(tool.versions()) or "?"
         scan = tool.secret_scan
         scanned = (
             f"scanned {scan.files_scanned:,} files / {human_size(scan.bytes_scanned)} in "

@@ -36,9 +36,9 @@ def _notes(proc: ProcessInfo, binary: str, report: ToolReport) -> list[str]:
     if installed and binary.startswith("/") and binary not in installed:
         notes.append(f"runs {binary}, not the binary on PATH")
     version = VERSION.search(binary)
-    current = report.binaries[0].version if report.binaries else ""
-    if version and current and version.group(0) != current:
-        notes.append(f"version {version.group(0)} (installed is {current})")
+    current = report.versions()
+    if version and current and version.group(0) not in current:
+        notes.append(f"version {version.group(0)} (installed: {', '.join(current)})")
     if UPDATE_LOOP in proc.command:
         notes.append("self-update loop")
     return notes
