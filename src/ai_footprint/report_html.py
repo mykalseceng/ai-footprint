@@ -12,7 +12,7 @@ import re
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from ai_footprint import document, keys, surface
+from ai_footprint import document, surface, tokens
 from ai_footprint.fsinfo import human_size, tilde
 from ai_footprint.model import (
     EXTENSION_PAGES,
@@ -685,7 +685,7 @@ def _key_owner(row: Views) -> str:
 
 def _keys_view(audit: AuditReport, views: Views) -> str:
     rows = views["keys"]
-    api = sum(1 for r in rows if r["kind"] == keys.API_KEY)
+    api = sum(1 for r in rows if r["kind"] == tokens.API_KEY)
     table_rows = [
         [
             e(r["provider"]),
