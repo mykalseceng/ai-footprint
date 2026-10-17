@@ -499,11 +499,7 @@ def rule_secrets(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     kinds = ", ".join(f"{k.unique} {k.label}" for k in ranked[:4])
     if len(ranked) > 4:
         kinds += f" and {len(ranked) - 4} more types"
-    others = (
-        " Some may be test data from targets you worked on."
-        if total > current
-        else " Each is a current credential of this tool."
-    )
+    others = "" if total > current else " Each is a current credential of this tool."
     out.append(
         _exposure(
             report,

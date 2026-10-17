@@ -8,7 +8,7 @@ from ai_footprint.secrets import scan_bytes, scan_paths
 from ai_footprint.tokens import fingerprint
 from tests.conftest import FAKE_ANTHROPIC_ACCESS, FAKE_API_KEY, FAKE_DEEPSEEK
 
-AWS = "AKIAABCDEFGHIJKLMNOP"
+AWS = "AKIA" + "Q7XK2M9PLW4RT8VN"
 
 
 def kinds(data: bytes) -> list[str]:
@@ -33,7 +33,7 @@ def test_each_pattern_detects_its_format(value: str, kind: str):
 
 def test_boundary_patterns_ignore_matches_inside_words():
     assert "generic_sk_key" not in kinds(b"task-" + b"a" * 40)
-    assert "aws_access_key" not in kinds(b"XAKIAABCDEFGHIJKLMNOP")
+    assert "aws_access_key" not in kinds(b"X" + AWS.encode())
 
 
 def test_matches_starting_past_the_limit_are_left_for_the_next_chunk():
@@ -122,7 +122,10 @@ def test_secret_straddling_chunk_boundaries_is_counted_once(
 def test_documentation_placeholders_are_not_counted():
     assert kinds(b"key AKIAIOSFODNN7EXAMPLE here") == []
     assert kinds(b'"AIza' + b"b" * 31 + b'XXXX"') == []
-    assert kinds(b"key AKIAABCDEFGHIJKLMNOP here") == ["aws_access_key"]
+    assert kinds(b"key AKIAABCDEFGHIJKLMNOP here") == []
+    assert kinds(b"key AKIATESTQ7XK2M9PLW4R here") == []
+    assert kinds(b'"AIzaSyEx' + b"abcdefghijklmnop" + b'qrstuvwxyz0" ') == []
+    assert kinds(b"key " + AWS.encode() + b" here") == ["aws_access_key"]
 
 
 def test_excluded_folders_are_skipped_and_listed(tmp_path: Path):
@@ -133,3 +136,9 @@ def test_excluded_folders_are_skipped_and_listed(tmp_path: Path):
     assert [k.kind for k in scan.kinds] == ["generic_sk_key"]
     assert scan.excluded == [str(tmp_path / "plugins")]
     assert scan.files_scanned == 1
+
+
+def test_openai_refresh_tokens_in_both_formats_are_found():
+    assert kinds(b'"refresh": "rt_' + b"Zj7q" * 20 + b'"') == ["openai_refresh"]
+    assert kinds(b'"refresh": "rt.1.' + b"Zj7q" * 20 + b'"') == ["openai_refresh"]
+    assert kinds(b"start_" + b"Zj7q" * 20) == []

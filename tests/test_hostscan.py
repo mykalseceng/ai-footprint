@@ -30,7 +30,7 @@ def test_ssh_cipher_distinguishes_open_and_protected_keys(tmp_path: Path):
 
 
 def test_reach_reports_presence_never_values(tmp_path: Path):
-    secret = "AKIAABCDEFGHIJKLMNOP"
+    secret = "AKIA" + "Q7XK2M9PLW4RT8VN"
     (tmp_path / ".ssh").mkdir()
     (tmp_path / ".ssh" / "id_ed25519").write_text(openssh_key(b"none"))
     (tmp_path / ".aws").mkdir()

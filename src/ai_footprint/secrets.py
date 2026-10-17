@@ -50,7 +50,10 @@ PATTERNS: tuple[SecretPattern, ...] = (
         "generic_sk_key", "Provider API key (sk-…)", rb"sk-[A-Za-z0-9]{32,}", boundary=True
     ),
     SecretPattern(
-        "openai_refresh", "OpenAI refresh token", rb"rt\.1\.[A-Za-z0-9_\-.]{60,}", boundary=True
+        "openai_refresh",
+        "OpenAI refresh token",
+        rb"rt(?:\.1\.|_)[A-Za-z0-9_\-.]{60,}",
+        boundary=True,
     ),
     SecretPattern("github_token", "GitHub token", rb"gh[pousr]_[A-Za-z0-9]{36}", boundary=True),
     SecretPattern("github_pat", "GitHub fine-grained token", rb"github_pat_[A-Za-z0-9_]{60,}"),
@@ -95,9 +98,18 @@ class ChunkResult:
     markers: dict[str, int] = field(default_factory=dict)
 
 
+_RUNS = ("ABCDEFGH", "abcdefgh", "12345678")
+
+
 def _placeholder(value: str) -> bool:
-    """Documentation placeholders such as AWS's ``AKIAIOSFODNN7EXAMPLE`` or ``AIza…XXXX``."""
-    return "EXAMPLE" in value or value.endswith("XXXX")
+    """Placeholders: ``AKIAIOSFODNN7EXAMPLE``, ``AIza…XXXX``, ``TEST`` keys, ``ABCDEFGH`` runs."""
+    upper = value.upper()
+    return (
+        "EXAMPLE" in upper
+        or "TEST" in upper
+        or value.endswith("XXXX")
+        or any(run in value for run in _RUNS)
+    )
 
 
 def scan_bytes(data: bytes, limit: int) -> list[tuple[str, str, str]]:

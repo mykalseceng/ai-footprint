@@ -154,8 +154,9 @@ def test_secrets_that_are_all_current_credentials_are_not_called_test_data(tmp_p
     assert at_rest.statement.endswith("Each is a current credential of this tool.")
 
 
-def test_other_secrets_may_still_be_test_data(tmp_path: Path):
+def test_other_secrets_are_counted_without_guessing_where_they_came_from(tmp_path: Path):
     _live, at_rest = rules.rule_secrets(scanned(3, 1), rule_ctx(tmp_path))
-    assert at_rest.statement.endswith("Some may be test data from targets you worked on.")
+    assert "test data" not in at_rest.statement
+    assert "current credential" not in at_rest.statement
     [only] = rules.rule_secrets(scanned(2, 0), rule_ctx(tmp_path))
     assert only.id.endswith("secrets-at-rest")

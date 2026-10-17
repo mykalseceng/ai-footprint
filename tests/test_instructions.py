@@ -23,7 +23,7 @@ def test_planted_content_is_flagged():
 
 
 def test_embedded_secrets_are_flagged_by_kind_only():
-    key = "AKIAABCDEFGHIJKLMNOP"
+    key = "AKIA" + "Q7XK2M9PLW4RT8VN"
     markers = analyse_text(f"aws key {key}")
     assert markers == ["embedded secrets: aws_access_key"]
 
