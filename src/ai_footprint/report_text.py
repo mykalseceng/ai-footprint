@@ -8,9 +8,18 @@ from collections.abc import Iterable
 
 from ai_footprint import reportcheck, surface
 from ai_footprint.fsinfo import human_size
-from ai_footprint.model import AuditReport, CommandValidation, Exposure, Fix, ToolPresence
+from ai_footprint.model import AuditReport, CommandValidation, Fix, ToolPresence
+from ai_footprint.rules import Check
 
-_COLORS = {"EXPOSED": "31", "clear": "32", "PASS": "32", "FAIL": "31", "dim": "2", "bold": "1"}
+_COLORS = {
+    "REVIEW": "31",
+    "clear": "32",
+    "unchecked": "33",
+    "PASS": "32",
+    "FAIL": "31",
+    "dim": "2",
+    "bold": "1",
+}
 
 
 class Style:
@@ -75,13 +84,11 @@ def render_narrative(audit: AuditReport, style: Style) -> list[str]:
     return out
 
 
-def render_doctor(
-    audit: AuditReport, checklist: Iterable[tuple[str, str, list[Exposure]]], style: Style
-) -> tuple[str, int]:
-    """Doctor view: each check marked EXPOSED or clear, with validated fixes.
+def render_doctor(audit: AuditReport, checklist: Iterable[Check], style: Style) -> tuple[str, int]:
+    """Doctor view: each check marked REVIEW, clear or not checked, with validated fixes.
 
     Returns:
-        The text and the exit code (1 when anything is exposed or any command is invalid).
+        The text and the exit code (1 when anything needs review or any command is invalid).
     """
     host = audit.host
     out = [
@@ -91,12 +98,15 @@ def render_doctor(
     ]
     counts: Counter[str] = Counter()
     scope = None
-    for name, check, found in checklist:
+    for name, check, found, unchecked in checklist:
         if name != scope:
             scope = name
             out.append(style(name, "bold"))
-        status = "EXPOSED" if found else "clear"
+        status = "REVIEW" if found else "unchecked" if unchecked else "clear"
         counts[status] += 1
+        if unchecked:
+            out.append(f"  {style('not checked', 'unchecked')}  {check} ({unchecked})")
+            continue
         out.append(f"  {style(status.ljust(7), status)}  {check}")
         for exposure in found:
             out.extend(_wrap(exposure.statement, "             "))
@@ -106,10 +116,11 @@ def render_doctor(
     commands_ok = all(v.ok for v in _validations(audit)) and all(
         v.ok for v in audit.probe_validation
     )
-    code = 1 if counts["EXPOSED"] or not commands_ok else 0
+    code = 1 if counts["REVIEW"] or not commands_ok else 0
     out.append(
-        f"Result: {style(str(counts['EXPOSED']) + ' exposed', 'EXPOSED')} · "
-        f"{style(str(counts['clear']) + ' clear', 'clear')}  (exit {code})"
+        f"Result: {style(str(counts['REVIEW']) + ' to review', 'REVIEW')} · "
+        f"{style(str(counts['clear']) + ' clear', 'clear')} · "
+        f"{style(str(counts['unchecked']) + ' not checked', 'unchecked')}  (exit {code})"
     )
     out.append(
         style("Secret scan skipped in doctor mode; run without --doctor for the full audit.", "dim")
@@ -143,8 +154,8 @@ def _validation_summary(audit: AuditReport, style: Style) -> list[str]:
     return lines
 
 
-def render_summary(audit: AuditReport, style: Style, outputs: list[str]) -> str:
-    """Audit output: tools found, the narrative, validation, and report paths."""
+def render_summary(audit: AuditReport, style: Style, outputs: list[tuple[str, str]]) -> str:
+    """Audit output: tools found, the narrative, validation, and labelled output paths."""
     out = [
         style("ai-footprint", "bold")
         + style(f"  ·  {audit.host.os}  ·  {audit.host.user}@{audit.host.hostname}", "dim"),
@@ -167,7 +178,7 @@ def render_summary(audit: AuditReport, style: Style, outputs: list[str]) -> str:
     out.append("")
     out.extend(render_narrative(audit, style))
     out.extend([*_validation_summary(audit, style), ""])
-    out.extend(f"Report: {path}" for path in outputs)
+    out.extend(f"{label + ':':<11}{path}" for label, path in outputs)
     return "\n".join(out)
 
 
@@ -186,24 +197,32 @@ def render_validation(audit: AuditReport, style: Style) -> tuple[str, int]:
     out.extend(["", style("Tool claims", "bold")])
     for validation in audit.claim_validation:
         out.extend(_validation_block(validation, style))
-    out.extend(["", style("Report layout", "bold")])
+    out.extend(["", style("Report and dashboard pages", "bold")])
     for validation in audit.report_validation:
+        out.extend(_validation_block(validation, style))
+    out.extend(["", style("Figures", "bold")])
+    for validation in audit.figure_validation:
         out.extend(_validation_block(validation, style))
     out.extend(["", style("CLI options", "bold")])
     for validation in audit.option_validation:
         out.extend(_validation_block(validation, style))
     options_ok = sum(v.ok for v in audit.option_validation)
     layout_ok = sum(v.ok for v in audit.report_validation)
+    figures_ok = sum(v.ok for v in audit.figure_validation)
     out.extend(["", *_validation_summary(audit, style)])
     out.append(
         f"CLI options:    {options_ok}/{len(audit.option_validation)} checks passed "
         "(examples parse and select tools, help text, defaults, exclusive modes)"
     )
     out.append(
-        f"Report layout:  {layout_ok}/{len(audit.report_validation)} pages pass "
-        f"(cells ≤ {reportcheck.MAX_CELL} chars, tables ≤ {reportcheck.MAX_ROWS} rows, "
-        f"tokens ≤ {reportcheck.MAX_RUN} chars, no blank descriptive cells, one-sentence "
-        "answers, one date format)"
+        f"Pages:          {layout_ok}/{len(audit.report_validation)} pass "
+        f"(report: cells ≤ {reportcheck.MAX_CELL} chars, tables ≤ {reportcheck.MAX_ROWS} rows, "
+        f"tokens ≤ {reportcheck.MAX_RUN} chars; both: one-sentence answers, one fact per cell, "
+        "one date format, every extension row says what it does)"
+    )
+    out.append(
+        f"Figures:        {figures_ok}/{len(audit.figure_validation)} groups match an independent "
+        "recount of the run's data (tiles, signals grid, disk chart, checklist, method, headlines)"
     )
     failed = (
         any(not v.ok for v in audit.probe_validation)
@@ -211,6 +230,7 @@ def render_validation(audit: AuditReport, style: Style) -> tuple[str, int]:
         or any(not v.ok for v in audit.claim_validation)
         or any(not v.ok for v in audit.option_validation)
         or any(not v.ok for v in audit.report_validation)
+        or any(not v.ok for v in audit.figure_validation)
     )
     return "\n".join(out), int(failed)
 

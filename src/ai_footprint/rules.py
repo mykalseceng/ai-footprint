@@ -11,7 +11,7 @@ import shlex
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from ai_footprint import daemons
 from ai_footprint.host import first_system_index
@@ -50,13 +50,24 @@ ToolRuleFn = Callable[[ToolReport, RuleContext], list[Exposure]]
 HostRuleFn = Callable[[AuditReport, RuleContext], list[Exposure]]
 
 
+def _always(report: ToolReport, ctx: RuleContext) -> str:
+    del report, ctx
+    return ""
+
+
 @dataclass(frozen=True)
 class Rule:
-    """A check with a checklist title and the function that states exposures."""
+    """A check with a checklist title and the function that states exposures.
+
+    Attributes:
+        needs: Why this check cannot run on this tool's data ("" when it can). A check whose
+            input was never recorded is reported as not checked, never as clear.
+    """
 
     id: str
     check: str
     fn: ToolRuleFn
+    needs: Callable[[ToolReport, RuleContext], str] = _always
 
 
 @dataclass(frozen=True)
@@ -68,7 +79,16 @@ class HostRule:
     fn: HostRuleFn
 
 
-Checklist = list[tuple[str, str, list[Exposure]]]
+class Check(NamedTuple):
+    """One checklist line: a finding list, or why the check could not run."""
+
+    scope: str
+    check: str
+    found: list[Exposure]
+    unchecked: str = ""
+
+
+Checklist = list[Check]
 
 LABELS = {
     "no-approval": "Runs commands without asking",
@@ -136,18 +156,19 @@ def _exposure(
 
 # --- through the model --------------------------------------------------------------------------
 
-_NO_APPROVAL = {
+NO_APPROVAL = {
     "permissions.defaultMode": "bypassPermissions",
     "approval_policy": "never",
     "sandbox_mode": "danger-full-access",
 }
-_RUNNING_BYPASS = "running with --dangerously-skip-permissions"
+RUNNING_BYPASS = "running with --dangerously-skip-permissions"
+"""Setting values that turn approval off, and the setting that lists sessions started that way."""
 
 
 def rule_no_approval(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     """Commands run without approval or sandbox: a config value, or sessions started that way."""
-    configured = [s for s in report.settings if _NO_APPROVAL.get(s.key) == s.value]
-    running = [s for s in report.settings if s.key == _RUNNING_BYPASS]
+    configured = [s for s in report.settings if NO_APPROVAL.get(s.key) == s.value]
+    running = [s for s in report.settings if s.key == RUNNING_BYPASS]
     if not configured and not running:
         return []
     observed = [f"{s.key} = {s.value}" for s in configured]
@@ -909,28 +930,156 @@ def rule_account_signals(report: ToolReport, ctx: RuleContext) -> list[Exposure]
     ]
 
 
+# --- what each check needs from the collected data -----------------------------------------------
+# Each returns "" when the input the check reads was recorded for this tool, else the reason
+# the check could not run. A check that ran and found nothing is clear; one that could not
+# run says so.
+
+SIGNAL_SOURCES = frozenset({"codex", "opencode", "pi"})
+"""Tools whose collectors can mark a sign of use elsewhere as a concern (accounts.py)."""
+
+
+def _needs_approval_setting(report: ToolReport, ctx: RuleContext) -> str:
+    del ctx
+    keys = set(NO_APPROVAL) | {RUNNING_BYPASS}
+    if any(s.key in keys for s in report.settings):
+        return ""
+    return f"this audit records no approval setting for {report.display_name}"
+
+
+def _needs_scopes(report: ToolReport, ctx: RuleContext) -> str:
+    del ctx
+    if any(t.scopes for c in report.credentials for t in c.tokens):
+        return ""
+    return "no stored token records its scopes"
+
+
+def _needs_share_setting(report: ToolReport, ctx: RuleContext) -> str:
+    del ctx
+    if any(s.key in {"shared sessions", "share"} for s in report.settings):
+        return ""
+    return f"this audit records no share setting for {report.display_name}"
+
+
+def _needs_keychain(report: ToolReport, ctx: RuleContext) -> str:
+    del ctx
+    if any(c.store == "macOS Keychain" for c in report.credentials):
+        return ""
+    return "no credential is stored in the Keychain"
+
+
+def _needs_credentials(report: ToolReport, ctx: RuleContext) -> str:
+    del ctx
+    return "" if report.credentials else "no stored credentials were found"
+
+
+def _needs_scan(report: ToolReport, ctx: RuleContext) -> str:
+    del ctx
+    return "" if report.secret_scan else "the secret scan runs only in the full audit"
+
+
+def _needs_local_mcp(report: ToolReport, ctx: RuleContext) -> str:
+    del ctx
+    if any(x.kind == "mcp" and x.access == "stdio" for x in report.extensions):
+        return ""
+    return "no local MCP server command to check"
+
+
+def _needs_other_accounts(report: ToolReport, ctx: RuleContext) -> str:
+    del report
+    return "" if ctx.host.other_users else "there are no other local accounts"
+
+
+def _needs_local_server(report: ToolReport, ctx: RuleContext) -> str:
+    del ctx
+    if any(s.key.startswith("local server") for s in report.settings):
+        return ""
+    return f"this audit records no local server for {report.display_name}"
+
+
+def _needs_trusted_folders(report: ToolReport, ctx: RuleContext) -> str:
+    del ctx
+    return "" if report.trusted_folders else "no trusted folders are recorded"
+
+
+def _needs_data_notes(report: ToolReport, ctx: RuleContext) -> str:
+    del ctx
+    if any(n.topic == "data" for n in report.account):
+        return ""
+    return "no data-use setting is recorded"
+
+
+def _needs_signal_source(report: ToolReport, ctx: RuleContext) -> str:
+    del ctx
+    if report.name in SIGNAL_SOURCES:
+        return ""
+    return f"nothing on disk records where else the {report.display_name} token is used"
+
+
 TOOL_RULES: tuple[Rule, ...] = (
-    Rule("no-approval", "Commands require approval", rule_no_approval),
+    Rule(
+        "no-approval",
+        "Approval not turned off by a recorded setting",
+        rule_no_approval,
+        _needs_approval_setting,
+    ),
     Rule(
         "instructions", "Instruction files contain nothing that steers the model", rule_instructions
     ),
-    Rule("token-reach", "Token cannot reach connected accounts", rule_token_reach),
-    Rule("shared", "No sessions published to share links", rule_shared_sessions),
-    Rule("keychain-silent", "Keychain item requires a prompt", rule_keychain_silent),
-    Rule("creds-plaintext", "Credentials in an OS-protected store", rule_plaintext_credentials),
-    Rule("secrets", "No secrets in history or logs (full audit only)", rule_secrets),
-    Rule("dangling", "No autostart command points at a missing file", rule_dangling),
+    Rule("token-reach", "Token cannot reach connected accounts", rule_token_reach, _needs_scopes),
+    Rule(
+        "shared", "No sessions published to share links", rule_shared_sessions, _needs_share_setting
+    ),
+    Rule(
+        "keychain-silent", "Keychain item requires a prompt", rule_keychain_silent, _needs_keychain
+    ),
+    Rule(
+        "creds-plaintext",
+        "Credentials in an OS-protected store",
+        rule_plaintext_credentials,
+        _needs_credentials,
+    ),
+    Rule("secrets", "No secrets in history or logs (full audit only)", rule_secrets, _needs_scan),
+    Rule(
+        "dangling",
+        "No MCP server command points at a missing file",
+        rule_dangling,
+        _needs_local_mcp,
+    ),
     Rule("autostart", "No automatic code execution points", rule_autostart),
     Rule("daemons", "No background process outlives its session", rule_daemons),
     Rule("duplicate-installs", "One install per tool", rule_duplicate_installs),
-    Rule("creds-readable", "Credentials not readable by other accounts", rule_credentials_exposed),
-    Rule("data-readable", "Data stores not readable by other accounts", rule_exposed_data),
-    Rule("open-server", "Local server requires authentication", rule_open_server),
-    Rule("trust", "Trusted folders are few and owned by you", rule_trust),
     Rule(
-        "account-data", "Provider keeps no extra copies (training, cloud tasks)", rule_account_data
+        "creds-readable",
+        "Credentials not readable by other accounts",
+        rule_credentials_exposed,
+        _needs_credentials,
     ),
-    Rule("account-signals", "No local signs of use elsewhere", rule_account_signals),
+    Rule(
+        "data-readable",
+        "Data stores not readable by other accounts",
+        rule_exposed_data,
+        _needs_other_accounts,
+    ),
+    Rule(
+        "open-server",
+        "Local server requires authentication",
+        rule_open_server,
+        _needs_local_server,
+    ),
+    Rule("trust", "Trusted folders are few and owned by you", rule_trust, _needs_trusted_folders),
+    Rule(
+        "account-data",
+        "Provider keeps no extra copies (training, cloud tasks)",
+        rule_account_data,
+        _needs_data_notes,
+    ),
+    Rule(
+        "account-signals",
+        "No local signs of use elsewhere",
+        rule_account_signals,
+        _needs_signal_source,
+    ),
 )
 
 
@@ -1303,8 +1452,11 @@ HOST_RULES: tuple[HostRule, ...] = (
 def evaluate(audit: AuditReport, ctx: RuleContext) -> Checklist:
     """Run every rule, attach exposures to the audit, and return the checklist.
 
+    Every rule runs, so nothing it finds is hidden; a rule that finds nothing because its input
+    was never recorded is marked not checked, with the reason.
+
     Returns:
-        ``(scope, check title, exposures)`` per rule and tool, for the doctor view.
+        One ``Check`` per rule and tool, for the doctor view.
     """
     checklist: Checklist = []
     for tool in audit.tools:
@@ -1313,9 +1465,10 @@ def evaluate(audit: AuditReport, ctx: RuleContext) -> Checklist:
         for rule in TOOL_RULES:
             found = rule.fn(tool, ctx)
             tool.exposures.extend(found)
-            checklist.append((tool.display_name, rule.check, found))
+            unchecked = "" if found else rule.needs(tool, ctx)
+            checklist.append(Check(tool.display_name, rule.check, found, unchecked))
     for rule in HOST_RULES:
         found = rule.fn(audit, ctx)
         audit.host_exposures.extend(found)
-        checklist.append(("Host", rule.check, found))
+        checklist.append(Check("Host", rule.check, found))
     return checklist

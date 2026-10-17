@@ -54,7 +54,7 @@ ban-relative-imports = "all"
 "tests/rsa_test_key.py" = ["E501"]
 "src/ai_footprint/cli.py" = ["T201"]
 "scripts/layout_check.py" = ["T201"]  # a CLI: its output is the report
-# Inline SVG path data and CSS are long single-line literals by nature.
+# Inline CSS is a long single-line literal by nature.
 "src/ai_footprint/report_html.py" = ["E501"]
 
 [tool.ty.environment]
