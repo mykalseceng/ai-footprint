@@ -14,6 +14,7 @@ from typing import Any
 
 from ai_footprint import answers, figures, keys, surface
 from ai_footprint.model import (
+    EXTENSION_PAGES,
     AuditReport,
     Category,
     CommandValidation,
@@ -177,10 +178,14 @@ def _verb(count: int, singular: str, plural: str) -> str:
 
 def page_summaries(grouped: Grouped, audit: AuditReport) -> dict[str, str]:
     """The summary sentence for the MCP servers, Skills and Plugins pages."""
+    pages = {
+        page: [(x, t) for x, t in grouped if x.kind in kinds]
+        for page, kinds in EXTENSION_PAGES.items()
+    }
     return {
-        "mcp": _mcp_tldr([(x, t) for x, t in grouped if x.kind in {"mcp", "connector"}]),
-        "skills": _skills_tldr([(x, t) for x, t in grouped if x.kind == "skill"]),
-        "plugins": _plugins_tldr([(x, t) for x, t in grouped if x.kind == "plugin"], audit),
+        "mcp": _mcp_tldr(pages["mcp"]),
+        "skills": _skills_tldr(pages["skills"]),
+        "plugins": _plugins_tldr(pages["plugins"], audit),
     }
 
 

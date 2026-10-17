@@ -22,7 +22,7 @@ import re
 from collections.abc import Iterator
 from typing import Any
 
-from ai_footprint.model import CheckResult, CommandValidation
+from ai_footprint.model import EXTENSION_PAGES, CheckResult, CommandValidation
 
 MAX_CELL = 260
 MAX_ROWS = 80
@@ -41,7 +41,6 @@ _HEAD = re.compile(r"<th>(.*?)</th>", re.S)
 _ROW = re.compile(r"<tr>(.*?)</tr>", re.S)
 _CELL = re.compile(r"<td>(.*?)</td>", re.S)
 _TAG = re.compile(r"<[^>]+>")
-EXTENSION_PAGES = {"mcp": {"mcp", "connector"}, "skills": {"skill"}, "plugins": {"plugin"}}
 OVERCLAIM = re.compile(
     r"\b(findings?|exposed|vulnerab\w*|critical|severity|high[- ]risk|risk scores?|"
     r"compromised|insecure|breach(?:ed)?)\b",

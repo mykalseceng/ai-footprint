@@ -218,6 +218,10 @@ class Extension:
     identity: str = ""
 
 
+EXTENSION_PAGES = {"mcp": ("mcp", "connector"), "skills": ("skill",), "plugins": ("plugin",)}
+"""Which extension kinds each across-tools page lists; every other kind stays on tool pages."""
+
+
 @dataclass
 class InstructionFile:
     """A CLAUDE.md / AGENTS.md style file that is fed to the model as instructions."""

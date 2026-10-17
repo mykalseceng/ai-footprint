@@ -205,7 +205,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         data = document.build(audit, checklist)
         audit.report_validation = [
-            *reportcheck.check_report(report_html.render(audit, checklist)),
+            *reportcheck.check_report(report_html.render(audit, checklist, data["views"])),
             *reportcheck.check_document(data),
             reportcheck.check_wording(data, dashboard.script()),
         ]
@@ -221,7 +221,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     write_private(args.dashboard, dashboard.render(data))
     outputs = [("Dashboard", str(args.dashboard.resolve()))]
     if args.html:
-        write_private(args.html, report_html.render(audit, checklist))
+        write_private(args.html, report_html.render(audit, checklist, data["views"]))
         outputs.append(("Report", str(args.html.resolve())))
     if args.json:
         write_private(args.json, json.dumps(data, indent=2, ensure_ascii=False))

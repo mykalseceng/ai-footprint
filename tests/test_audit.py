@@ -183,7 +183,7 @@ def test_no_secret_value_reaches_any_output(audited):
     audit, checklist, access = audited
     data = document.build(audit, checklist)
     page = dashboard.render(data)
-    report = report_html.render(audit, checklist)
+    report = report_html.render(audit, checklist, data["views"])
     dump = json.dumps(data)
     doctor, _code = render_doctor(audit, checklist, Style(enabled=False))
     for secret in (
@@ -219,7 +219,7 @@ def test_collected_markup_stays_data_and_only_pinned_code_runs(audited):
 
 def test_static_report_escapes_collected_strings_and_has_no_scripts(audited):
     audit, checklist, _a = audited
-    page = report_html.render(audit, checklist)
+    page = report_html.render(audit, checklist, document.build(audit, checklist)["views"])
     assert "<script>alert(1)</script>" not in page
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in page
     assert "default-src 'none'" in page
@@ -231,7 +231,8 @@ def test_static_report_escapes_collected_strings_and_has_no_scripts(audited):
 
 def test_static_report_passes_its_layout_checks(audited):
     audit, checklist, _a = audited
-    validations = reportcheck.check_report(report_html.render(audit, checklist))
+    views = document.build(audit, checklist)["views"]
+    validations = reportcheck.check_report(report_html.render(audit, checklist, views))
     assert {v.command for v in validations} >= {"page summary", "page skills", "page host"}
     assert all(v.ok for v in validations), [
         (v.command, c.name, c.detail) for v in validations for c in v.checks if not c.passed

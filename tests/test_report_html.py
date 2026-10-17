@@ -5,7 +5,7 @@ from pathlib import Path
 from hypothesis import given
 from hypothesis import strategies as st
 
-from ai_footprint import report_html, rules
+from ai_footprint import document, report_html, rules
 from ai_footprint.model import (
     AuditReport,
     Exposure,
@@ -55,10 +55,14 @@ def host_exposures(audit: AuditReport) -> list[Exposure]:
     return found
 
 
+def host_view(audit: AuditReport) -> str:
+    return report_html._host_view(audit, document.build(audit, [])["views"])
+
+
 def host_page(facts: list[HostFact], tools: list[ToolReport] | None = None) -> str:
     audit = make_audit(facts, [], tools)
     audit.host_exposures = host_exposures(audit)
-    return report_html._host_view(audit)
+    return host_view(audit)
 
 
 def block(page: str, anchor: str) -> str:
@@ -154,7 +158,7 @@ def test_finding_without_a_question_gets_its_own_block():
         label="One folder steers several tools",
         evidence=["~/.claude/skills: Claude Code, OpenCode"],
     )
-    page = report_html._host_view(make_audit([], [finding]))
+    page = host_view(make_audit([], [finding]))
     assert "<h2>Across tools</h2>" in page
     section = block(page, "host:shared-surfaces")
     assert "One folder steers several tools" in section
@@ -235,7 +239,7 @@ def test_fix_steps_render_under_their_question():
         label="Processes running without a session",
         fix=fix,
     )
-    page = report_html._host_view(make_audit([pid(7, 2, "codex app-server")], [finding]))
+    page = host_view(make_audit([pid(7, 2, "codex app-server")], [finding]))
     section = block(page, "host:unattended")
     assert "Stop processes that outlived their sessions" in section
     assert "p-concern" in section
