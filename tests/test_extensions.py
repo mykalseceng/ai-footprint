@@ -232,3 +232,22 @@ def test_only_claude_codes_own_native_host_is_attributed_to_it(tmp_path: Path):
     [row] = claude._chrome_extensions(context(tmp_path), {})
     assert row.name == claude.NATIVE_HOST
     assert not row.autostart
+
+
+def test_merged_rows_keep_every_name_and_source():
+    rows = [
+        Extension(
+            "claude", "mcp", "hopper", "project ~/a", "/Apps/Hopper", identity="/Apps/Hopper"
+        ),
+        Extension(
+            "claude",
+            "mcp",
+            "HopperMCPServer",
+            "project ~/b",
+            "/Apps/Hopper",
+            identity="/Apps/Hopper",
+        ),
+    ]
+    [merged] = extensions.dedupe(rows)
+    assert merged.name == "hopper / HopperMCPServer"
+    assert merged.source == "project ~/a; project ~/b"

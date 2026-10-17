@@ -321,6 +321,9 @@ def dedupe(rows: list[Extension]) -> list[Extension]:
         if first is None:
             seen[key] = row
             out.append(row)
-        elif row.source not in first.source:
-            first.source = f"{first.source}; {row.source}"
+        else:
+            if row.name not in first.name.split(" / "):
+                first.name = f"{first.name} / {row.name}"
+            if row.source not in first.source.split("; "):
+                first.source = f"{first.source}; {row.source}"
     return out

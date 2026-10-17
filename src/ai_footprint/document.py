@@ -148,10 +148,20 @@ def grouped_extensions(audit: AuditReport) -> Grouped:
             continue
         for x in tool.extensions:
             key = (x.kind, x.identity or f"{x.name} {x.detail}")
-            entry = groups.setdefault(key, (x, []))
-            if tool.display_name not in entry[1]:
-                entry[1].append(tool.display_name)
+            first, users = groups.setdefault(key, (dataclasses.replace(x), []))
+            if tool.display_name not in users:
+                users.append(tool.display_name)
+            if x is not first:
+                _merge_names(first, x)
     return list(groups.values())
+
+
+def _merge_names(into: Extension, row: Extension) -> None:
+    """Keep every name and source an extension is listed under, across tools."""
+    if row.name not in into.name.split(" / "):
+        into.name = f"{into.name} / {row.name}"
+    if row.source not in into.source.split("; "):
+        into.source = f"{into.source}; {row.source}"
 
 
 def skill_group(x: Extension) -> str:
