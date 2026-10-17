@@ -207,10 +207,18 @@ def _visible_entries(folder: Path) -> int:
 
 
 def plugin_mcp_rows(install: Path, tool: str, plugin: str) -> list[Extension]:
-    """MCP servers a plugin ships in its .mcp.json."""
+    """MCP servers a plugin ships in its .mcp.json; ``"enabled": false`` marks one disabled."""
     servers = (load_json(install / ".mcp.json") or {}).get("mcpServers", {})
     return [
-        mcp_row(tool, name, spec, f"plugin {plugin}", cwd=install) for name, spec in servers.items()
+        mcp_row(
+            tool,
+            name,
+            spec,
+            f"plugin {plugin}",
+            cwd=install,
+            enabled=spec.get("enabled", True) is not False,
+        )
+        for name, spec in servers.items()
     ]
 
 

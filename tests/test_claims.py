@@ -138,11 +138,13 @@ def test_logout_note_states_revocation_only_with_markers(tmp_path: Path):
         "`claude /logout` posts the refresh token to "
         "https://platform.claude.com/v1/oauth/token/revoke"
     )
-    [codex_without] = accounts._codex_revoke(ctx, report, "")
-    assert codex_without.text.startswith("No token-revocation marker was found")
+    codex_without = accounts._codex_revoke(ctx, report, "")
+    assert codex_without[0].text.startswith("No token-revocation marker was found")
     binary = fake_binary(tmp_path / "bin", "codex", list(codex.REVOKE_MARKERS))
-    [codex_with] = accounts._codex_revoke(ctx, report, str(binary))
-    assert codex_with.text.startswith("The installed Codex revokes its auth tokens")
+    codex_with = accounts._codex_revoke(ctx, report, str(binary))
+    assert codex_with[0].text.startswith("The installed Codex revokes its auth tokens")
+    assert codex_with[0].source == "markers in the installed codex binary"
+    assert all(n.source != "markers in the installed codex binary" for n in codex_with[1:])
 
 
 def test_memory_agents_and_commands_go_through_the_instruction_analysis(tmp_path: Path):

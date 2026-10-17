@@ -162,14 +162,19 @@ NO_APPROVAL = {
     "sandbox_mode": "danger-full-access",
 }
 RUNNING_BYPASS = "running with --dangerously-skip-permissions"
-"""Setting values that turn approval off, and the setting that lists sessions started that way."""
+THREADS_WITHOUT_APPROVAL = "threads with approval_mode=never"
+"""Setting values that turn approval off, the setting that lists sessions started that way, and
+the setting that counts recorded threads that ran with approval off."""
+APPROVAL_KEYS = frozenset({*NO_APPROVAL, RUNNING_BYPASS, THREADS_WITHOUT_APPROVAL})
+"""Every setting the no-approval check reads."""
 
 
 def rule_no_approval(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     """Commands run without approval or sandbox: a config value, or sessions started that way."""
     configured = [s for s in report.settings if NO_APPROVAL.get(s.key) == s.value]
     running = [s for s in report.settings if s.key == RUNNING_BYPASS]
-    if not configured and not running:
+    threads = [s for s in report.settings if s.key == THREADS_WITHOUT_APPROVAL and s.concern]
+    if not configured and not running and not threads:
         return []
     observed = [f"{s.key} = {s.value}" for s in configured]
     observed += [
@@ -177,6 +182,7 @@ def rule_no_approval(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
         "--dangerously-skip-permissions"
         for s in running
     ]
+    observed += [f"{s.key}: {s.value}" for s in threads]
     return [
         _exposure(
             report,
@@ -186,7 +192,7 @@ def rule_no_approval(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             f"({join(observed)}). In those sessions, text that reaches the model (a web page, a "
             "repo file, an MCP result, an instruction file) can become commands running as you, "
             "limited only by the deny rules and hooks that still apply.",
-            evidence=[f"{s.key} = {s.value}" for s in configured + running],
+            evidence=[f"{s.key} = {s.value}" for s in configured + running + threads],
             fix=_no_approval_fix(report, ctx),
         )
     ]
@@ -310,7 +316,7 @@ def rule_token_reach(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             f"{', '.join(scopes)}.{used}",
             evidence=scopes + connectors,
             fix=Fix(
-                "Disconnect connectors you do not need from this client",
+                "Disconnect connectors you do not use (the token keeps its scopes)",
                 [
                     FixCommand(
                         "Remove unused connectors in the provider's web settings", manual=True
@@ -952,8 +958,7 @@ SIGNAL_SOURCES = frozenset({"codex", "opencode", "pi"})
 
 def _needs_approval_setting(report: ToolReport, ctx: RuleContext) -> str:
     del ctx
-    keys = set(NO_APPROVAL) | {RUNNING_BYPASS}
-    if any(s.key in keys for s in report.settings):
+    if any(s.key in APPROVAL_KEYS for s in report.settings):
         return ""
     return f"this audit records no approval setting for {report.display_name}"
 
@@ -1037,7 +1042,7 @@ TOOL_RULES: tuple[Rule, ...] = (
     Rule(
         "instructions", "Instruction files contain nothing that steers the model", rule_instructions
     ),
-    Rule("token-reach", "Token cannot reach connected accounts", rule_token_reach, _needs_scopes),
+    Rule("token-reach", "Token carries no connector scopes", rule_token_reach, _needs_scopes),
     Rule(
         "shared", "No sessions published to share links", rule_shared_sessions, _needs_share_setting
     ),

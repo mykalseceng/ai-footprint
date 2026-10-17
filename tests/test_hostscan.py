@@ -124,7 +124,7 @@ def test_log_markers_count_only_the_markers_asked_for(tmp_path: Path):
     assert "refresh_token_reused" not in claude_cli.LOG_MARKERS
 
 
-def test_codex_data_sharing_group_is_surfaced(tmp_path: Path):
+def test_codex_group_claim_is_stated_as_recorded_not_as_a_concern(tmp_path: Path):
     token = TokenInfo(
         field="id_token",
         kind="jwt",
@@ -143,8 +143,9 @@ def test_codex_data_sharing_group_is_surfaced(tmp_path: Path):
         ],
     )
     notes = accounts._codex_data(report, tmp_path, {})
-    assert notes[0].concern
-    assert "data-sharing" in notes[0].text
+    assert "api-data-sharing-incentives-program" in notes[0].text
+    assert "training" not in notes[0].text
+    assert not notes[0].concern
 
 
 def test_account_collect_skips_uninstalled_tools(tmp_path: Path):
