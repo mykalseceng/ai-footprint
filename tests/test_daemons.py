@@ -160,7 +160,7 @@ def test_a_session_child_that_listens_is_named_with_its_session_and_never_killed
     assert "outside any session" not in found.statement
     assert found.fix is not None
     assert [c.text for c in found.fix.commands] == [
-        "Quit the session (pid 50614) that started pid 50615"
+        "Stop pid 50615 (started by session pid 50614) when you no longer need it"
     ]
 
 

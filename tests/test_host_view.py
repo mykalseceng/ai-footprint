@@ -75,7 +75,7 @@ def pid(number: int, days: int, command: str) -> HostFact:
 def test_host_finding_names_itself_and_keeps_commands_in_evidence():
     audit = make_audit([pid(4242, 3, "claude --dangerously-skip-permissions")], [])
     [finding] = [x for x in host_exposures(audit) if x.id == "host:unattended"]
-    assert finding.label == "Processes running without a session"
+    assert finding.label == "Long-running or orphaned AI processes"
     assert "pid 4242" not in finding.statement
     assert any("--dangerously-skip-permissions" in line for line in finding.evidence)
 
@@ -236,6 +236,6 @@ def test_duplicate_credentials_separate_logins_from_copies():
     [finding] = [x for x in host_exposures(audit) if x.id == "host:duplicate-creds"]
     assert finding.statement.startswith(
         "Credentials for one provider are held in several places (OpenAI: 2 separate "
-        "credentials in 3 places, including the same credential in OpenCode (plaintext file) "
-        "and OpenCode (SQLite table))."
+        "credentials in 3 places, including the same credential in OpenCode (plaintext file, /x) "
+        "and OpenCode (SQLite table, /x))."
     )

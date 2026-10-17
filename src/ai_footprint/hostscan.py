@@ -275,7 +275,7 @@ def _native_hosts(home: Path) -> list[HostFact]:
                     str(data.get("name", manifest.stem)),
                     detail,
                     manifest,
-                    concern=installed and (missing or any(w in manifest.name for w in TOOL_WORDS)),
+                    concern=installed,
                 )
             )
     return facts
@@ -457,6 +457,28 @@ def _long_running(tools: list[ToolReport], now: datetime.datetime) -> list[HostF
     return facts
 
 
+DEBUG_PORT = re.compile(r"--remote-debugging-port=(\d+)")
+
+
+def _debug_browsers(procs: list[ProcessInfo]) -> list[HostFact]:
+    """Processes launchd adopted that expose a browser remote debugging port."""
+    facts = []
+    for proc in procs:
+        port = DEBUG_PORT.search(proc.command)
+        if proc.ppid != 1 or port is None:
+            continue
+        facts.append(
+            _fact(
+                "unattended",
+                f"browser pid {proc.pid}",
+                f"remote debugging port {port.group(1)}, no parent session: "
+                f"{_clip(proc.command, 160)}",
+                concern=True,
+            )
+        )
+    return facts
+
+
 def unattended(
     system: System, tools: list[ToolReport], home: Path, now: datetime.datetime
 ) -> list[HostFact]:
@@ -489,7 +511,7 @@ def unattended(
                 concern=True,
             )
         )
-    return facts + _long_running(tools, now) + _launch_agents(home)
+    return facts + _long_running(tools, now) + _debug_browsers(procs) + _launch_agents(home)
 
 
 def _launch_agents(home: Path) -> list[HostFact]:

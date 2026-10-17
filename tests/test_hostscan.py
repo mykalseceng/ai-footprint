@@ -237,3 +237,14 @@ def test_other_tools_note_private_keys_without_a_passphrase(tmp_path: Path):
     (ollama / "id_ed25519.pub").write_text("ssh-ed25519 AAAA")
     facts = {f.name: f for f in hostscan.other_tools(tmp_path)}
     assert facts["Ollama"].detail.endswith("; private key without a passphrase: id_ed25519")
+
+
+def test_detached_browsers_with_a_debugging_port_are_reported():
+    procs = [
+        ProcessInfo(7, "Sun Oct  4 10:00:00 2026", "Chrome --remote-debugging-port=9222", ppid=1),
+        ProcessInfo(8, "Sun Oct  4 10:00:00 2026", "Chrome --remote-debugging-port=9333", ppid=7),
+        ProcessInfo(9, "Sun Oct  4 10:00:00 2026", "Chrome", ppid=1),
+    ]
+    [fact] = hostscan._debug_browsers(procs)
+    assert fact.name == "browser pid 7"
+    assert fact.detail.startswith("remote debugging port 9222, no parent session")

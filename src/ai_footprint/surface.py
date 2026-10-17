@@ -152,11 +152,7 @@ def _remote_points(tools: list[ToolReport]) -> list[Point]:
         for creds in groups:
             if creds in keys:
                 continue
-            if is_local_secret(creds[0]):
-                points.append(
-                    Point(f"{creds[0].provider} password ({_stores(creds)}).", tool.display_name)
-                )
-            else:
+            if not is_local_secret(creds[0]):
                 points.append(_oauth_point(tool, creds))
         if keys:
             names = join(sorted(g[0].provider for g in keys))
@@ -227,7 +223,7 @@ def _headline(tools: list[ToolReport], exposures: list[Exposure], audit: AuditRe
         )
         history = f", plus data files holding {secrets} {counted}" if secrets else ""
         sentences.append(f"Anything that runs as you can take {share} without a prompt{history}.")
-    inherited = [f for f in audit.host.facts if f.topic == "reach" and f.concern]
+    inherited = [f for f in audit.host.facts if f.topic == "reach" and f.concern and f.path]
     if inherited and len(tools) > 1:
         names = join([f.name for f in inherited[:3]])
         listed = names if len(inherited) <= 3 else f"including {names}"

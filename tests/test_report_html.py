@@ -103,7 +103,7 @@ def test_breakable_only_adds_break_points_to_escaped_text(text: str):
 def test_host_tldr_names_findings_and_links_to_them():
     page = host_page([pid(4242, 3, "claude --dangerously-skip-permissions")])
     tldr = page[page.index('<div class="tldr">') : page.index("</header>")]
-    assert '<a href="#host:unattended">Processes running without a session</a>' in tldr
+    assert '<a href="#host:unattended">Long-running or orphaned AI processes</a>' in tldr
     assert "pid 4242" not in tldr
     assert "--dangerously-skip-permissions" not in tldr
 

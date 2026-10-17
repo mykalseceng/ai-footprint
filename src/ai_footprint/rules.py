@@ -120,7 +120,7 @@ LABELS = {
     "inherited-creds": "Other credentials an agent inherits",
     "computer-control": "Software that can drive the computer",
     "backups": "History copied into backups",
-    "unattended": "Processes running without a session",
+    "unattended": "Long-running or orphaned AI processes",
     "other-tools": "Other AI tools on this machine",
 }
 
@@ -622,9 +622,12 @@ def rule_daemons(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             f"{report.display_name} sessions accept connections: "
             f"{join([_server_line(d, ctx.home) for d in servers])}."
         )
-    fix = _daemon_fix(report, detached) if detached else Fix("Quit sessions you no longer use")
+    fix = _daemon_fix(report, detached) if detached else Fix("Stop servers you no longer use")
     fix.commands += [
-        FixCommand(f"Quit the session (pid {d.ppid}) that started pid {d.pid}", manual=True)
+        FixCommand(
+            f"Stop pid {d.pid} (started by session pid {d.ppid}) when you no longer need it",
+            manual=True,
+        )
         for d in servers
     ]
     return [
@@ -1331,22 +1334,24 @@ def rule_shared_surfaces(audit: AuditReport, ctx: RuleContext) -> list[Exposure]
     ]
 
 
-def _provider_copies(audit: AuditReport) -> dict[str, dict[frozenset[str], list[str]]]:
+def _provider_copies(
+    audit: AuditReport, ctx: RuleContext
+) -> dict[str, dict[frozenset[str], list[str]]]:
     """``{provider: {token fingerprints: [where each copy is stored]}}``."""
     found: dict[str, dict[frozenset[str], list[str]]] = {}
     for tool in audit.tools:
         for cred in tool.credentials:
             prints = frozenset(t.fingerprint for t in cred.tokens if t.fingerprint)
-            where = f"{tool.display_name} ({cred.store})"
+            where = f"{tool.display_name} ({cred.store}, {ctx.display(cred.location)})"
             found.setdefault(cred.provider, {}).setdefault(prints, []).append(where)
     return found
 
 
 def rule_duplicate_providers(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
     """One provider's credentials held in several places: copies and separate logins."""
-    del ctx
+    copies = _provider_copies(audit, ctx)
     lines = []
-    for provider, creds in sorted(_provider_copies(audit).items()):
+    for provider, creds in sorted(copies.items()):
         places = sum(len(stores) for stores in creds.values())
         if places < 2:
             continue
@@ -1365,7 +1370,7 @@ def rule_duplicate_providers(audit: AuditReport, ctx: RuleContext) -> list[Expos
             "Each place is another copy to take.",
             evidence=[
                 f"{provider}: {', '.join(stores)}"
-                for provider, creds in sorted(_provider_copies(audit).items())
+                for provider, creds in sorted(copies.items())
                 for stores in creds.values()
             ],
         )
@@ -1424,6 +1429,7 @@ def _brief(fact: HostFact) -> str:
 
 def _unattended_statement(facts: list[HostFact]) -> str:
     procs = [f for f in facts if f.name.startswith("pid ")]
+    browsers = [f for f in facts if f.name.startswith("browser pid ")]
     orphans = [f for f in facts if "orphaned" in f.detail]
     logins = [f for f in facts if f.detail.startswith("starts at login")]
     parts = []
@@ -1434,6 +1440,10 @@ def _unattended_statement(facts: list[HostFact]) -> str:
         )
     if orphans:
         parts.append(f"{plural(len(orphans), 'MCP server')} left running after the session ended")
+    if browsers:
+        parts.append(
+            f"{plural(len(browsers), 'browser')} with a remote debugging port and no parent session"
+        )
     if logins:
         parts.append(plural(len(logins), "login item"))
     statement = f"These keep running as you when you are not there: {join(parts)}."
@@ -1520,7 +1530,12 @@ def rule_unattended(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
         if "orphaned" in f.detail and f.path
     ]
     if not commands:
-        commands = [FixCommand("Quit the listed processes and remove the login items", manual=True)]
+        commands = [
+            FixCommand(
+                "Quit listed processes you no longer use; remove login items you do not want",
+                manual=True,
+            )
+        ]
     return [
         _host(
             "unattended",
