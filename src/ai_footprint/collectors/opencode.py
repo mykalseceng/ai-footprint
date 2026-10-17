@@ -33,6 +33,7 @@ from ai_footprint.model import (
     Endpoint,
     Extension,
     Setting,
+    StoreKind,
     ToolPresence,
     ToolReport,
 )
@@ -272,8 +273,8 @@ def _credentials(
     fingerprints: dict[str, str] = {}
     creds: list[Credential] = []
     auth = roots["data"] / "auth.json"
-    stored = [(p, e, "plaintext file", auth) for p, e in (load_json(auth) or {}).items()]
-    stored += [(p, e, "SQLite table credential", db) for p, e in _db_credentials(db)]
+    stored = [(p, e, StoreKind.FILE, auth) for p, e in (load_json(auth) or {}).items()]
+    stored += [(p, e, StoreKind.SQLITE, db) for p, e in _db_credentials(db)]
     for provider, entry, store, path in stored:
         if not isinstance(entry, dict):
             continue
@@ -299,11 +300,12 @@ def _credentials(
             Credential(
                 NAME,
                 "OpenCode local server",
-                "plaintext file",
+                StoreKind.FILE,
                 str(service),
                 f"file mode {mode_string(service.stat().st_mode)}",
                 readable_by_others=readable_by_others(service),
                 tokens=[info],
+                local_service=True,
             )
         )
     return creds, fingerprints, {p for p, e, _s, _p in stored if isinstance(e, dict)}

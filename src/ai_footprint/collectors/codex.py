@@ -35,6 +35,7 @@ from ai_footprint.model import (
     ProcessInfo,
     ProgramStatus,
     Setting,
+    StoreKind,
     ToolPresence,
     ToolReport,
 )
@@ -273,7 +274,7 @@ def _credentials(
                 Credential(
                     NAME,
                     "OpenAI",
-                    "environment variable",
+                    StoreKind.ENV,
                     f"${var}",
                     "inherited by every child process",
                     tokens=[info],
@@ -290,7 +291,7 @@ def _auth_file_credential(
     cred = Credential(
         NAME,
         "OpenAI",
-        "plaintext file",
+        StoreKind.FILE,
         str(path),
         f"file mode {mode_string(path.stat().st_mode)}; credential store setting: {store}; "
         f"auth mode {data.get('auth_mode', '?')}; "

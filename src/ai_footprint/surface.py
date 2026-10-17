@@ -9,7 +9,16 @@ import re
 from dataclasses import dataclass, field
 
 from ai_footprint.fsinfo import disk_bytes, human_size, tilde
-from ai_footprint.model import AuditReport, Category, Credential, Exposure, Lens, ToolReport
+from ai_footprint.model import (
+    AuditReport,
+    Category,
+    Credential,
+    Exposure,
+    FactKind,
+    Lens,
+    ToolReport,
+)
+from ai_footprint.tokens import API_KEY, kind_of
 
 
 @dataclass
@@ -80,7 +89,7 @@ def _sentence(text: str) -> str:
 
 def is_local_secret(cred: Credential) -> bool:
     """A password for a local service rather than a provider account."""
-    return "local server" in cred.provider
+    return cred.local_service
 
 
 def merged_credentials(tools: list[ToolReport]) -> list[tuple[ToolReport, list[Credential]]]:
@@ -96,11 +105,7 @@ def merged_credentials(tools: list[ToolReport]) -> list[tuple[ToolReport, list[C
 
 
 def _is_api_key(creds: list[Credential]) -> bool:
-    return all(
-        t.field in {"key", "OPENAI_API_KEY"} or t.kind.endswith("api_key")
-        for c in creds
-        for t in c.tokens
-    )
+    return all(kind_of(c.tokens) == API_KEY for c in creds)
 
 
 def lifetime(creds: list[Credential]) -> str:
@@ -180,10 +185,7 @@ def _lenses(tools: list[ToolReport], exposures: list[Exposure]) -> list[LensView
 
 
 def _takeable(creds: list[Credential]) -> bool:
-    return any(
-        "plaintext" in c.store or "SQLite" in c.store or "without a prompt" in c.protection
-        for c in creds
-    )
+    return any(c.readable_without_prompt for c in creds)
 
 
 def _named(tool: ToolReport) -> str:
@@ -223,7 +225,11 @@ def _headline(tools: list[ToolReport], exposures: list[Exposure], audit: AuditRe
         )
         history = f", plus data files holding {secrets} {counted}" if secrets else ""
         sentences.append(f"Anything that runs as you can take {share} without a prompt{history}.")
-    inherited = [f for f in audit.host.facts if f.topic == "reach" and f.concern and f.path]
+    inherited = [
+        f
+        for f in audit.host.facts
+        if f.topic == "reach" and f.concern and f.kind is not FactKind.ENV
+    ]
     if inherited and len(tools) > 1:
         names = join([f.name for f in inherited[:3]])
         listed = names if len(inherited) <= 3 else f"including {names}"

@@ -7,7 +7,14 @@ from ai_footprint import accounts, hostscan
 from ai_footprint.collectors import claude as claude_cli
 from ai_footprint.collectors.common import Context
 from ai_footprint.host import all_processes
-from ai_footprint.model import Credential, Extension, ProcessInfo, TokenInfo, ToolReport
+from ai_footprint.model import (
+    Credential,
+    Extension,
+    ProcessInfo,
+    StoreKind,
+    TokenInfo,
+    ToolReport,
+)
 from ai_footprint.system import ProbeResult
 from tests.conftest import FakeSystem
 
@@ -161,7 +168,7 @@ def test_codex_group_claim_is_stated_as_recorded_not_as_a_concern(tmp_path: Path
         display_name="Codex CLI",
         installed=True,
         credentials=[
-            Credential("codex", "OpenAI", "plaintext file", "auth.json", "", tokens=[token])
+            Credential("codex", "OpenAI", StoreKind.FILE, "auth.json", "", tokens=[token])
         ],
     )
     notes = accounts._codex_data(report, tmp_path, {})

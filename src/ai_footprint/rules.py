@@ -18,6 +18,7 @@ from ai_footprint import daemons
 from ai_footprint.fsinfo import tilde
 from ai_footprint.host import first_system_index
 from ai_footprint.model import (
+    BARE_SECURITY,
     Artifact,
     AuditReport,
     BinaryInfo,
@@ -25,11 +26,13 @@ from ai_footprint.model import (
     Daemon,
     Exposure,
     Extension,
+    FactKind,
     Fix,
     FixCommand,
     HostFact,
     HostReport,
     Lens,
+    StoreKind,
     ToolReport,
 )
 from ai_footprint.surface import join, plural
@@ -372,7 +375,7 @@ def rule_keychain_silent(report: ToolReport, ctx: RuleContext) -> list[Exposure]
     silent = [
         c
         for c in report.credentials
-        if c.store == "macOS Keychain" and "without a prompt" in c.protection
+        if c.store is StoreKind.KEYCHAIN and c.silent_read_seconds is not None
     ]
     if not silent:
         return []
@@ -405,7 +408,7 @@ def rule_keychain_silent(report: ToolReport, ctx: RuleContext) -> list[Exposure]
 
 def rule_plaintext_credentials(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     """Credentials stored without OS protection."""
-    plain = [c for c in report.credentials if "plaintext" in c.store or "SQLite" in c.store]
+    plain = [c for c in report.credentials if c.store in {StoreKind.FILE, StoreKind.SQLITE}]
     if not plain:
         return []
     providers = sorted({c.provider for c in plain})
@@ -1070,7 +1073,7 @@ def _needs_share_setting(report: ToolReport, ctx: RuleContext) -> str:
 
 def _needs_keychain(report: ToolReport, ctx: RuleContext) -> str:
     del ctx
-    if any(c.store == "macOS Keychain" for c in report.credentials):
+    if any(c.store is StoreKind.KEYCHAIN for c in report.credentials):
         return ""
     return "no credential is stored in the Keychain"
 
@@ -1241,7 +1244,7 @@ def rule_path_hijack(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
         f"{t.display_name}: {f.value}"
         for t in audit.tools
         for f in t.fingerprint
-        if "bare name" in f.value
+        if f.value == BARE_SECURITY
     ]
     folders = ", ".join(e.path for e in risky)
     consequence = (
@@ -1412,7 +1415,7 @@ def rule_inherited(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
     commands = [
         FixCommand(f"ssh-keygen -p -f {_q(f.path)}")
         for f in facts
-        if f.name.startswith("SSH key") and "no passphrase" in f.detail
+        if f.kind is FactKind.SSH_KEY_OPEN
     ]
     commands.append(
         FixCommand(
@@ -1438,10 +1441,10 @@ def _brief(fact: HostFact) -> str:
 
 
 def _unattended_statement(facts: list[HostFact]) -> str:
-    procs = [f for f in facts if f.name.startswith("pid ")]
-    browsers = [f for f in facts if f.name.startswith("browser pid ")]
-    orphans = [f for f in facts if "orphaned" in f.detail]
-    logins = [f for f in facts if f.detail.startswith("starts at login")]
+    procs = [f for f in facts if f.kind is FactKind.LONG_RUNNING]
+    browsers = [f for f in facts if f.kind is FactKind.DEBUG_BROWSER]
+    orphans = [f for f in facts if f.kind is FactKind.ORPHAN]
+    logins = [f for f in facts if f.kind is FactKind.LOGIN_ITEM]
     parts = []
     if procs:
         parts.append(
@@ -1473,7 +1476,7 @@ def rule_control(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
     browsers: dict[str, list[str]] = {}
     others = []
     for fact in facts:
-        if " extension bridge to " in fact.detail:
+        if fact.kind is FactKind.BRIDGE:
             browsers.setdefault(fact.name, []).append(fact.detail.split(" extension bridge", 1)[0])
         else:
             others.append(_brief(fact))
@@ -1511,7 +1514,9 @@ def rule_backups(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
     included = [f for f in _facts(ctx, "backup") if f.concern]
     if not included:
         return []
-    where = next((f.detail for f in _facts(ctx, "backup") if f.name.endswith("destinations")), "")
+    where = next(
+        (f.detail for f in _facts(ctx, "backup") if f.kind is FactKind.BACKUP_DESTINATIONS), ""
+    )
     return [
         _host(
             "backups",
@@ -1537,7 +1542,7 @@ def rule_unattended(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
     commands = [
         FixCommand(f"pkill -P 1 -f {_q(f.path)}")
         for f in facts
-        if "orphaned" in f.detail and f.path
+        if f.kind is FactKind.ORPHAN and f.path
     ]
     if not commands:
         commands = [

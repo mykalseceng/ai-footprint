@@ -171,18 +171,32 @@ class TokenInfo:
     signature: str = "not applicable"
 
 
+class StoreKind(StrEnum):
+    """How a credential is stored; the value is the text the report shows."""
+
+    KEYCHAIN = "macOS Keychain"
+    FILE = "plaintext file"
+    SQLITE = "SQLite table credential"
+    ENV = "environment variable"
+
+
 @dataclass
 class Credential:
     """Where a tool keeps a credential and how well it is protected.
 
     Attributes:
+        protection: Display text only; rules read the typed fields below.
         owner: The account the credential belongs to, when a file on disk records it.
         owner_source: The file and field ``owner`` was read from.
+        local_service: A password for a service on this machine, not a provider account.
+        silent_read_seconds: How long this audit took to read the Keychain item with no
+            prompt; None when it was not read that way.
+        keychain_written: The Keychain item's last modification time, when known.
     """
 
     tool: str
     provider: str
-    store: str
+    store: StoreKind
     location: str
     protection: str
     readable_by_others: bool = False
@@ -190,6 +204,16 @@ class Credential:
     live_check: str = ""
     owner: str = ""
     owner_source: str = ""
+    local_service: bool = False
+    silent_read_seconds: float | None = None
+    keychain_written: str = ""
+
+    @property
+    def readable_without_prompt(self) -> bool:
+        """Any program running as you can copy it: a file, a table, or a silent Keychain read."""
+        return self.store in {StoreKind.FILE, StoreKind.SQLITE} or (
+            self.silent_read_seconds is not None
+        )
 
 
 @dataclass
@@ -244,6 +268,10 @@ class Endpoint:
     purpose: str
     source: str
     count: int = 0
+
+
+BARE_SECURITY = 'spawns "security" by bare name (PATH lookup)'
+"""Fingerprint value for a binary that runs ``security`` through a PATH lookup."""
 
 
 @dataclass
@@ -307,6 +335,7 @@ class Daemon:
         detached: Parent is launchd (pid 1): no terminal session owns it.
         days: Whole days since it started.
         notes: Observed facts: a copied binary, a self-updating loop, a version mismatch.
+        off_path: It runs ``binary``, which is not the tool binary on PATH.
     """
 
     pid: int
@@ -317,6 +346,7 @@ class Daemon:
     detached: bool
     days: int
     listeners: list[Listener] = field(default_factory=list)
+    off_path: bool = False
     notes: list[str] = field(default_factory=list)
 
 
@@ -330,6 +360,20 @@ class AccountNote:
     concern: bool = False
 
 
+class FactKind(StrEnum):
+    """What a host fact records, so rules never read it back out of its text."""
+
+    OTHER = ""
+    SSH_KEY_OPEN = "ssh-key-open"
+    ENV = "env"
+    BRIDGE = "bridge"
+    BACKUP_DESTINATIONS = "backup-destinations"
+    ORPHAN = "orphan"
+    LONG_RUNNING = "long-running"
+    DEBUG_BROWSER = "debug-browser"
+    LOGIN_ITEM = "login-item"
+
+
 @dataclass
 class HostFact:
     """One observation about the machine around the tools (reach, control, backups...)."""
@@ -339,6 +383,7 @@ class HostFact:
     detail: str
     path: str = ""
     concern: bool = False
+    kind: FactKind = FactKind.OTHER
 
 
 @dataclass

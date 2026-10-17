@@ -28,6 +28,7 @@ from ai_footprint.model import (
     Endpoint,
     FingerprintItem,
     Setting,
+    StoreKind,
     ToolPresence,
     ToolReport,
 )
@@ -228,7 +229,7 @@ def provider_credential(
     *,
     tool: str,
     provider: str,
-    store: str,
+    store: StoreKind,
     path: Path,
     fingerprints: dict[str, str],
     label: str,

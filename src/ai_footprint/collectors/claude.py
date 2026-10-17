@@ -24,6 +24,7 @@ from ai_footprint.collectors.common import (
 from ai_footprint.fsinfo import mode_string, readable_by_others
 from ai_footprint.host import processes
 from ai_footprint.model import (
+    BARE_SECURITY,
     BinaryInfo,
     Category,
     Credential,
@@ -31,6 +32,7 @@ from ai_footprint.model import (
     Extension,
     ProgramStatus,
     Setting,
+    StoreKind,
     ToolPresence,
     ToolReport,
 )
@@ -149,7 +151,7 @@ FINGERPRINT = (
     ),
     (
         "Keychain read",
-        'spawns "security" by bare name (PATH lookup)',
+        BARE_SECURITY,
         '"security",["find-generic-password"',
     ),
 )
@@ -276,7 +278,7 @@ def _credentials(
     if file_path.is_file():
         data = load_json(file_path) or {}
         cred = _oauth_credential(
-            ctx, data, store="plaintext file", location=str(file_path), fingerprints=fingerprints
+            ctx, data, store=StoreKind.FILE, location=str(file_path), fingerprints=fingerprints
         )
         cred.readable_by_others = readable_by_others(file_path)
         cred.protection = f"file mode {mode_string(file_path.stat().st_mode)}"
@@ -291,7 +293,7 @@ def _set_owner(creds: list[Credential], config: dict[str, Any]) -> None:
     if not isinstance(email, str) or not email:
         return
     for cred in creds:
-        if cred.store != "environment variable":
+        if cred.store is not StoreKind.ENV:
             cred.owner = email
             cred.owner_source = "~/.claude.json oauthAccount.emailAddress"
 
@@ -310,7 +312,7 @@ def _keychain_credential(
     cred = _oauth_credential(
         ctx,
         data,
-        store="macOS Keychain",
+        store=StoreKind.KEYCHAIN,
         location=f"{item.keychain} · service '{KEYCHAIN_SERVICE}'",
         fingerprints=fingerprints,
     )
@@ -323,6 +325,8 @@ def _keychain_credential(
             else ""
         )
     )
+    cred.keychain_written = item.modified
+    cred.silent_read_seconds = read.seconds if read.silent else None
     access = data.get("claudeAiOauth", {}).get("accessToken")
     if ctx.live and isinstance(access, str):
         try:
@@ -333,7 +337,12 @@ def _keychain_credential(
 
 
 def _oauth_credential(
-    ctx: Context, data: dict[str, Any], *, store: str, location: str, fingerprints: dict[str, str]
+    ctx: Context,
+    data: dict[str, Any],
+    *,
+    store: StoreKind,
+    location: str,
+    fingerprints: dict[str, str],
 ) -> Credential:
     oauth = data.get("claudeAiOauth", {}) if isinstance(data, dict) else {}
     cred = Credential(
@@ -369,7 +378,7 @@ def _env_credentials(ctx: Context, fingerprints: dict[str, str]) -> list[Credent
             Credential(
                 tool=NAME,
                 provider="Anthropic",
-                store="environment variable",
+                store=StoreKind.ENV,
                 location=f"${var}",
                 protection="inherited by every child process",
                 tokens=[info],

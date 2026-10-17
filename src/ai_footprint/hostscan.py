@@ -27,7 +27,7 @@ from ai_footprint.fsinfo import (
     tree_stats,
 )
 from ai_footprint.host import all_processes, started_at
-from ai_footprint.model import Category, HostFact, ProcessInfo, ToolReport
+from ai_footprint.model import Category, FactKind, HostFact, ProcessInfo, ToolReport
 from ai_footprint.system import System
 
 SECRET_ENV = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.IGNORECASE)
@@ -63,9 +63,17 @@ TERMINALS = (
 
 
 def _fact(
-    topic: str, name: str, detail: str, path: Path | str = "", *, concern: bool = False
+    topic: str,
+    name: str,
+    detail: str,
+    path: Path | str = "",
+    *,
+    concern: bool = False,
+    kind: FactKind = FactKind.OTHER,
 ) -> HostFact:
-    return HostFact(topic=topic, name=name, detail=detail, path=str(path), concern=concern)
+    return HostFact(
+        topic=topic, name=name, detail=detail, path=str(path), concern=concern, kind=kind
+    )
 
 
 def _clip(text: str, limit: int) -> str:
@@ -118,6 +126,7 @@ def _ssh_facts(home: Path, system: System) -> list[HostFact]:
                 "no passphrase" if open_key else f"passphrase-protected ({cipher})",
                 path,
                 concern=open_key,
+                kind=FactKind.SSH_KEY_OPEN if open_key else FactKind.OTHER,
             )
         )
     if system.has_probe("ssh-add") and system.env.get("SSH_AUTH_SOCK"):
@@ -225,6 +234,7 @@ def _env_facts(system: System) -> list[HostFact]:
             "Secret-looking environment variables in the audit's environment",
             ", ".join(names[:12]) + (f" and {len(names) - 12} more" if len(names) > 12 else ""),
             concern=True,
+            kind=FactKind.ENV,
         )
     ]
 
@@ -276,6 +286,7 @@ def _native_hosts(home: Path) -> list[HostFact]:
                     detail,
                     manifest,
                     concern=installed,
+                    kind=FactKind.BRIDGE,
                 )
             )
     return facts
@@ -380,7 +391,7 @@ def backups(system: System, roots: Iterable[Path]) -> list[HostFact]:
     if not names:
         return [_fact("backup", "Time Machine", "no backup destination configured")]
     where = ", ".join(f"{n} ({k.lower()})" for n, k in zip(names, kinds, strict=False))
-    facts = [_fact("backup", "Time Machine destinations", where)]
+    facts = [_fact("backup", "Time Machine destinations", where, kind=FactKind.BACKUP_DESTINATIONS)]
     for root in roots:
         if not root.exists():
             continue
@@ -452,6 +463,7 @@ def _long_running(tools: list[ToolReport], now: datetime.datetime) -> list[HostF
                     f"{tool.display_name} running since {started:%Y-%m-%d}: "
                     f"{_clip(proc.command, 160)}",
                     concern=True,
+                    kind=FactKind.LONG_RUNNING,
                 )
             )
     return facts
@@ -474,6 +486,7 @@ def _debug_browsers(procs: list[ProcessInfo]) -> list[HostFact]:
                 f"remote debugging port {port.group(1)}, no parent session: "
                 f"{_clip(proc.command, 160)}",
                 concern=True,
+                kind=FactKind.DEBUG_BROWSER,
             )
         )
     return facts
@@ -509,6 +522,7 @@ def unattended(
                 f"session ended{since}",
                 _common_needle(orphans),
                 concern=True,
+                kind=FactKind.ORPHAN,
             )
         )
     return facts + _long_running(tools, now) + _debug_browsers(procs) + _launch_agents(home)
@@ -538,6 +552,7 @@ def _launch_agents(home: Path) -> list[HostFact]:
                         f"starts at login: {_clip(program, 160)}",
                         plist,
                         concern=True,
+                        kind=FactKind.LOGIN_ITEM,
                     )
                 )
     return facts

@@ -14,6 +14,7 @@ from ai_footprint.model import (
     ProcessInfo,
     SecretKindSummary,
     SecretScan,
+    StoreKind,
     ToolReport,
 )
 from ai_footprint.tokens import inspect_token
@@ -94,7 +95,7 @@ def oauth(provider: str, *, issued: float, expires: float) -> Credential:
     access = inspect_token("access", "a" * 40, now=time.time(), expires_at=expires)
     access.issued_at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(issued))
     refresh = inspect_token("refresh", "rt_" + "r" * 60, now=time.time())
-    return Credential("pi", provider, "plaintext file", "/a.json", "", tokens=[access, refresh])
+    return Credential("pi", provider, StoreKind.FILE, "/a.json", "", tokens=[access, refresh])
 
 
 def test_an_expired_login_states_issue_and_expiry_dates_only(tmp_path: Path):
@@ -118,8 +119,10 @@ def test_revoke_advice_names_only_the_stored_providers(tmp_path: Path):
     report = ToolReport(name="opencode", display_name="OpenCode", installed=True)
     report.credentials = [
         oauth("OpenAI", issued=time.time(), expires=time.time() + 60),
-        Credential("opencode", "zai", "SQLite table credential", "/db", ""),
-        Credential("opencode", "OpenCode local server", "plaintext file", "/s.json", ""),
+        Credential("opencode", "zai", StoreKind.SQLITE, "/db", ""),
+        Credential(
+            "opencode", "OpenCode local server", StoreKind.FILE, "/s.json", "", local_service=True
+        ),
     ]
     notes = accounts.opencode(_ctx(tmp_path), report, {"config": {}})
     [revoke] = [n.text for n in notes if n.topic == "revoke"]

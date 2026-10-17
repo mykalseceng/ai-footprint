@@ -9,6 +9,7 @@ from ai_footprint import document, report_html, rules
 from ai_footprint.model import (
     AuditReport,
     Exposure,
+    FactKind,
     Fix,
     FixCommand,
     HostFact,
@@ -73,7 +74,11 @@ def block(page: str, anchor: str) -> str:
 
 def pid(number: int, days: int, command: str) -> HostFact:
     return HostFact(
-        "unattended", f"pid {number}", f"running for {days} days: {command}", concern=True
+        "unattended",
+        f"pid {number}",
+        f"running for {days} days: {command}",
+        concern=True,
+        kind=FactKind.LONG_RUNNING,
     )
 
 
@@ -176,8 +181,15 @@ def test_unattended_statement_counts_instead_of_listing_commands():
             "1 orphaned process(es) still running after their session ended",
             "/Apps/HopperMCPServer",
             concern=True,
+            kind=FactKind.ORPHAN,
         ),
-        HostFact("unattended", "com.example.agent", "starts at login: claude", concern=True),
+        HostFact(
+            "unattended",
+            "com.example.agent",
+            "starts at login: claude",
+            concern=True,
+            kind=FactKind.LOGIN_ITEM,
+        ),
     ]
     audit = make_audit(facts, [])
     [finding] = [x for x in host_exposures(audit) if x.id == "host:unattended"]

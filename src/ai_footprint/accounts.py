@@ -15,7 +15,7 @@ from ai_footprint.collectors import claude as claude_cli
 from ai_footprint.collectors import codex as codex_cli
 from ai_footprint.collectors import pi as pi_cli
 from ai_footprint.collectors.common import Context, binary_path, load_json
-from ai_footprint.model import AccountNote, ToolReport
+from ai_footprint.model import AccountNote, StoreKind, ToolReport
 from ai_footprint.surface import join, when
 from ai_footprint.tokens import iso_time
 
@@ -154,8 +154,8 @@ def _claude_revoke(ctx: Context, report: ToolReport, binary: str) -> list[Accoun
 def _claude_detect(ctx: Context, report: ToolReport, config: dict[str, Any]) -> list[AccountNote]:
     notes = []
     for cred in report.credentials:
-        if cred.store == "macOS Keychain" and "last written " in cred.protection:
-            written = cred.protection.split("last written ", 1)[1].split(";", 1)[0]
+        if cred.store is StoreKind.KEYCHAIN and cred.keychain_written:
+            written = cred.keychain_written
             notes.append(
                 _note(
                     "detect",
@@ -392,7 +392,7 @@ def opencode(ctx: Context, report: ToolReport, facts: dict[str, Any]) -> list[Ac
     del ctx
     config = facts.get("config", {})
     share = config.get("share", "not set")
-    providers = sorted({c.provider for c in report.credentials if "local server" not in c.provider})
+    providers = sorted({c.provider for c in report.credentials if not c.local_service})
     notes = [
         _note(
             "data",

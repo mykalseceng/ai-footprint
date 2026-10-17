@@ -108,6 +108,7 @@ def test_rule_names_each_daemon_and_offers_validated_codex_fixes(tmp_path: Path)
             days=3,
             listeners=[Listener("unix", "/tmp/codex-daemon-501/abcdefghijklmnopqrstuvwxyz", "600")],
             notes=["runs /x/bin/codex, not the binary on PATH"],
+            off_path=True,
         ),
         Daemon(
             pid=7,

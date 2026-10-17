@@ -30,10 +30,15 @@ def _binary(command: str) -> str:
     return words[0] if words else ""
 
 
-def _notes(proc: ProcessInfo, binary: str, report: ToolReport) -> list[str]:
-    notes = []
+def _off_path(binary: str, report: ToolReport) -> bool:
     installed = {b.resolved for b in report.binaries}
-    if installed and binary.startswith("/") and binary not in installed:
+    return bool(installed) and binary.startswith("/") and binary not in installed
+
+
+def _notes(proc: ProcessInfo, binary: str, report: ToolReport) -> list[str]:
+    """Observed facts; the off-PATH note, when there is one, always comes first."""
+    notes = []
+    if _off_path(binary, report):
         notes.append(f"runs {binary}, not the binary on PATH")
     version = VERSION.search(binary)
     current = report.versions()
@@ -70,6 +75,7 @@ def collect(ctx: Context, report: ToolReport) -> list[Daemon]:
                 days=(now - started).days if started else 0,
                 listeners=by_pid.get(proc.pid, []),
                 notes=_notes(proc, binary, report),
+                off_path=_off_path(binary, report),
             )
         )
     return out
@@ -82,12 +88,9 @@ def describe(daemon: Daemon, home: str) -> tuple[str, list[str], list[str]]:
         f"{ln.kind} {short_path(ln.address, home)}" + (f" mode {ln.mode}" if ln.mode else "")
         for ln in daemon.listeners
     ]
-    notes = [
-        f"binary {short_path(note[5:].split(',')[0], home)}, not the one on PATH"
-        if note.startswith("runs ")
-        else note
-        for note in daemon.notes
-    ]
+    notes = list(daemon.notes)
+    if daemon.off_path:
+        notes[0] = f"binary {short_path(daemon.binary, home)}, not the one on PATH"
     return what[:60] + ("…" if len(what) > 60 else ""), listens, notes
 
 

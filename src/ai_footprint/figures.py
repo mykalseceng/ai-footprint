@@ -12,7 +12,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-from ai_footprint import keys, rules, surface
+from ai_footprint import keys, rules, surface, tokens
 from ai_footprint.fsinfo import disk_bytes, human_size, outermost
 from ai_footprint.model import Artifact, AuditReport, Category, Lens, ToolReport
 from ai_footprint.rules import Checklist
@@ -70,8 +70,8 @@ def _secret_figure(tools: list[ToolReport]) -> Figure:
 
 def _keys_figure(audit: AuditReport) -> Figure:
     rows = keys.rows(audit)
-    api = [r for r in rows if r.kind == keys.API_KEY]
-    logins = sum(1 for r in rows if r.kind == keys.LOGIN)
+    api = [r for r in rows if r.kind == tokens.API_KEY]
+    logins = sum(1 for r in rows if r.kind == tokens.LOGIN)
     providers = sorted({r.provider for r in api}, key=str.lower)
     detail = f"distinct keys for {', '.join(providers)}" if api else "no API keys stored"
     return Figure(

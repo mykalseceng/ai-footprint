@@ -276,7 +276,7 @@ def _headlines(doc: Doc) -> CommandValidation:
 
 
 def _key_type(tokens: list[Doc]) -> str:
-    """Classify a credential entry with separate rules from keys.kind_of."""
+    """Classify a credential entry with separate rules from tokens.kind_of."""
     names = [t["field"].lower() for t in tokens]
     kinds = [t["kind"] for t in tokens]
     api_kind = any(

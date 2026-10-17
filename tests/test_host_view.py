@@ -9,11 +9,13 @@ from ai_footprint.model import (
     CommandValidation,
     Credential,
     Exposure,
+    FactKind,
     Fix,
     FixCommand,
     HostFact,
     HostReport,
     Lens,
+    StoreKind,
     TokenInfo,
     ToolReport,
 )
@@ -68,7 +70,11 @@ def question(view: dict, finding_id: str) -> dict:
 
 def pid(number: int, days: int, command: str) -> HostFact:
     return HostFact(
-        "unattended", f"pid {number}", f"running for {days} days: {command}", concern=True
+        "unattended",
+        f"pid {number}",
+        f"running for {days} days: {command}",
+        concern=True,
+        kind=FactKind.LONG_RUNNING,
     )
 
 
@@ -145,8 +151,15 @@ def test_unattended_statement_counts_instead_of_listing_commands():
             "1 orphaned process(es) still running after their session ended",
             "/Apps/HopperMCPServer",
             concern=True,
+            kind=FactKind.ORPHAN,
         ),
-        HostFact("unattended", "com.example.agent", "starts at login: claude", concern=True),
+        HostFact(
+            "unattended",
+            "com.example.agent",
+            "starts at login: claude",
+            concern=True,
+            kind=FactKind.LOGIN_ITEM,
+        ),
     ]
     audit = make_audit(facts, [])
     [finding] = [x for x in host_exposures(audit) if x.id == "host:unattended"]
@@ -221,21 +234,21 @@ def test_manual_fix_steps_are_labelled_as_manual():
 
 
 def test_duplicate_credentials_separate_logins_from_copies():
-    def cred(provider: str, store: str, print_: str) -> Credential:
+    def cred(provider: str, store: StoreKind, print_: str) -> Credential:
         token = TokenInfo("refresh", "opaque", "", "rt_", 90, print_)
         return Credential("x", provider, store, "/x", "file mode 600", tokens=[token])
 
     codex = ToolReport(name="codex", display_name="Codex CLI", installed=True)
-    codex.credentials = [cred("OpenAI", "plaintext file", "aaa")]
+    codex.credentials = [cred("OpenAI", StoreKind.FILE, "aaa")]
     opencode = ToolReport(name="opencode", display_name="OpenCode", installed=True)
     opencode.credentials = [
-        cred("OpenAI", "plaintext file", "bbb"),
-        cred("OpenAI", "SQLite table", "bbb"),
+        cred("OpenAI", StoreKind.FILE, "bbb"),
+        cred("OpenAI", StoreKind.SQLITE, "bbb"),
     ]
     audit = make_audit([], [], [codex, opencode])
     [finding] = [x for x in host_exposures(audit) if x.id == "host:duplicate-creds"]
     assert finding.statement.startswith(
         "Credentials for one provider are held in several places (OpenAI: 2 separate "
         "credentials in 3 places, including the same credential in OpenCode (plaintext file, /x) "
-        "and OpenCode (SQLite table, /x))."
+        "and OpenCode (SQLite table credential, /x))."
     )

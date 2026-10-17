@@ -63,7 +63,7 @@ def _store_answer(tool: ToolReport, home: str) -> Answer:
     question = "Where is my auth token stored?"
     if not tool.credentials:
         return Answer(question, "No stored credentials were found.")
-    silent = any("without a prompt" in c.protection for c in tool.credentials)
+    silent = any(c.silent_read_seconds is not None for c in tool.credentials)
     return Answer(
         question,
         "This audit read the Keychain item without a prompt." if silent else "",

@@ -9,7 +9,6 @@ the data is written here, in Python; the dashboard only lays it out.
 """
 
 import dataclasses
-import re
 from typing import Any
 
 from ai_footprint import answers, figures, keys, surface
@@ -115,11 +114,10 @@ def proof(audit: AuditReport) -> str:
     """The callout: how fast this audit read a Keychain token without a prompt, if it did."""
     for tool in audit.tools:
         for cred in tool.credentials:
-            match = re.search(r"read it via /usr/bin/security in ([\d.]+)s", cred.protection)
-            if match:
+            if cred.silent_read_seconds is not None:
                 return (
                     f"This audit read your {cred.provider} token from the Keychain through "
-                    f"`/usr/bin/security` in {match.group(1)} seconds, with no prompt. "
+                    f"`/usr/bin/security` in {cred.silent_read_seconds} seconds, with no prompt. "
                     "Any program running as you can do the same."
                 )
     return "This audit never writes a secret value to this report."
