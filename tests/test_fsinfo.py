@@ -6,7 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint.fsinfo import describe, human_size, readable_by_group, readable_by_others, tilde
+from ai_footprint.fsinfo import (
+    describe,
+    human_size,
+    readable_by_group,
+    readable_by_others,
+    tilde,
+    tree_stats,
+)
 from ai_footprint.model import Category
 
 
@@ -99,3 +106,20 @@ def test_group_readability_follows_group_bits_through_parents(
 
 def test_group_readability_of_missing_path_is_empty(tmp_path: Path):
     assert readable_by_group(tmp_path / "nope") == ""
+
+
+def test_tree_stats_counts_files_readable_through_every_folder(tmp_path: Path):
+    root = tmp_path / "projects"
+    (root / "open").mkdir(parents=True)
+    (root / "closed").mkdir()
+    (root / "open" / "a.jsonl").write_text("{}")
+    (root / "open" / "b.jsonl").write_text("{}")
+    (root / "closed" / "c.jsonl").write_text("{}")
+    (root / "open" / "a.jsonl").chmod(0o644)
+    (root / "open" / "b.jsonl").chmod(0o600)
+    (root / "closed" / "c.jsonl").chmod(0o644)
+    (root / "closed").chmod(0o700)
+    root.chmod(0o755)
+    (root / "open").chmod(0o755)
+    totals = tree_stats(root)
+    assert (totals.file_count, totals.group_files, totals.other_files) == (3, 1, 1)

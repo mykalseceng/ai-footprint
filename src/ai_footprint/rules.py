@@ -18,6 +18,7 @@ from ai_footprint import daemons
 from ai_footprint.fsinfo import tilde
 from ai_footprint.host import first_system_index
 from ai_footprint.model import (
+    Artifact,
     AuditReport,
     BinaryInfo,
     Category,
@@ -837,13 +838,22 @@ def rule_credentials_exposed(report: ToolReport, ctx: RuleContext) -> list[Expos
     ]
 
 
+def _contents_readable(artifact: Artifact, shared_groups: set[str]) -> bool:
+    """Another account can read the file, or at least one file inside the folder."""
+    if artifact.other_readable:
+        return not artifact.is_dir or artifact.other_readable_files > 0
+    if artifact.group_readable in shared_groups:
+        return not artifact.is_dir or artifact.group_readable_files > 0
+    return False
+
+
 def rule_exposed_data(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     """Session, config and log data readable by other accounts, directly or through a group."""
     shared_groups = {g for groups in ctx.host.other_user_groups.values() for g in groups}
     exposed = [
         a
         for a in report.artifacts
-        if (a.other_readable or a.group_readable in shared_groups)
+        if _contents_readable(a, shared_groups)
         and a.category in {Category.SESSION, Category.CONFIG, Category.LOG, Category.INSTRUCTIONS}
     ]
     if not exposed or not ctx.host.other_users:

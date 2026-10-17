@@ -115,8 +115,16 @@ def _expiry_answer(tool: ToolReport) -> Answer:
 
 def _readers(artifact: Artifact) -> str:
     if artifact.other_readable:
-        return "any account"
-    return f"group `{artifact.group_readable}`" if artifact.group_readable else ""
+        who, files = "any account", artifact.other_readable_files
+    elif artifact.group_readable:
+        who, files = f"group `{artifact.group_readable}`", artifact.group_readable_files
+    else:
+        return ""
+    if not artifact.is_dir:
+        return who
+    if not files:
+        return f"{who}: file names only"
+    return f"{who}: {files:,} of {artifact.file_count:,} files"
 
 
 def _readers_answer(tool: ToolReport, host: HostReport) -> Answer:

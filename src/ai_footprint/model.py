@@ -134,6 +134,8 @@ class Artifact:
     owner: str = ""
     other_readable: bool = False
     group_readable: str = ""
+    group_readable_files: int = 0
+    other_readable_files: int = 0
     group_writable: bool = False
     other_writable: bool = False
     oldest: str = ""

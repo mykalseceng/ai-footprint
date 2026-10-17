@@ -25,6 +25,8 @@ class TreeStats:
     file_count: int = 0
     oldest: float | None = None
     newest: float | None = None
+    group_files: int = 0
+    other_files: int = 0
 
     def add(self, size: int, mtime: float) -> None:
         """Fold one file into the totals."""
@@ -126,7 +128,11 @@ def readable_by_group(path: Path) -> str:
 
 
 def tree_stats(path: Path) -> TreeStats:
-    """Walk ``path`` without following symlinks and total regular files."""
+    """Walk ``path`` without following symlinks and total regular files.
+
+    Also counts the files the item's group and other accounts can read, following the
+    execute bits of every folder between ``path`` and the file.
+    """
     totals = TreeStats()
     try:
         info = path.lstat()
@@ -135,9 +141,30 @@ def tree_stats(path: Path) -> TreeStats:
     if stat.S_ISREG(info.st_mode):
         totals.add(info.st_size, info.st_mtime)
         return totals
-    if not stat.S_ISDIR(info.st_mode):
-        return totals
-    for root, _dirs, files in os.walk(path, followlinks=False):
+    if stat.S_ISDIR(info.st_mode):
+        _walk(path, info.st_mode, totals)
+    return totals
+
+
+def _modes(folder: str, names: list[str]) -> dict[str, int]:
+    modes = {}
+    for name in names:
+        try:
+            modes[name] = Path(folder, name).lstat().st_mode
+        except OSError:
+            continue
+    return modes
+
+
+def _walk(path: Path, mode: int, totals: TreeStats) -> None:
+    reach = {str(path): (mode & stat.S_IXGRP, mode & stat.S_IXOTH)}
+    for root, dirs, files in os.walk(path, followlinks=False):
+        group_in, other_in = reach.get(root, (0, 0))
+        for name, dir_mode in _modes(root, dirs).items():
+            reach[str(Path(root, name))] = (
+                group_in and dir_mode & stat.S_IXGRP,
+                other_in and dir_mode & stat.S_IXOTH,
+            )
         for name in files:
             try:
                 entry = Path(root, name).lstat()
@@ -145,7 +172,8 @@ def tree_stats(path: Path) -> TreeStats:
                 continue
             if stat.S_ISREG(entry.st_mode):
                 totals.add(entry.st_size, entry.st_mtime)
-    return totals
+                totals.group_files += bool(group_in and entry.st_mode & stat.S_IRGRP)
+                totals.other_files += bool(other_in and entry.st_mode & stat.S_IROTH)
 
 
 def describe(path: Path, *, label: str, category: Category, description: str) -> Artifact:
@@ -164,6 +192,8 @@ def describe(path: Path, *, label: str, category: Category, description: str) ->
     artifact.owner = owner_name(info.st_uid)
     artifact.other_readable = readable_by_others(path)
     artifact.group_readable = readable_by_group(path)
+    artifact.group_readable_files = totals.group_files if artifact.is_dir else 0
+    artifact.other_readable_files = totals.other_files if artifact.is_dir else 0
     artifact.group_writable = bool(info.st_mode & stat.S_IWGRP)
     artifact.other_writable = bool(info.st_mode & stat.S_IWOTH)
     artifact.oldest = iso_date(totals.oldest)

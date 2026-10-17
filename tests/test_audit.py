@@ -22,7 +22,15 @@ from ai_footprint import (
     surface,
 )
 from ai_footprint.audit import run_audit
-from ai_footprint.model import AuditReport, BinaryInfo, CommandValidation, ToolReport
+from ai_footprint.model import (
+    Artifact,
+    AuditReport,
+    BinaryInfo,
+    Category,
+    CommandValidation,
+    HostReport,
+    ToolReport,
+)
 from ai_footprint.report_text import Style, render_doctor, render_summary
 from tests.conftest import (
     FAKE_ANTHROPIC_ACCESS,
@@ -353,3 +361,40 @@ def test_plural_handles_words_ending_in_y():
     assert surface.plural(2, "entry") == "2 entries"
     assert surface.plural(1, "entry") == "1 entry"
     assert surface.plural(2, "key") == "2 keys"
+
+
+def test_readers_answer_says_how_many_files_the_group_can_read(tmp_path: Path):
+    tool = ToolReport(name="claude", display_name="Claude Code", installed=True)
+    tool.artifacts = [
+        Artifact(
+            "Projects",
+            f"{tmp_path}/p",
+            Category.SESSION,
+            "",
+            exists=True,
+            is_dir=True,
+            file_count=10,
+            mode="755",
+            group_readable="staff",
+            group_readable_files=0,
+        ),
+        Artifact(
+            "Logs",
+            f"{tmp_path}/l",
+            Category.LOG,
+            "",
+            exists=True,
+            is_dir=True,
+            file_count=4,
+            mode="755",
+            group_readable="staff",
+            group_readable_files=3,
+        ),
+    ]
+    host = HostReport("macOS", "", "arm64", "mac", "me", 501, str(tmp_path), "750")
+    answer = answers._readers_answer(tool, host)
+    assert answer.text.endswith("and no other local account exists today.")
+    assert [row[2] for row in answer.rows] == [
+        "group `staff`: file names only",
+        "group `staff`: 3 of 4 files",
+    ]
