@@ -120,14 +120,14 @@ def test_duplicate_dangling_entries_become_one_statement(audited):
 def test_faq_answers_every_original_question(audited):
     audit, _c, _a = audited
     claude = next(t for t in audit.tools if t.name == "claude")
-    answered = answers.for_tool(claude, audit.host.home)
+    answered = answers.for_tool(claude, audit.host)
     questions = [a.question for a in answered]
     assert len(questions) == 15
     assert questions[0] == "Where are the log files?"
     assert "How do I revoke this token, and how would I prove it?" in questions
     assert questions[-1] == "Would I notice if someone else used it?"
     sessions = answered[1]
-    assert sessions.headers == ("Path", "Size", "Files", "Since")
+    assert sessions.headers == ("Path", "Size", "Files", "Modified")
     assert sessions.rows and all(row[0].startswith("`~/") for row in sessions.rows)
     revoke = next(a for a in answered if a.question.startswith("How do I revoke"))
     assert revoke.headers == ("Fact", "Source") and revoke.rows and not revoke.text

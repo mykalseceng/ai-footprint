@@ -7,7 +7,7 @@ from collections import Counter
 from collections.abc import Iterable
 
 from ai_footprint import reportcheck, surface
-from ai_footprint.fsinfo import human_size
+from ai_footprint.fsinfo import human_size, tilde
 from ai_footprint.model import AuditReport, CommandValidation, Fix, ToolPresence
 from ai_footprint.rules import Check
 
@@ -263,14 +263,12 @@ def render_list(presences: list[ToolPresence], style: Style, *, home: str) -> st
             shadow = "" if binary is tool.binaries[0] else style("  (shadowed on PATH)", "dim")
             out.append(
                 style(
-                    f"      binary  {binary.path.replace(home, '~', 1)} v{binary.version or '?'}",
+                    f"      binary  {tilde(binary.path, home)} v{binary.version or '?'}",
                     "dim",
                 )
                 + shadow
             )
-        out.extend(
-            style(f"      data    {path.replace(home, '~', 1)}", "dim") for path in tool.data_paths
-        )
+        out.extend(style(f"      data    {tilde(path, home)}", "dim") for path in tool.data_paths)
     installed = [t.name for t in presences if t.installed]
     out.append("")
     if installed:

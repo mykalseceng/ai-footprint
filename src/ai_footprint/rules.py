@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from ai_footprint import daemons
+from ai_footprint.fsinfo import tilde
 from ai_footprint.host import first_system_index
 from ai_footprint.model import (
     AuditReport,
@@ -42,8 +43,7 @@ class RuleContext:
 
     def display(self, path: str) -> str:
         """Path with home shown as ~."""
-        home = str(self.home)
-        return "~" + path[len(home) :] if path.startswith(home) else path
+        return tilde(path, str(self.home))
 
 
 ToolRuleFn = Callable[[ToolReport, RuleContext], list[Exposure]]
@@ -755,11 +755,12 @@ def rule_credentials_exposed(report: ToolReport, ctx: RuleContext) -> list[Expos
 
 
 def rule_exposed_data(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
-    """Session, config and log data readable by other accounts."""
+    """Session, config and log data readable by other accounts, directly or through a group."""
+    shared_groups = {g for groups in ctx.host.other_user_groups.values() for g in groups}
     exposed = [
         a
         for a in report.artifacts
-        if a.other_readable
+        if (a.other_readable or a.group_readable in shared_groups)
         and a.category in {Category.SESSION, Category.CONFIG, Category.LOG, Category.INSTRUCTIONS}
     ]
     if not exposed or not ctx.host.other_users:

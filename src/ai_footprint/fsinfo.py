@@ -6,8 +6,10 @@ for directories). A 644 file inside a 700 directory is not readable by others.
 """
 
 import datetime
+import grp
 import os
 import pwd
+import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,6 +47,17 @@ def owner_name(uid: int) -> str:
         return str(uid)
 
 
+def tilde(text: str, home: str) -> str:
+    """``text`` with the home directory shown as ``~`` wherever it is a whole path prefix.
+
+    ``/Users/al`` becomes ``~`` in ``/Users/al/x`` but not in ``/Users/alice/x``.
+    """
+    root = home.rstrip("/")
+    if not root:
+        return text
+    return re.sub(re.escape(root) + r"(?=$|[/\s\"'`),;:\]])", "~", text)
+
+
 def iso_date(timestamp: float | None) -> str:
     """UTC date (YYYY-MM-DD) for a POSIX timestamp, or empty."""
     if timestamp is None:
@@ -77,6 +90,41 @@ def readable_by_others(path: Path) -> bool:
     return allowed and parents_traversable_by_others(path)
 
 
+def _group_name(gid: int) -> str:
+    try:
+        return grp.getgrgid(gid).gr_name
+    except KeyError:
+        return str(gid)
+
+
+def readable_by_group(path: Path) -> str:
+    """Name of the item's group when its other members can read it, else empty.
+
+    A member of the group reaches the item when every parent directory grants it execute,
+    through the group bits for directories in the same group and the other bits elsewhere.
+    A group named after the owner is the owner's personal group and has no other members.
+    """
+    try:
+        info = path.stat()
+    except OSError:
+        return ""
+    group = _group_name(info.st_gid)
+    if group == owner_name(info.st_uid):
+        return ""
+    needed = stat.S_IRGRP | (stat.S_IXGRP if stat.S_ISDIR(info.st_mode) else 0)
+    if info.st_mode & needed != needed:
+        return ""
+    for parent in path.parents:
+        try:
+            parent_info = parent.stat()
+        except OSError:
+            return ""
+        bit = stat.S_IXGRP if parent_info.st_gid == info.st_gid else stat.S_IXOTH
+        if not parent_info.st_mode & bit:
+            return ""
+    return group
+
+
 def tree_stats(path: Path) -> TreeStats:
     """Walk ``path`` without following symlinks and total regular files."""
     totals = TreeStats()
@@ -100,21 +148,6 @@ def tree_stats(path: Path) -> TreeStats:
     return totals
 
 
-def count_other_readable(path: Path) -> tuple[int, int]:
-    """Count (total, readable-by-others) regular files under a directory."""
-    total = exposed = 0
-    if not path.is_dir():
-        return (1, int(readable_by_others(path))) if path.is_file() else (0, 0)
-    for root, _dirs, files in os.walk(path, followlinks=False):
-        for name in files:
-            file_path = Path(root, name)
-            if not file_path.is_file() or file_path.is_symlink():
-                continue
-            total += 1
-            exposed += int(readable_by_others(file_path))
-    return total, exposed
-
-
 def describe(path: Path, *, label: str, category: Category, description: str) -> Artifact:
     """Build an ``Artifact`` with size, dates, owner, and effective permissions."""
     artifact = Artifact(label=label, path=str(path), category=category, description=description)
@@ -130,6 +163,7 @@ def describe(path: Path, *, label: str, category: Category, description: str) ->
     artifact.mode = mode_string(info.st_mode)
     artifact.owner = owner_name(info.st_uid)
     artifact.other_readable = readable_by_others(path)
+    artifact.group_readable = readable_by_group(path)
     artifact.group_writable = bool(info.st_mode & stat.S_IWGRP)
     artifact.other_writable = bool(info.st_mode & stat.S_IWOTH)
     artifact.oldest = iso_date(totals.oldest)
@@ -138,12 +172,12 @@ def describe(path: Path, *, label: str, category: Category, description: str) ->
 
 
 def human_size(size: int) -> str:
-    """Compact size string, e.g. ``598 MB``."""
+    """Compact size string in decimal units, as Finder shows them, e.g. ``598.0 MB``."""
     value = float(size)
     for unit in ("B", "KB", "MB", "GB", "TB"):
-        if value < 1024 or unit == "TB":
+        if value < 1000 or unit == "TB":
             return f"{value:.0f} {unit}" if unit in {"B", "KB"} else f"{value:.1f} {unit}"
-        value /= 1024
+        value /= 1000
     return f"{size} B"
 
 

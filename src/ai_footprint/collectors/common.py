@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ai_footprint.fsinfo import describe, mode_string, owner_name, tree_stats
+from ai_footprint.fsinfo import describe, mode_string, owner_name, tilde, tree_stats
 from ai_footprint.model import (
     Artifact,
     BinaryInfo,
@@ -44,8 +44,7 @@ class Context:
 
     def display(self, path: str) -> str:
         """Path with the home directory shown as ``~``."""
-        home = str(self.home)
-        return "~" + path[len(home) :] if path.startswith(home) else path
+        return tilde(path, str(self.home))
 
     def binary_has(self, binary: str, markers: Iterable[str]) -> dict[str, bool]:
         """Which marker strings appear in a binary or script."""

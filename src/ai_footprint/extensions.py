@@ -113,26 +113,40 @@ def _read(path: Path) -> str:
 NO_SKILL_TEXT = "no description in its files"
 
 
+def _skill_file(entry: Path) -> Path | None:
+    """The file that defines a skill: a folder's SKILL.md, or a standalone Markdown skill."""
+    if entry.is_dir():
+        skill = entry / "SKILL.md"
+        return skill if skill.is_file() else None
+    if entry.suffix == ".md" and frontmatter(_read(entry)).get("description"):
+        return entry
+    return None
+
+
+def _category(entry: Path) -> bool:
+    return entry.is_dir() and any(_skill_file(child) for child in entry.iterdir())
+
+
 def skill_rows(directory: Path, tool: str, ctx: Context, *, source: str = "") -> list[Extension]:
     """One row per skill in a folder, described by its own SKILL.md.
 
-    A folder without a SKILL.md whose children have one is a category folder, and its
-    children are listed instead. The description is the frontmatter ``description``, else
-    the file's first paragraph, else a fixed placeholder, so every row reads the same way.
+    A skill is a folder with a SKILL.md, or a Markdown file whose frontmatter has a
+    description. A folder without a SKILL.md whose children are skills is a category folder,
+    and its children are listed instead. Anything else is not a skill. The description is the
+    frontmatter ``description``, else the file's first paragraph, else a fixed placeholder.
     """
     if not directory.is_dir():
         return []
     out = []
     for entry in sorted(directory.iterdir()):
-        if entry.name.startswith("."):
-            continue
         target = entry.resolve()
-        if target.is_dir() and not (target / "SKILL.md").is_file():
-            nested = [c for c in target.iterdir() if (c / "SKILL.md").is_file()]
-            if nested:
-                out += skill_rows(target, tool, ctx, source=source or ctx.display(str(entry)))
-                continue
-        text = _read(target / "SKILL.md" if target.is_dir() else target)
+        if _category(target) and not (target / "SKILL.md").is_file():
+            out += skill_rows(target, tool, ctx, source=source or ctx.display(str(entry)))
+            continue
+        skill = _skill_file(target)
+        if skill is None:
+            continue
+        text = _read(skill)
         meta = frontmatter(text)
         linked = f"symlink → {ctx.display(str(target))}" if entry.is_symlink() else "local"
         description = meta.get("description") or body_description(text)
@@ -151,6 +165,20 @@ def skill_rows(directory: Path, tool: str, ctx: Context, *, source: str = "") ->
     return out
 
 
+def count_skills(directory: Path) -> int:
+    """Skills in a folder, counted the way ``skill_rows`` lists them."""
+    if not directory.is_dir():
+        return 0
+    total = 0
+    for entry in directory.iterdir():
+        target = entry.resolve()
+        if _category(target) and not (target / "SKILL.md").is_file():
+            total += count_skills(target)
+        elif _skill_file(target):
+            total += 1
+    return total
+
+
 NO_MANIFEST = "no manifest on disk"
 
 
@@ -161,7 +189,7 @@ def plugin_manifest(install: Path) -> tuple[str, str]:
     parts = []
     for name in _COMPONENTS:
         folder = install / name
-        count = _visible_entries(folder)
+        count = count_skills(folder) if name == "skills" else _visible_entries(folder)
         if count:
             parts.append(f"{count} {name.rstrip('s')}{'s' if count != 1 else ''}")
     servers = list((load_json(install / ".mcp.json") or {}).get("mcpServers", {}))

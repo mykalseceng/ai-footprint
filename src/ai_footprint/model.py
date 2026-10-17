@@ -133,6 +133,7 @@ class Artifact:
     mode: str = ""
     owner: str = ""
     other_readable: bool = False
+    group_readable: str = ""
     group_writable: bool = False
     other_writable: bool = False
     oldest: str = ""

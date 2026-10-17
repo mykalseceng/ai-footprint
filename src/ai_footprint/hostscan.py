@@ -17,7 +17,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from ai_footprint.collectors.common import command_target, load_json
-from ai_footprint.fsinfo import human_size, mode_string, readable_by_others, tree_stats
+from ai_footprint.fsinfo import human_size, mode_string, readable_by_others, tilde, tree_stats
 from ai_footprint.host import all_processes, started_at
 from ai_footprint.model import HostFact, ProcessInfo, ToolReport
 from ai_footprint.system import System
@@ -495,7 +495,7 @@ def other_tools(home: Path) -> list[HostFact]:
         size = sum(tree_stats(p).size_bytes for p in paths)
         servers = list((load_json(home / mcp_rel) or {}).get("mcpServers", {})) if mcp_rel else []
         exposed = [p for p in paths if readable_by_others(p)]
-        detail = f"{human_size(size)} in {', '.join(str(p).replace(str(home), '~') for p in paths)}"
+        detail = f"{human_size(size)} in {', '.join(tilde(str(p), str(home)) for p in paths)}"
         if servers:
             detail += f"; MCP servers: {', '.join(servers)}"
         if exposed:

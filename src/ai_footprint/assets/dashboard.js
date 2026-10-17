@@ -72,10 +72,10 @@
     if (typeof n !== "number") return n == null ? "" : String(n);
     let value = n;
     for (const unit of ["B", "KB", "MB", "GB", "TB"]) {
-      if (value < 1024 || unit === "TB") {
+      if (value < 1000 || unit === "TB") {
         return unit === "B" || unit === "KB" ? `${value.toFixed(0)} ${unit}` : `${value.toFixed(1)} ${unit}`;
       }
-      value /= 1024;
+      value /= 1000;
     }
     return `${n} B`;
   }

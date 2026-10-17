@@ -68,6 +68,7 @@ def test_skill_rows_describe_each_skill_from_its_own_file(tmp_path: Path):
     (skills / "grill").mkdir(parents=True)
     (skills / "grill" / "SKILL.md").write_text(SKILL)
     (skills / "bare").mkdir()
+    (skills / "bare" / "SKILL.md").write_text("")
     [bare, grill] = extensions.skill_rows(skills, "claude", context(tmp_path))
     assert grill.name == "grill"
     assert grill.description == "Interview the user about a plan until every branch is settled."
@@ -76,14 +77,31 @@ def test_skill_rows_describe_each_skill_from_its_own_file(tmp_path: Path):
     assert bare.description == extensions.NO_SKILL_TEXT and bare.access == ""
 
 
+def test_only_skill_folders_and_described_markdown_files_are_skills(tmp_path: Path):
+    skills = tmp_path / "skills"
+    (skills / "empty").mkdir(parents=True)
+    (skills / "README.md").write_text("# Skills in this repo\n")
+    (skills / "python-encoding.test.mjs").write_text("export {}")
+    (skills / "standalone.md").write_text("---\ndescription: Does one thing.\n---\n")
+    (skills / ".system" / "imagegen").mkdir(parents=True)
+    (skills / ".system" / "imagegen" / "SKILL.md").write_text(SKILL)
+    (skills / ".git").mkdir()
+    rows = extensions.skill_rows(skills, "codex", context(tmp_path))
+    assert sorted(r.name for r in rows) == ["imagegen", "standalone"]
+    assert extensions.count_skills(skills) == 2
+    assert extensions.count_skills(tmp_path / "missing") == 0
+
+
 def test_plugin_manifest_reports_description_and_components(tmp_path: Path):
     install = tmp_path / "plugin"
     (install / ".claude-plugin").mkdir(parents=True)
     (install / ".claude-plugin" / "plugin.json").write_text(
         json.dumps({"description": "Audit things. Carefully. Very."})
     )
-    (install / "skills" / "a").mkdir(parents=True)
-    (install / "skills" / "b").mkdir()
+    for name in ("a", "b"):
+        (install / "skills" / name).mkdir(parents=True)
+        (install / "skills" / name / "SKILL.md").write_text(SKILL)
+    (install / "skills" / "README.md").write_text("# Skills\n")
     (install / "commands").mkdir()
     (install / "commands" / "x.md").write_text("")
     (install / ".mcp.json").write_text(json.dumps({"mcpServers": {"s": {"url": "https://x/"}}}))

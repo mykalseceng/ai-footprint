@@ -8,7 +8,7 @@ attacker in each position gets and decides what matters.
 import re
 from dataclasses import dataclass, field
 
-from ai_footprint.fsinfo import human_size
+from ai_footprint.fsinfo import human_size, tilde
 from ai_footprint.model import AuditReport, Category, Credential, Exposure, Lens, ToolReport
 
 
@@ -60,7 +60,7 @@ def sentences(text: str) -> list[str]:
 
 def short_path(path: str, home: str) -> str:
     """Path with ``~`` for home and a long last segment (a hash) cut to 12 characters."""
-    shown = "~" + path[len(home) :] if home and path.startswith(home) else path
+    shown = tilde(path, home)
     head, _, name = shown.rpartition("/")
     return f"{head}/{name[:12]}…" if len(name) > 16 else shown
 

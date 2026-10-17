@@ -12,7 +12,7 @@ import re
 from collections.abc import Iterable, Sequence
 
 from ai_footprint import answers, document, figures, keys, surface
-from ai_footprint.fsinfo import human_size
+from ai_footprint.fsinfo import human_size, tilde
 from ai_footprint.model import (
     AuditReport,
     Category,
@@ -21,6 +21,7 @@ from ai_footprint.model import (
     Extension,
     Fix,
     HostFact,
+    HostReport,
     ToolReport,
 )
 from ai_footprint.report_text import validation_label
@@ -164,9 +165,9 @@ def _close_folds(exposures: list[Exposure]) -> str:
     )
 
 
-def _faq(tool: ToolReport, home: str) -> str:
+def _faq(tool: ToolReport, host: HostReport) -> str:
     items = []
-    for answer in answers.for_tool(tool, home):
+    for answer in answers.for_tool(tool, host):
         body = f"<p>{rich(answer.text)}</p>" if answer.text else ""
         if answer.rows:
             rows = [[rich_breakable(cell) for cell in row] for row in answer.rows]
@@ -264,7 +265,7 @@ def _files_table(tool: ToolReport, home: str) -> str:
     rows = [
         [
             e(a.label),
-            f"<code>{breakable(a.path.replace(home, '~', 1))}</code>",
+            f"<code>{breakable(tilde(a.path, home))}</code>",
             e(human_size(a.size_bytes)),
             e(f"{a.file_count:,}"),
             e(a.mode),
@@ -550,7 +551,7 @@ def _tool_view(audit: AuditReport, tool: ToolReport) -> str:
 <h2>Ways in</h2>
 {_lens_folds(story, show_tool=False)}
 {_close_folds(tool.exposures)}
-{_faq(tool, home)}
+{_faq(tool, audit.host)}
 {_inventory(tool, home)}
 </section>"""
 
@@ -572,10 +573,10 @@ def _facts_table(facts: list[HostFact], home: str) -> str:
         row = [
             pill("review", "concern") if fact.concern else pill("info", "neutral"),
             breakable(fact.name),
-            breakable(fact.detail.replace(home, "~")),
+            breakable(tilde(fact.detail, home)),
         ]
         if with_files:
-            path = fact.path.replace(home, "~", 1)
+            path = tilde(fact.path, home)
             row.append(f"<code>{breakable(path)}</code>" if path else "")
         rows.append(row)
     return table(["", "Item", "Found", *(["File"] if with_files else [])], rows, raw=True)
@@ -626,7 +627,7 @@ def _host_view(audit: AuditReport) -> str:
     path_rows = [
         [
             str(p.index),
-            p.path.replace(host.home, "~", 1),
+            tilde(p.path, host.home),
             f"{p.owner}:{p.group}",
             p.mode,
             "yes" if p.group_writable or p.other_writable else "no",
@@ -654,7 +655,7 @@ def _key_locations(row: keys.KeyRow, home: str) -> str:
     return "<br>".join(
         f"{e(loc.tool)} · {e(loc.store)}"
         + (" " + pill("readable by other accounts", "concern") if loc.readable_by_others else "")
-        + f"<br><code>{breakable(loc.location.replace(home, '~', 1))}</code>"
+        + f"<br><code>{breakable(tilde(loc.location, home))}</code>"
         for loc in row.locations
     )
 

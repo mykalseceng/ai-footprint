@@ -136,7 +136,7 @@ def _fix_label(validation: CommandValidation) -> dict[str, str]:
 def _tool_view(audit: AuditReport, tool: ToolReport) -> dict[str, Any]:
     return {
         **_narrative(surface.for_tool(audit, tool)),
-        "answers": [dataclasses.asdict(a) for a in answers.for_tool(tool, audit.host.home)],
+        "answers": [dataclasses.asdict(a) for a in answers.for_tool(tool, audit.host)],
     }
 
 
