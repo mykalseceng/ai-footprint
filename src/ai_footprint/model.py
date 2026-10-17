@@ -382,6 +382,7 @@ class SecretScan:
     """Summary of a full scan of a tool's data stores."""
 
     roots: list[str]
+    excluded: list[str] = field(default_factory=list)
     files_scanned: int = 0
     bytes_scanned: int = 0
     seconds: float = 0.0

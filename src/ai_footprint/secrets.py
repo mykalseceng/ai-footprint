@@ -95,6 +95,11 @@ class ChunkResult:
     markers: dict[str, int] = field(default_factory=dict)
 
 
+def _placeholder(value: str) -> bool:
+    """Documentation placeholders such as AWS's ``AKIAIOSFODNN7EXAMPLE`` or ``AIza…XXXX``."""
+    return "EXAMPLE" in value or value.endswith("XXXX")
+
+
 def scan_bytes(data: bytes, limit: int) -> list[tuple[str, str, str]]:
     """Find secrets whose match starts before ``limit``; return (kind, fingerprint, last4).
 
@@ -110,6 +115,8 @@ def scan_bytes(data: bytes, limit: int) -> list[tuple[str, str, str]]:
             if boundary and start > 0 and data[start - 1] in _WORD_BYTES:
                 continue
             value = match.group().decode("ascii", errors="replace")
+            if _placeholder(value):
+                continue
             hits.append((kind, fingerprint(value), value[-4:]))
     return hits
 
@@ -140,8 +147,12 @@ def scan_task(task: Task, markers: Mapping[str, bytes]) -> ChunkResult:
     return result
 
 
-def iter_files(roots: Iterable[Path]) -> Iterable[tuple[Path, int]]:
-    """Yield (path, size) for regular files under each root, never following symlinks."""
+def iter_files(roots: Iterable[Path], exclude: Iterable[Path] = ()) -> Iterable[tuple[Path, int]]:
+    """Yield (path, size) for regular files under each root, never following symlinks.
+
+    Folders in ``exclude`` are skipped with everything under them.
+    """
+    skipped = set(exclude)
     seen: set[Path] = set()
     for root in roots:
         if root.is_file() and not root.is_symlink():
@@ -149,7 +160,8 @@ def iter_files(roots: Iterable[Path]) -> Iterable[tuple[Path, int]]:
                 seen.add(root)
                 yield root, root.stat().st_size
             continue
-        for directory, _dirs, files in os.walk(root, followlinks=False):
+        for directory, dirs, files in os.walk(root, followlinks=False):
+            dirs[:] = [d for d in dirs if Path(directory, d) not in skipped]
             for name in files:
                 path = Path(directory, name)
                 if path in seen or path.is_symlink() or not path.is_file():
@@ -206,6 +218,7 @@ def scan_paths(
     markers: Mapping[str, tuple[str, bytes]] | None = None,
     known: Mapping[str, str] | None = None,
     stores: Iterable[Path] = (),
+    exclude: Iterable[Path] = (),
     workers: int | None = None,
     display: Callable[[str], str] = str,
     chunk_bytes: int = CHUNK_BYTES,
@@ -219,6 +232,8 @@ def scan_paths(
             report where a live secret is also stored on disk.
         stores: The tool's own credential files. Its current credentials found there are
             expected and are neither counted nor reported as copies.
+        exclude: Folders under a root that hold installed third-party code rather than your
+            data (plugins, bundled packages); they are listed as not scanned.
         workers: Process count; defaults to the CPU count. ``1`` scans in-process.
         display: Formats paths for the report (e.g. replaces the home directory with ~).
         chunk_bytes: Size of each byte range handed to a worker.
@@ -229,11 +244,14 @@ def scan_paths(
     started = time.monotonic()
     marker_bytes = {key: lit for key, (_label, lit) in (markers or {}).items()}
     existing = [r for r in roots if r.exists()]
-    tasks = make_tasks(iter_files(existing), chunk_bytes)
+    excluded = [p for p in exclude if p.exists()]
+    tasks = make_tasks(iter_files(existing, excluded), chunk_bytes)
     totals = _Totals(own=frozenset(known or {}), stores=frozenset(str(p) for p in stores))
     for chunk in _run(tasks, marker_bytes, workers):
         totals.fold(chunk)
-    scan = SecretScan(roots=[display(str(r)) for r in existing])
+    scan = SecretScan(
+        roots=[display(str(r)) for r in existing], excluded=[display(str(p)) for p in excluded]
+    )
     scan.files_scanned = len(totals.files)
     scan.bytes_scanned = totals.bytes_read
     scan.unreadable = sorted(display(u) for u in totals.unreadable)

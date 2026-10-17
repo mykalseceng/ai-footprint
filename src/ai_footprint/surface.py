@@ -210,7 +210,11 @@ def _headline(tools: list[ToolReport], exposures: list[Exposure], audit: AuditRe
     secrets = sum(k.unique for t in tools if t.secret_scan for k in t.secret_scan.kinds)
     if takeable:
         share = "all of them" if len(takeable) == len(accounts) else f"{len(takeable)} of them"
-        counted = "distinct secrets" if len(tools) == 1 else "secret values (distinct per tool)"
+        counted = (
+            "distinct secret-shaped values"
+            if len(tools) == 1
+            else "secret-shaped values (distinct per tool)"
+        )
         history = f", plus history holding {secrets} {counted}" if secrets else ""
         sentences.append(f"Anything that runs as you can take {share} without a prompt{history}.")
     inherited = [f for f in audit.host.facts if f.topic == "reach" and f.concern]

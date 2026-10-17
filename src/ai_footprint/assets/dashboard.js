@@ -1158,6 +1158,7 @@
     return [
       kv([
         ["Roots", h("span", { class: "chips" }, (scan.roots || []).map((r) => chip(r, "chip-mono")))],
+        ["Not scanned", (scan.excluded || []).length ? h("span", { class: "chips" }, scan.excluded.map((r) => chip(r, "chip-mono"))) : "none"],
         ["Files scanned", mono(String(scan.files_scanned))],
         ["Bytes scanned", mono(fmtBytes(scan.bytes_scanned))],
         ["Seconds", mono(String(scan.seconds))],

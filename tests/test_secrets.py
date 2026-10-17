@@ -117,3 +117,19 @@ def test_secret_straddling_chunk_boundaries_is_counted_once(
     (root / "f").write_bytes(b" " * prefix + AWS.encode() + b" " * 7)
     scan = scan_paths([root], workers=1, chunk_bytes=chunk)
     assert [(k.kind, k.unique) for k in scan.kinds] == [("aws_access_key", 1)]
+
+
+def test_documentation_placeholders_are_not_counted():
+    assert kinds(b"key AKIAIOSFODNN7EXAMPLE here") == []
+    assert kinds(b'"AIza' + b"b" * 31 + b'XXXX"') == []
+    assert kinds(b"key AKIAABCDEFGHIJKLMNOP here") == ["aws_access_key"]
+
+
+def test_excluded_folders_are_skipped_and_listed(tmp_path: Path):
+    (tmp_path / "plugins" / "vendor").mkdir(parents=True)
+    (tmp_path / "plugins" / "vendor" / "readme.md").write_text(FAKE_API_KEY)
+    (tmp_path / "history.jsonl").write_text(FAKE_DEEPSEEK)
+    scan = scan_paths([tmp_path], workers=1, exclude=[tmp_path / "plugins", tmp_path / "gone"])
+    assert [k.kind for k in scan.kinds] == ["generic_sk_key"]
+    assert scan.excluded == [str(tmp_path / "plugins")]
+    assert scan.files_scanned == 1

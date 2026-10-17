@@ -490,7 +490,8 @@ def rule_secrets(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             report,
             "secrets-at-rest",
             Lens.CODE,
-            f"{report.display_name} history and logs hold {total} distinct secrets: {kinds}. "
+            f"{report.display_name} data files hold {total} distinct secret-shaped values: "
+            f"{kinds}. "
             "Some may be test data from targets you worked on.",
             evidence=[
                 f"{k.label}: e.g. {k.locations[0] if k.locations else '?'}" for k in scan.kinds
@@ -819,44 +820,50 @@ def rule_open_server(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
 
 # --- trust, account data, account signals -------------------------------------------------------
 
-RISKY_TRUST = ("Downloads", "Desktop", "tmp", "Library/Application Support", "node_modules")
-FOLDER_CARRIERS = (
-    "CLAUDE.md",
-    "AGENTS.md",
-    ".mcp.json",
-    ".claude/settings.json",
-    ".claude/settings.local.json",
-    ".codex/config.toml",
-    ".pi/settings.json",
-    ".pi/mcp.json",
-)
+BROAD_TRUST = ("Downloads", "Desktop", "tmp", "Library/Application Support", "node_modules")
+"""Folder names whose contents come from many sources, not one project."""
+
+
+def _broad(folder: Path, home: Path) -> bool:
+    path = f"{folder}/"
+    return folder == home or any(f"/{name}/" in path for name in BROAD_TRUST)
+
+
+def _carried_instructions(report: ToolReport, folder: Path) -> list[str]:
+    """Project instruction files this tool loads from inside a trusted folder."""
+    return [
+        i.path
+        for i in report.instructions
+        if i.scope == "project" and Path(i.path).parent in {folder, folder / ".claude"}
+    ]
 
 
 def rule_trust(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
-    """Trusted folders, especially risky ones and those carrying their own instructions."""
+    """Trusted folders: broad ones, writable ones, and those holding instruction files."""
     folders = [Path(f) for f in report.trusted_folders]
     if not folders:
         return []
-    home = ctx.home
-    risky = [f for f in folders if f == home or any(part in str(f) for part in RISKY_TRUST)]
-    carriers = [f for f in folders if any((f / name).is_file() for name in FOLDER_CARRIERS)]
-    if not risky and not carriers:
+    broad = [f for f in folders if _broad(f, ctx.home)]
+    carried = {f: _carried_instructions(report, f) for f in folders}
+    carriers = [f for f in folders if carried[f]]
+    if not broad and not carriers:
         return []
-    named = ", ".join(ctx.display(str(f)) for f in risky[:5])
-    statement = (
-        f"{report.display_name} trusts {len(folders)} folders, so a repo in any of them applies "
-        f"its own instructions and settings without asking. {len(carriers)} of them carry their "
-        "own instruction, settings or MCP files."
-    )
-    if risky:
-        statement += f" Trusted folders that anyone can drop files into: {named}."
+    statement = f"{report.display_name} trusts {plural(len(folders), 'folder')}."
+    if carriers:
+        statement += (
+            f" {len(carriers)} of them {'holds' if len(carriers) == 1 else 'hold'} "
+            f"instruction files {report.display_name} loads."
+        )
+    if broad:
+        named = join([ctx.display(str(f)) for f in broad[:5]])
+        statement += f" Broad folders on the list: {named}."
     return [
         _exposure(
             report,
             "trust",
             Lens.MODEL,
             statement,
-            evidence=[ctx.display(str(f)) for f in carriers[:10]],
+            evidence=[ctx.display(p) for f in carriers for p in carried[f]][:10],
             fix=Fix(
                 "Withdraw trust from folders you do not own or no longer use",
                 [_trust_fix(report)],

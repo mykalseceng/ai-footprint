@@ -226,6 +226,7 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
             markers={"cyber": ("Cyber-safeguard refusals", CYBER_MARKER)},
             known=facts["fingerprints"],
             stores=[home / ".claude" / ".credentials.json"],
+            exclude=[home / ".claude" / "plugins"],
         )
     report.programs = [_cvp_status(report)]
     return report, facts

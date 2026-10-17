@@ -19,7 +19,7 @@ from ai_footprint.model import CheckResult, CommandValidation
 Doc = dict[str, Any]
 SESSION, BINARY = "session", "binary"
 TOOL_RUNS = {"Confirm tool version", "Confirm subcommand exists"}
-_HELD = re.compile(r"holding ([\d,]+) (?:distinct secrets|secret values)")
+_HELD = re.compile(r"holding ([\d,]+) (?:distinct )?secret-shaped values")
 
 
 def _installed(doc: Doc) -> list[Doc]:

@@ -198,6 +198,7 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
             display=ctx.display,
             known=facts["fingerprints"],
             stores=[root / "auth.json"],
+            exclude=[root / "packages", root / "plugins"],
         )
     report.programs = [_tac_status(report)]
     return report, facts

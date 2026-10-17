@@ -12,6 +12,7 @@ from ai_footprint.model import (
     AuditReport,
     BinaryInfo,
     HostReport,
+    InstructionFile,
     Lens,
     Setting,
     ToolReport,
@@ -252,3 +253,22 @@ def test_missing_plugin_server_fix_disables_the_plugin(tmp_path: Path):
     [command] = fix.commands
     assert command.text == "claude plugin disable semgrep@official"
     assert command.help_probe == ("claude", "plugin", "disable")
+
+
+def test_trust_counts_only_instruction_files_the_tool_itself_loads(tmp_path: Path):
+    ctx = rules.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
+    project, other, downloads = tmp_path / "app", tmp_path / "lib", tmp_path / "Downloads" / "x"
+    report = ToolReport(name="codex", display_name="Codex CLI", installed=True)
+    report.trusted_folders = [str(project), str(other), str(downloads)]
+    report.instructions = [
+        InstructionFile(str(project / "AGENTS.md"), "project", ["codex"]),
+        InstructionFile(str(tmp_path / "AGENTS.md"), "global", ["codex"]),
+    ]
+    [found] = rules.rule_trust(report, ctx)
+    assert found.statement == (
+        "Codex CLI trusts 3 folders. 1 of them holds instruction files Codex CLI loads. "
+        "Broad folders on the list: ~/Downloads/x."
+    )
+    assert found.evidence == ["~/app/AGENTS.md"]
+    report.trusted_folders = [str(other)]
+    assert rules.rule_trust(report, ctx) == []
