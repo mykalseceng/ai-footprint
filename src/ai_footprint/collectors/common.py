@@ -270,9 +270,17 @@ def command_target(command: str, args: list[str]) -> str | None:
 
 
 def is_dangling(command: str, args: list[str], *, cwd: Path | None = None) -> bool:
-    """True when the program or script a command launches does not exist."""
+    """True when the program or script a command launches does not exist.
+
+    ``${CLAUDE_PLUGIN_ROOT}`` is the plugin folder ``cwd``; a command that names any other
+    variable cannot be resolved here, so it is not called missing.
+    """
     target = command_target(command, args)
     if target is None or "/" not in target:
+        return False
+    if cwd is not None:
+        target = target.replace("${CLAUDE_PLUGIN_ROOT}", str(cwd))
+    if "$" in target:
         return False
     path = Path(target).expanduser()
     if not path.is_absolute() and cwd is not None:

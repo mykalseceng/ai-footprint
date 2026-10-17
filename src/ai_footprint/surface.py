@@ -8,7 +8,7 @@ attacker in each position gets and decides what matters.
 import re
 from dataclasses import dataclass, field
 
-from ai_footprint.fsinfo import human_size, tilde
+from ai_footprint.fsinfo import disk_bytes, human_size, tilde
 from ai_footprint.model import AuditReport, Category, Credential, Exposure, Lens, ToolReport
 
 
@@ -191,14 +191,14 @@ def _inventory(tools: list[ToolReport], accounts: list[list[Credential]]) -> str
         [f"{t.display_name} {t.binaries[0].version if t.binaries else ''}".strip() for t in tools]
     )
     providers = sorted({g[0].provider for g in accounts})
-    size = sum(a.size_bytes for t in tools for a in t.artifacts if a.category is Category.SESSION)
+    size = sum(disk_bytes(t.artifacts, Category.SESSION) for t in tools)
     holding = (
         f"{plural(len(accounts), 'credential')} for {join(providers)}"
         if accounts
         else "no credentials"
     )
     verb = "holds" if len(tools) == 1 else "hold"
-    return f"{named} {verb} {holding} and {human_size(size)} of conversations, prompts and logs."
+    return f"{named} {verb} {holding} and {human_size(size)} of conversations and prompt history."
 
 
 def _headline(tools: list[ToolReport], exposures: list[Exposure], audit: AuditReport) -> list[str]:
@@ -224,10 +224,11 @@ def _headline(tools: list[ToolReport], exposures: list[Exposure], audit: AuditRe
         t.display_name for t in tools if any(x.id == f"{t.name}:no-approval" for x in exposures)
     ]
     if unattended:
-        verb = "runs" if len(unattended) == 1 else "run"
+        verb = "skips" if len(unattended) == 1 else "skip"
         sentences.append(
-            f"{join(unattended)} {verb} commands without asking, so a web page, repo file or tool "
-            "result that steers the model becomes code running on this machine."
+            f"{join(unattended)} {verb} approval prompts in some sessions, so in those sessions "
+            "a web page, repo file or tool result that steers the model can become code running "
+            "on this machine."
         )
     if audit.host.other_users and any(x.lens is Lens.ACCOUNT for x in exposures):
         sentences.append(
@@ -236,7 +237,7 @@ def _headline(tools: list[ToolReport], exposures: list[Exposure], audit: AuditRe
         )
     copies = sorted({x.label[:1].lower() + x.label[1:] for x in exposures if x.lens is Lens.COPIES})
     if copies:
-        sentences.append(f"Copies also live outside your control: {join(copies)}.")
+        sentences.append(f"Copies also live elsewhere: {join(copies)}.")
     unexpiring = [g for g in accounts if "no recorded expiry" in lifetime(g)]
     if unexpiring:
         sentences.append(

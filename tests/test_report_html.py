@@ -219,7 +219,7 @@ def test_inherited_credentials_sentence_agrees_with_one_tool():
     ]
     audit = make_audit(facts, [], [tool])
     [finding] = [x for x in host_exposures(audit) if x.id == "host:inherited-creds"]
-    assert "Claude Code runs commands without asking" in finding.statement
+    assert "Claude Code skips approval prompts in some sessions" in finding.statement
 
 
 def test_fix_steps_render_under_their_question():

@@ -65,24 +65,27 @@ def _claude_data(ctx: Context, config: dict[str, Any], binary: str) -> list[Acco
     notes = []
     account = config.get("oauthAccount", {}).get("accountUuid", "")
     grove = (config.get("groveConfigCache") or {}).get(account)
-    wording = ctx.binary_has(binary, claude_cli.TRAINING_MARKERS) if binary else {}
-    if isinstance(grove, dict):
-        when = iso_time(grove.get("timestamp"))[:10]
-        on = bool(grove.get("grove_enabled"))
-        state = "ON" if on else "OFF"
-        if all(wording.get(marker) for marker in claude_cli.TRAINING_MARKERS):
-            text = (
-                f"The 'Help improve our AI models' setting is {state}. Claude Code's own text: "
-                "turning it on extends data retention from 30 days to 5 years"
-            )
-        else:
-            text = f"The cached account setting grove_enabled is {state}"
+    markers = [*claude_cli.TRAINING_MARKERS, claude_cli.GROVE_NOTICE_MARKER]
+    found = ctx.binary_has(binary, markers) if binary else {}
+    if all(found.get(marker) for marker in claude_cli.TRAINING_MARKERS):
         notes.append(
             _note(
                 "data",
-                f"{text} (cached {when}). Change it at claude.ai/settings/data-privacy-controls.",
+                "Claude Code's own text says turning on 'Help improve our AI models' extends "
+                "data retention from 30 days to 5 years.",
+                "markers in the installed claude binary",
+            )
+        )
+    if isinstance(grove, dict) and found.get(claude_cli.GROVE_NOTICE_MARKER):
+        when = iso_time(grove.get("timestamp"))[:10]
+        state = "true" if grove.get("grove_enabled") else "false"
+        notes.append(
+            _note(
+                "data",
+                f"The cached Grove notice config has grove_enabled {state} (cached {when}); "
+                "your training choice itself is not cached on disk, so check "
+                "claude.ai/settings/data-privacy-controls.",
                 "~/.claude.json groveConfigCache",
-                concern=on,
             )
         )
     github = (config.get("githubWebConnectionStatusCache") or {}).get("status")
@@ -135,13 +138,16 @@ def _claude_revoke(ctx: Context, report: ToolReport, binary: str) -> list[Accoun
             "No token-revocation marker was found in the installed Claude Code binary, so "
             "this audit cannot say whether `claude /logout` revokes the token at Anthropic."
         )
+    notes = [_note("revoke", text, "markers in the installed claude binary")]
     if expiry:
-        text += f" The stored refresh token's recorded expiry is {expiry[:10]}."
-    text += (
-        " To be sure a copied token is dead, sign out of all sessions at claude.ai and run "
-        "`ai-footprint --live` afterwards: the old token should get HTTP 401."
-    )
-    return [_note("revoke", text, "markers in the installed claude binary")]
+        notes.append(
+            _note(
+                "revoke",
+                f"The stored refresh token's recorded expiry is {expiry[:10]}.",
+                f"Keychain item {claude_cli.KEYCHAIN_SERVICE}",
+            )
+        )
+    return notes
 
 
 def _claude_detect(ctx: Context, report: ToolReport, config: dict[str, Any]) -> list[AccountNote]:

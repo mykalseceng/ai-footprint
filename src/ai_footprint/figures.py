@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ai_footprint import keys, rules, surface
-from ai_footprint.fsinfo import human_size
+from ai_footprint.fsinfo import disk_bytes, human_size, outermost
 from ai_footprint.model import Artifact, AuditReport, Category, Lens, ToolReport
 from ai_footprint.rules import Checklist
 
@@ -46,27 +46,6 @@ class Figure:
     value: int | str | None
     display: str
     detail: str
-
-
-def outermost(artifacts: list[Artifact]) -> list[Artifact]:
-    """Listed locations not inside another listed location, so their sizes can be added."""
-    paths = sorted({a.path.rstrip("/") for a in artifacts})
-    outer = {p for p in paths if not any(p.startswith(q + "/") for q in paths if q != p)}
-    seen: set[str] = set()
-    kept = []
-    for artifact in artifacts:
-        path = artifact.path.rstrip("/")
-        if path in outer and path not in seen:
-            seen.add(path)
-            kept.append(artifact)
-    return kept
-
-
-def disk_bytes(artifacts: list[Artifact], category: Category | None = None) -> int:
-    """Bytes on disk for the outermost locations, optionally of one category."""
-    return sum(
-        a.size_bytes for a in outermost(artifacts) if category is None or a.category is category
-    )
 
 
 def _installed(audit: AuditReport) -> list[ToolReport]:

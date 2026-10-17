@@ -193,3 +193,42 @@ def test_mcp_row_summarises_long_env_lists():
     assert row.notes == "env: 5 variables (VAR_0, VAR_1, VAR_2, …)"
     short = extensions.mcp_row("codex", "s", {"command": "/usr/bin/true", "env": {"A": 1}}, "c")
     assert short.notes == "env: A"
+
+
+def test_plugin_root_variable_resolves_to_the_plugin_folder(tmp_path: Path):
+    install = tmp_path / "semgrep" / "2.7.0"
+    (install / "scripts").mkdir(parents=True)
+    (install / "scripts" / "hook").write_text("#!/bin/sh\n")
+    (install / ".mcp.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "present": {"command": "${CLAUDE_PLUGIN_ROOT}/scripts/hook", "args": ["mcp"]},
+                    "gone": {"command": "${CLAUDE_PLUGIN_ROOT}/scripts/missing"},
+                    "unknown": {"command": "${OTHER_ROOT}/scripts/hook"},
+                }
+            }
+        )
+    )
+    rows = {r.name: r for r in extensions.plugin_mcp_rows(install, "claude", "semgrep@m")}
+    assert not rows["present"].dangling
+    assert rows["gone"].dangling
+    assert not rows["unknown"].dangling
+
+
+def test_remote_mcp_servers_run_no_local_code_at_start():
+    row = extensions.mcp_row("codex", "gmail", {"type": "http", "url": "https://x/mcp"}, "user")
+    assert not row.autostart
+
+
+def test_only_claude_codes_own_native_host_is_attributed_to_it(tmp_path: Path):
+    hosts = tmp_path / "Library/Application Support/Google/Chrome/NativeMessagingHosts"
+    hosts.mkdir(parents=True)
+    for name, path in (
+        ("com.anthropic.claude_browser_extension", "/Applications/Claude.app/host"),
+        (claude.NATIVE_HOST, str(tmp_path / "claude-host")),
+    ):
+        (hosts / f"{name}.json").write_text(json.dumps({"name": name, "path": path}))
+    [row] = claude._chrome_extensions(context(tmp_path), {})
+    assert row.name == claude.NATIVE_HOST
+    assert not row.autostart

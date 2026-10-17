@@ -99,22 +99,21 @@ def test_other_tools_are_inventoried_with_mcp_servers(tmp_path: Path):
     assert "MCP servers: github" in facts["Cursor"].detail
 
 
-def test_claude_training_setting_wording_needs_the_binary(tmp_path: Path):
+def test_claude_grove_cache_is_reported_as_the_notice_config_not_the_choice(tmp_path: Path):
     ctx = Context(home=tmp_path, system=FakeSystem(), now=0.0)
     config = {
         "oauthAccount": {"accountUuid": "u1"},
         "groveConfigCache": {"u1": {"grove_enabled": True, "timestamp": 1791742272447}},
     }
-    without = accounts._claude_data(ctx, config, "")
-    assert without[0].concern
-    assert without[0].text.startswith("The cached account setting grove_enabled is ON")
-    assert "5 years" not in without[0].text
+    assert accounts._claude_data(ctx, config, "") == []
     binary = tmp_path / "claude"
-    binary.write_bytes(b"".join(m.encode() + b"\0" for m in claude_cli.TRAINING_MARKERS))
-    with_binary = accounts._claude_data(ctx, config, str(binary))
-    assert "extends data retention from 30 days to 5 years" in with_binary[0].text
-    config["groveConfigCache"]["u1"]["grove_enabled"] = False
-    assert not accounts._claude_data(ctx, config, str(binary))[0].concern
+    markers = [*claude_cli.TRAINING_MARKERS, claude_cli.GROVE_NOTICE_MARKER]
+    binary.write_bytes(b"".join(m.encode() + b"\0" for m in markers))
+    [wording, grove] = accounts._claude_data(ctx, config, str(binary))
+    assert "extends data retention from 30 days to 5 years" in wording.text
+    assert grove.text.startswith("The cached Grove notice config has grove_enabled true")
+    assert "not cached on disk" in grove.text
+    assert not wording.concern and not grove.concern
 
 
 def test_log_markers_count_only_the_markers_asked_for(tmp_path: Path):

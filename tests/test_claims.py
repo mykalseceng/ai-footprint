@@ -121,7 +121,7 @@ def test_skipping_the_bypass_prompt_alone_is_not_running_without_approval(tmp_pa
     report.settings.append(Setting("running with --dangerously-skip-permissions", "11, 12", ""))
     [found] = rules.rule_no_approval(report, ctx)
     assert found.statement.startswith(
-        "Claude Code runs commands without asking "
+        "Claude Code skips approval prompts in some sessions "
         "(2 running sessions started with --dangerously-skip-permissions)."
     )
     assert found.lens is Lens.MODEL
@@ -242,3 +242,11 @@ def test_dates_and_sentences_are_normalised():
         "The token expires 2026-10-18.",
         "~/x is read.",
     ]
+
+
+def test_missing_plugin_server_fix_disables_the_plugin(tmp_path: Path):
+    report = ToolReport(name="claude", display_name="Claude Code", installed=True)
+    fix = rules._dangling_fix(report, "guardian", "plugin semgrep@official", tmp_path)
+    [command] = fix.commands
+    assert command.text == "claude plugin disable semgrep@official"
+    assert command.help_probe == ("claude", "plugin", "disable")

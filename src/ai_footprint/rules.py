@@ -29,7 +29,7 @@ from ai_footprint.model import (
     Lens,
     ToolReport,
 )
-from ai_footprint.surface import plural
+from ai_footprint.surface import join, plural
 
 
 @dataclass
@@ -91,15 +91,15 @@ class Check(NamedTuple):
 Checklist = list[Check]
 
 LABELS = {
-    "no-approval": "Runs commands without asking",
+    "no-approval": "Approval prompts skipped",
     "instructions": "Instruction file steers the model",
     "token-reach": "Token carries connector scopes",
     "shared": "Sessions on public share links",
     "keychain-silent": "Keychain token readable without a prompt",
     "creds-plaintext": "Credentials in plaintext",
     "live-token-on-disk": "Live credentials copied into data files",
-    "secrets-at-rest": "Secrets in history and logs",
-    "secrets": "Secrets in history and logs",
+    "secrets-at-rest": "Secret-shaped values in history and logs",
+    "secrets": "Secret-shaped values in history and logs",
     "autostart": "Code that runs automatically",
     "daemons": "Background processes outlive sessions",
     "dangling": "Autostart command points at a missing file",
@@ -112,8 +112,8 @@ LABELS = {
     "other-accounts": "Other local accounts",
     "shared-surfaces": "One folder steers several tools",
     "duplicate-creds": "Same credentials stored twice",
-    "trust": "Trusted folders apply their own instructions",
-    "account-data": "Provider keeps copies of your work",
+    "trust": "Trusted folders",
+    "account-data": "Work shared with provider services",
     "account-signals": "Signs of use elsewhere",
     "inherited-creds": "Other credentials an agent inherits",
     "computer-control": "Software that can drive the computer",
@@ -182,9 +182,10 @@ def rule_no_approval(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             report,
             "no-approval",
             Lens.MODEL,
-            f"{report.display_name} runs commands without asking ({_join_words(observed)}). "
-            "Text that reaches the model (a web page, a repo file, an MCP result, an "
-            "instruction file) becomes code running as you.",
+            f"{report.display_name} skips approval prompts in some sessions "
+            f"({join(observed)}). In those sessions, text that reaches the model (a web page, a "
+            "repo file, an MCP result, an instruction file) can become commands running as you, "
+            "limited only by the deny rules and hooks that still apply.",
             evidence=[f"{s.key} = {s.value}" for s in configured + running],
             fix=_no_approval_fix(report, ctx),
         )
@@ -296,7 +297,7 @@ def rule_token_reach(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
         return []
     connectors = [e.name for e in report.extensions if e.kind == "connector"]
     used = (
-        f" This CLI has connected to {_join_words(connectors)} (recorded in ~/.claude.json)."
+        f" This CLI has connected to {join(connectors)} (recorded in ~/.claude.json)."
         if connectors
         else ""
     )
@@ -513,9 +514,9 @@ def rule_autostart(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             report,
             "autostart",
             Lens.CODE,
-            f"{report.display_name} runs code automatically from {plural(len(auto), 'place')} "
-            f"({_join_words(_kind_counts(auto))}). Each is a file you can write, so anything "
-            "running as you can hide a persistent payload there.",
+            f"{report.display_name} is set up to run local code automatically from "
+            f"{plural(len(auto), 'place')} ({join(_kind_counts(auto))}). Whoever can change "
+            "those commands, or the files they run, controls code that runs as you.",
             evidence=[f"{e.kind}: {e.name} → {e.detail[:120]}" for e in auto[:12]],
             fix=Fix(
                 "Monitor these files for changes",
@@ -593,7 +594,7 @@ def rule_daemons(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             "daemons",
             Lens.CODE,
             f"{report.display_name} keeps {count} running outside any session: "
-            f"{_join_words([_daemon_line(d, ctx.home) for d in found])}.",
+            f"{join([_daemon_line(d, ctx.home) for d in found])}.",
             evidence=[f"pid {d.pid} started {d.started}: {d.command}" for d in found],
             fix=_daemon_fix(report, found),
         )
@@ -608,7 +609,7 @@ def rule_dangling(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             by_target.setdefault(ext.detail, []).append((ext.name, ext.source))
     out = []
     for index, (target, entries) in enumerate(by_target.items()):
-        scopes = _join_words([source for _name, source in entries])
+        scopes = join([source for _name, source in entries])
         commands = [
             c
             for name, source in entries
@@ -628,46 +629,55 @@ def rule_dangling(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     return out
 
 
-def _join_words(items: list[str]) -> str:
-    if len(items) <= 2:
-        return " and ".join(items)
-    return ", ".join(items[:-1]) + f" and {items[-1]}"
-
-
-def _dangling_fix(report: ToolReport, name: str, source: str, home: Path) -> Fix:
-    if report.name == "claude":
-        if source == "user":
-            return Fix(
-                "Remove the server entry",
-                [
-                    FixCommand(
-                        f"claude mcp remove {_q(name)} -s user",
-                        help_probe=("claude", "mcp", "remove"),
-                    )
-                ],
-            )
-        project = source.removeprefix("project ")
-        project = str(home) + project[1:] if project.startswith("~") else project
-        if not Path(project).is_dir():
-            return Fix(
-                "Remove the server entry",
-                [
-                    FixCommand(
-                        f'Delete projects["{project}"].mcpServers.{name} from ~/.claude.json '
-                        "(the project folder is gone, so `claude mcp remove` cannot target it)",
-                        manual=True,
-                    )
-                ],
-            )
+def _claude_dangling_fix(name: str, source: str, home: Path) -> Fix:
+    if source.startswith("plugin "):
+        plugin = source.removeprefix("plugin ")
+        return Fix(
+            "Disable the plugin that ships the server",
+            [
+                FixCommand(
+                    f"claude plugin disable {_q(plugin)}",
+                    help_probe=("claude", "plugin", "disable"),
+                )
+            ],
+        )
+    if source == "user":
         return Fix(
             "Remove the server entry",
             [
                 FixCommand(
-                    f"cd {_q(project)} && claude mcp remove {_q(name)} -s local",
+                    f"claude mcp remove {_q(name)} -s user",
                     help_probe=("claude", "mcp", "remove"),
                 )
             ],
         )
+    project = source.removeprefix("project ")
+    project = str(home) + project[1:] if project.startswith("~") else project
+    if not Path(project).is_dir():
+        return Fix(
+            "Remove the server entry",
+            [
+                FixCommand(
+                    f'Delete projects["{project}"].mcpServers.{name} from ~/.claude.json '
+                    "(the project folder is gone, so `claude mcp remove` cannot target it)",
+                    manual=True,
+                )
+            ],
+        )
+    return Fix(
+        "Remove the server entry",
+        [
+            FixCommand(
+                f"cd {_q(project)} && claude mcp remove {_q(name)} -s local",
+                help_probe=("claude", "mcp", "remove"),
+            )
+        ],
+    )
+
+
+def _dangling_fix(report: ToolReport, name: str, source: str, home: Path) -> Fix:
+    if report.name == "claude":
+        return _claude_dangling_fix(name, source, home)
     if report.name == "codex":
         return Fix(
             "Remove the server entry",
@@ -1245,7 +1255,7 @@ def rule_duplicate_providers(audit: AuditReport, ctx: RuleContext) -> list[Expos
         _host(
             "duplicate-creds",
             Lens.CODE,
-            f"Credentials for {_join_words(sorted(names[p] for p in dupes))} are stored in more "
+            f"Credentials for {join(sorted(names[p] for p in dupes))} are stored in more "
             "than one place; each "
             "copy is another place to take them from, often with weaker protection.",
             evidence=[f"{names[p]}: {', '.join(sorted(s))}" for p, s in sorted(dupes.items())],
@@ -1267,14 +1277,14 @@ def rule_inherited(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
         for t in audit.tools
         if any(x.id == f"{t.name}:no-approval" for x in t.exposures)
     ]
-    verb = "runs" if len(unattended) == 1 else "run"
+    verb = "skips" if len(unattended) == 1 else "skip"
     tail = (
-        f" {_join_words(unattended)} {verb} commands without asking, so a prompt injection can "
-        "use all of them."
+        f" {join(unattended)} {verb} approval prompts in some sessions, so text that steers "
+        "the model in those sessions can use them too."
         if unattended
         else ""
     )
-    items = _join_words([f"{f.name} ({f.detail})" for f in facts[:8]])
+    items = join([f"{f.name} ({f.detail})" for f in facts[:8]])
     commands = [
         FixCommand(f"ssh-keygen -p -f {_q(f.path)}")
         for f in facts
@@ -1317,7 +1327,7 @@ def _unattended_statement(facts: list[HostFact]) -> str:
         parts.append(f"{plural(len(orphans), 'MCP server')} left running after the session ended")
     if logins:
         parts.append(plural(len(logins), "login item"))
-    statement = f"These keep running as you when you are not there: {_join_words(parts)}."
+    statement = f"These keep running as you when you are not there: {join(parts)}."
     unguarded = [f for f in procs if "--dangerously" in f.detail]
     if unguarded:
         verb = "was" if len(unguarded) == 1 else "were"
@@ -1341,9 +1351,7 @@ def rule_control(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
     bridges = [f"{name} ({', '.join(b)})" for name, b in browsers.items()]
     parts = []
     if bridges:
-        parts.append(
-            f"browser bridges that let an extension run a local program: {_join_words(bridges)}"
-        )
+        parts.append(f"browser bridges that let an extension run a local program: {join(bridges)}")
     parts.extend(others)
     return [
         _host(
@@ -1376,7 +1384,7 @@ def rule_backups(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
         _host(
             "backups",
             Lens.COPIES,
-            f"Time Machine copies {_join_words([ctx.display(f.path) for f in included])} "
+            f"Time Machine copies {join([ctx.display(f.path) for f in included])} "
             f"to {where}. Deleting a transcript locally leaves it, and any secret in it, in "
             "every backup.",
             evidence=[f.detail for f in included],
@@ -1423,7 +1431,7 @@ def rule_other_tools(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
             "other-tools",
             Lens.COPIES,
             "Other AI tools also keep data here and were only inventoried: "
-            + _join_words([f.name for f in facts])
+            + join([f.name for f in facts])
             + ".",
             evidence=[ctx.display(f.path) for f in facts],
         )

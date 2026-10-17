@@ -103,7 +103,7 @@ def test_narrative_names_what_each_position_gets(audited):
     story = surface.for_machine(audit)
     headline = " ".join(story.headline)
     assert "Anything that runs as you can take" in headline
-    assert "run commands without asking" in headline
+    assert "skip approval prompts in some sessions" in headline
     assert "guest" in headline
     remote = next(v for v in story.lenses if v.lens.value == "remote")
     assert any("API keys for DeepSeek" in p.text for p in remote.points)

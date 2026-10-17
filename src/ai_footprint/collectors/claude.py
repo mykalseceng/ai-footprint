@@ -166,6 +166,8 @@ SETTING_KEYS = (
 REVOKE_MARKERS = ("oauth_token_revoke", "continuing with local logout")
 OAUTH_URL = "https://platform.claude.com/v1/oauth/token"
 TRAINING_MARKERS = ("Help improve our AI models", "extends data retention from 30 days to 5 years")
+GROVE_NOTICE_MARKER = "Grove notice config"
+NATIVE_HOST = "com.anthropic.claude_code_browser_extension"
 LOG_MARKERS = {
     "invalid_grant": "refresh rejected (invalid_grant)",
     "Please run /login": "asked to log in again",
@@ -178,6 +180,8 @@ CLAIMS: tuple[Claim, ...] = (
     *(Claim("logout revokes the token", marker) for marker in REVOKE_MARKERS),
     Claim("OAuth token endpoint", OAUTH_URL),
     *(Claim("training setting wording", marker) for marker in TRAINING_MARKERS),
+    Claim("groveConfigCache holds the Grove notice config", GROVE_NOTICE_MARKER),
+    Claim("browser native host name", NATIVE_HOST),
     *(Claim(f"log marker {marker}", marker) for marker in LOG_MARKERS),
     Claim("refusal category in transcripts", "apiRefusalCategory"),
 )
@@ -653,7 +657,7 @@ def _chrome_extensions(ctx: Context, config: dict[str, Any]) -> list[Extension]:
         ctx.home / ".config/google-chrome/NativeMessagingHosts",
     )
     for hosts in hosts_dirs:
-        for manifest in sorted(hosts.glob("com.anthropic.*.json")) if hosts.is_dir() else []:
+        for manifest in sorted(hosts.glob(f"{NATIVE_HOST}*.json")) if hosts.is_dir() else []:
             data = load_json(manifest) or {}
             out.append(
                 Extension(
@@ -663,8 +667,8 @@ def _chrome_extensions(ctx: Context, config: dict[str, Any]) -> list[Extension]:
                     ctx.display(str(hosts)),
                     f"{data.get('path', '?')} · origins "
                     f"{', '.join(data.get('allowed_origins', []))}",
-                    autostart=True,
-                    notes="Chrome launches this program"
+                    autostart=False,
+                    notes="Chrome launches this program when the extension connects"
                     + (
                         "; claudeInChromeDefaultEnabled is true"
                         if config.get("claudeInChromeDefaultEnabled")

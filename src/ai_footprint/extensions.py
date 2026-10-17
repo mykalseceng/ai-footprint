@@ -232,7 +232,7 @@ def mcp_row(
             name,
             source,
             f"remote {url}",
-            autostart=enabled,
+            autostart=False,
             notes="" if enabled else "disabled",
             description=NO_MANIFEST,
             access=f"{spec.get('type', 'http')} {url}",

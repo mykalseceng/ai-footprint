@@ -12,7 +12,7 @@ import re
 from collections.abc import Iterable, Sequence
 
 from ai_footprint import answers, document, figures, keys, surface
-from ai_footprint.fsinfo import human_size, tilde
+from ai_footprint.fsinfo import disk_bytes, human_size, tilde
 from ai_footprint.model import (
     AuditReport,
     Category,
@@ -395,7 +395,7 @@ def _tool_rows(tools: list[ToolReport]) -> list[list[str]]:
             [
                 f"<a href='#tool-{e(t.name)}'>{e(t.display_name)}</a>",
                 e(t.binaries[0].version if t.binaries else "?"),
-                e(human_size(figures.disk_bytes(t.artifacts, Category.SESSION))),
+                e(human_size(disk_bytes(t.artifacts, Category.SESSION))),
                 e(str(len(t.credentials))),
                 pill(approval.display, tone)
                 + f" <span class='small'>{breakable(approval.detail)}</span>",
