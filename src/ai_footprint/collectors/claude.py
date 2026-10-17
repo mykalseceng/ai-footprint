@@ -625,7 +625,9 @@ def _plugin_extensions(ctx: Context, settings: dict[str, Any]) -> list[Extension
         origin = source.get("repo") or source.get("path") or market
         entries = installed.get(plugin_id) or [{}]
         install = Path(entries[-1].get("installPath", "")) if entries[-1] else None
-        description, components = extensions.plugin_manifest(install) if install else ("", "")
+        description, components = (
+            extensions.plugin_manifest(install) if install else (extensions.NO_MANIFEST, "")
+        )
         out.append(
             Extension(
                 NAME,
@@ -636,7 +638,7 @@ def _plugin_extensions(ctx: Context, settings: dict[str, Any]) -> list[Extension
                 notes="Directory marketplace (local path)"
                 if source.get("source") == "directory"
                 else "",
-                description=description or extensions.NO_MANIFEST,
+                description=description,
                 access=components,
                 identity=str(install) if install else plugin_id,
             )

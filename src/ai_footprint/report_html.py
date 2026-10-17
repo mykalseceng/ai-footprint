@@ -872,9 +872,6 @@ details .body p { font-size: 14px; }
   border-left: 2px solid var(--oat); }
 .points .who { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em;
   text-transform: uppercase; color: var(--clay); }
-.tag { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--gray-500); border: 1px solid var(--gray-300); border-radius: 4px; padding: 0 5px;
-  margin-left: 4px; }
 .callout { display: flex; gap: 12px; border: 1.5px solid var(--oat);
   background: rgba(227, 218, 204, .35); border-radius: 10px; padding: 14px 16px; margin: 18px 0;
   font-size: 14px; }
@@ -921,7 +918,6 @@ tr:last-child td { border-bottom: 0; }
 .cred-title { color: var(--slate); margin-bottom: 2px; }
 .sub { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em;
   text-transform: uppercase; color: var(--gray-500); margin: 14px 0 6px; }
-.plain { padding-left: 18px; font-size: 14px; }
 footer { margin-top: 64px; font-size: 12px; color: var(--gray-500); }
 @media (prefers-reduced-motion: reduce) { summary::before { transition: none; } }
 """

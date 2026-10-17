@@ -479,7 +479,9 @@ def _plugin_rows(ctx: Context, root: Path, config: dict[str, Any]) -> list[Exten
             key=lambda p: p.stat().st_mtime,
         )
         install = versions[-1] if versions else None
-        description, components = extensions.plugin_manifest(install) if install else ("", "")
+        description, components = (
+            extensions.plugin_manifest(install) if install else (extensions.NO_MANIFEST, "")
+        )
         out.append(
             Extension(
                 NAME,
@@ -487,7 +489,7 @@ def _plugin_rows(ctx: Context, root: Path, config: dict[str, Any]) -> list[Exten
                 plugin,
                 "config.toml",
                 ctx.display(str(install)) if install else "",
-                description=description or extensions.NO_MANIFEST,
+                description=description,
                 access=components,
                 identity=str(install) if install else plugin,
             )

@@ -17,7 +17,7 @@ constant that is wrong or that a newer version removed fails ``--validate``.
 
 import glob
 import shlex
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from ai_footprint.collectors.common import Claim, search_file
@@ -208,10 +208,9 @@ def tool_binaries(audit: AuditReport) -> dict[str, str]:
     return {tool.name: tool.binaries[0].resolved for tool in audit.tools if tool.binaries}
 
 
-def validate_all(audit: AuditReport, system: System) -> list[CommandValidation]:
+def validate_all(audit: AuditReport, system: System) -> None:
     """Validate every fix command in the audit, storing results on each fix."""
     binaries = tool_binaries(audit)
-    every: list[CommandValidation] = []
     cache: dict[FixCommand, CommandValidation] = {}
     for exposure in audit.all_exposures():
         if exposure.fix is None:
@@ -221,8 +220,6 @@ def validate_all(audit: AuditReport, system: System) -> list[CommandValidation]:
             if cmd not in cache:
                 cache[cmd] = validate_command(cmd, system, binaries)
             exposure.fix.validations.append(cache[cmd])
-            every.append(cache[cmd])
-    return every
 
 
 def validate_claims(
@@ -254,8 +251,3 @@ def validate_claims(
             )
         out.append(validation)
     return out
-
-
-def failures(validations: Iterable[CommandValidation]) -> list[CommandValidation]:
-    """Validations with at least one failed check."""
-    return [v for v in validations if not v.ok]
