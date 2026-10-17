@@ -9,6 +9,7 @@ far enough to read the cipher name (``none`` means no passphrase).
 
 import base64
 import binascii
+import datetime
 import plistlib
 import re
 import shlex
@@ -23,7 +24,17 @@ from ai_footprint.model import HostFact, ProcessInfo, ToolReport
 from ai_footprint.system import System
 
 SECRET_ENV = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.IGNORECASE)
-TOOL_WORDS = ("claude", "codex", "opencode", "pi-coding-agent", "anthropic", "openai", "cursor")
+TOOL_WORDS = (
+    "claude",
+    "codex",
+    "opencode",
+    "pi-coding-agent",
+    "anthropic",
+    "openai",
+    "cursor",
+    "ollama",
+)
+LONG_RUNNING = datetime.timedelta(days=1)
 TCC_SERVICES = {
     "kTCCServiceSystemPolicyAllFiles": "Full Disk Access",
     "kTCCServiceAccessibility": "Accessibility (control the computer)",
@@ -159,7 +170,7 @@ def _gh_docker_gcloud(home: Path) -> list[HostFact]:
                 "GitHub CLI",
                 "token in plaintext hosts.yml"
                 if in_file
-                else "logged in; token kept in the OS keychain",
+                else "logged in; hosts.yml holds no token, so it is stored elsewhere",
                 gh,
                 concern=True,
             )
@@ -204,7 +215,7 @@ def _env_facts(system: System) -> list[HostFact]:
     return [
         _fact(
             "reach",
-            "Secret-looking environment variables",
+            "Secret-looking environment variables in the audit's environment",
             ", ".join(names[:12]) + (f" and {len(names) - 12} more" if len(names) > 12 else ""),
             concern=True,
         )
@@ -218,35 +229,46 @@ def reach(home: Path, system: System) -> list[HostFact]:
 
 # --- what can drive this computer --------------------------------------------------------------
 
-BROWSER_HOSTS = {
-    "Chrome": "Library/Application Support/Google/Chrome/NativeMessagingHosts",
-    "Brave": "Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts",
-    "Edge": "Library/Application Support/Microsoft Edge/NativeMessagingHosts",
-    "Chromium": "Library/Application Support/Chromium/NativeMessagingHosts",
-    "Firefox": "Library/Application Support/Mozilla/NativeMessagingHosts",
-    "Chrome (Linux)": ".config/google-chrome/NativeMessagingHosts",
-}
+BROWSER_HOSTS = (
+    ("Chrome", "Library/Application Support/Google/Chrome", "Google Chrome.app"),
+    ("Brave", "Library/Application Support/BraveSoftware/Brave-Browser", "Brave Browser.app"),
+    ("Edge", "Library/Application Support/Microsoft Edge", "Microsoft Edge.app"),
+    ("Chromium", "Library/Application Support/Chromium", "Chromium.app"),
+    ("Arc", "Library/Application Support/Arc/User Data", "Arc.app"),
+    ("Vivaldi", "Library/Application Support/Vivaldi", "Vivaldi.app"),
+    ("Opera", "Library/Application Support/com.operasoftware.Opera", "Opera.app"),
+    ("Firefox", "Library/Application Support/Mozilla", "Firefox.app"),
+    ("Chrome (Linux)", ".config/google-chrome", ""),
+)
+"""(browser, profile folder holding NativeMessagingHosts, macOS app bundle name)."""
+
+
+def _browser_installed(home: Path, app: str) -> bool:
+    if not app:
+        return True
+    return any((folder / app).exists() for folder in (Path("/Applications"), home / "Applications"))
 
 
 def _native_hosts(home: Path) -> list[HostFact]:
     facts = []
-    for browser, rel in BROWSER_HOSTS.items():
-        folder = home / rel
+    for browser, rel, app in BROWSER_HOSTS:
+        folder = home / rel / "NativeMessagingHosts"
+        installed = _browser_installed(home, app)
         for manifest in sorted(folder.glob("*.json")) if folder.is_dir() else []:
             data = load_json(manifest) or {}
             program = Path(str(data.get("path", "")))
             missing = bool(data.get("path")) and not program.exists()
             origins = len(data.get("allowed_origins", data.get("allowed_extensions", [])))
-            detail = f"{browser} extension bridge to {program} ({origins} extension(s) allowed)" + (
-                "; program missing" if missing else ""
-            )
+            detail = f"{browser} extension bridge to {program} ({origins} extension(s) allowed)"
+            detail += "; program missing" if missing else ""
+            detail += "" if installed else f"; {browser} is not installed"
             facts.append(
                 _fact(
                     "control",
                     str(data.get("name", manifest.stem)),
                     detail,
                     manifest,
-                    concern=missing or any(w in manifest.name for w in TOOL_WORDS),
+                    concern=installed and (missing or any(w in manifest.name for w in TOOL_WORDS)),
                 )
             )
     return facts
@@ -273,7 +295,7 @@ def _desktop_mcp(home: Path) -> list[HostFact]:
 def _computer_use(home: Path) -> list[HostFact]:
     apps = sorted((home / ".codex/computer-use").glob("*.app"))
     return [
-        _fact("control", app.stem, "Codex screen and input control helper", app, concern=True)
+        _fact("control", app.stem, "helper app in Codex's computer-use folder", app, concern=True)
         for app in apps
     ]
 
@@ -408,8 +430,33 @@ def _common_needle(orphans: list[ProcessInfo]) -> str:
     return first if all(first in c for c in commands) else commands[0]
 
 
-def unattended(system: System, tools: list[ToolReport], home: Path) -> list[HostFact]:
-    """Orphaned MCP servers and launch agents for AI tools (each tool reports its own daemons)."""
+def _long_running(tools: list[ToolReport], now: datetime.datetime) -> list[HostFact]:
+    """Audited tools' processes that have been running for a day or more."""
+    facts = []
+    for tool in tools:
+        for proc in tool.processes:
+            started = started_at(proc)
+            if started is None or now - started < LONG_RUNNING:
+                continue
+            facts.append(
+                _fact(
+                    "unattended",
+                    f"pid {proc.pid}",
+                    f"{tool.display_name} running since {started:%Y-%m-%d}: "
+                    f"{_clip(proc.command, 160)}",
+                    concern=True,
+                )
+            )
+    return facts
+
+
+def unattended(
+    system: System, tools: list[ToolReport], home: Path, now: datetime.datetime
+) -> list[HostFact]:
+    """Orphaned MCP servers, long-running tool processes and launch agents for AI tools.
+
+    ``now`` is local wall-clock time, the clock ``ps`` start times are written in.
+    """
     procs = all_processes(system)
     facts = []
     groups: dict[frozenset[int], tuple[list[str], list[str], list[ProcessInfo]]] = {}
@@ -435,7 +482,7 @@ def unattended(system: System, tools: list[ToolReport], home: Path) -> list[Host
                 concern=True,
             )
         )
-    return facts + _launch_agents(home)
+    return facts + _long_running(tools, now) + _launch_agents(home)
 
 
 def _launch_agents(home: Path) -> list[HostFact]:
@@ -476,6 +523,12 @@ OTHER_TOOLS = (
         "Library/Application Support/Claude/claude_desktop_config.json",
     ),
     ("ChatGPT app", ("Library/Application Support/com.openai.chat",), ""),
+    (
+        "Codex desktop app",
+        ("Library/Application Support/Codex", "Library/Application Support/com.openai.codex"),
+        "",
+    ),
+    ("Ollama", (".ollama", "Library/Application Support/Ollama"), ""),
     ("Cursor", ("Library/Application Support/Cursor", ".cursor"), ".cursor/mcp.json"),
     ("Gemini CLI", (".gemini",), ".gemini/settings.json"),
     ("GitHub Copilot", (".config/github-copilot",), ""),
@@ -500,8 +553,21 @@ def other_tools(home: Path) -> list[HostFact]:
             detail += f"; MCP servers: {', '.join(servers)}"
         if exposed:
             detail += f"; readable by other accounts ({mode_string(exposed[0].stat().st_mode)})"
+        detail += _open_keys(paths)
         facts.append(_fact("other-tools", name, detail, paths[0], concern=bool(servers or exposed)))
     return facts
+
+
+def _open_keys(paths: list[Path]) -> str:
+    """SSH-format private keys directly inside a tool folder that have no passphrase."""
+    keys = [
+        key
+        for folder in paths
+        if folder.is_dir()
+        for key in sorted(folder.glob("id_*"))
+        if key.suffix != ".pub" and ssh_key_cipher(key) == "none"
+    ]
+    return f"; private key without a passphrase: {', '.join(k.name for k in keys)}" if keys else ""
 
 
 DATA_ROOTS = {
@@ -519,6 +585,6 @@ def scan(home: Path, system: System, tools: list[ToolReport]) -> list[HostFact]:
         reach(home, system)
         + control(home)
         + backups(system, roots)
-        + unattended(system, tools, home)
+        + unattended(system, tools, home, datetime.datetime.now())
         + other_tools(home)
     )

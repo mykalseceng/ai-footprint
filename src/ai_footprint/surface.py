@@ -220,9 +220,10 @@ def _headline(tools: list[ToolReport], exposures: list[Exposure], audit: AuditRe
     inherited = [f for f in audit.host.facts if f.topic == "reach" and f.concern]
     if inherited and len(tools) > 1:
         names = join([f.name for f in inherited[:3]])
+        listed = names if len(inherited) <= 3 else f"including {names}"
         sentences.append(
-            f"The same goes for {plural(len(inherited), 'other credential')} on this machine, "
-            f"including {names}."
+            f"The same goes for {plural(len(inherited), 'other credential')} on this machine: "
+            f"{listed}."
         )
     unattended = [
         t.display_name for t in tools if any(x.id == f"{t.name}:no-approval" for x in exposures)

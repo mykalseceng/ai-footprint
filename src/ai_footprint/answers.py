@@ -329,7 +329,12 @@ HOST_QUESTIONS = (
         "host:backups",
         "Time Machine is not available, so no backup copies were checked.",
     ),
-    ("unattended", "What runs when I'm not there?", "host:unattended", "Nothing found."),
+    (
+        "unattended",
+        "What runs when I'm not there?",
+        "host:unattended",
+        "No orphaned MCP servers, AI-tool processes running a day or more, or AI login items.",
+    ),
     (
         "other-tools",
         "What about AI tools this audit doesn't cover?",

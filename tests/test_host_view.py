@@ -7,12 +7,14 @@ from ai_footprint.model import (
     AuditReport,
     CheckResult,
     CommandValidation,
+    Credential,
     Exposure,
     Fix,
     FixCommand,
     HostFact,
     HostReport,
     Lens,
+    TokenInfo,
     ToolReport,
 )
 
@@ -216,3 +218,24 @@ def test_manual_fix_steps_are_labelled_as_manual():
         }
     ]
     assert question(data["views"]["host"], "host:unattended")["status"] == "review"
+
+
+def test_duplicate_credentials_separate_logins_from_copies():
+    def cred(provider: str, store: str, print_: str) -> Credential:
+        token = TokenInfo("refresh", "opaque", "", "rt_", 90, print_)
+        return Credential("x", provider, store, "/x", "file mode 600", tokens=[token])
+
+    codex = ToolReport(name="codex", display_name="Codex CLI", installed=True)
+    codex.credentials = [cred("OpenAI", "plaintext file", "aaa")]
+    opencode = ToolReport(name="opencode", display_name="OpenCode", installed=True)
+    opencode.credentials = [
+        cred("OpenAI", "plaintext file", "bbb"),
+        cred("OpenAI", "SQLite table", "bbb"),
+    ]
+    audit = make_audit([], [], [codex, opencode])
+    [finding] = [x for x in host_exposures(audit) if x.id == "host:duplicate-creds"]
+    assert finding.statement.startswith(
+        "Credentials for one provider are held in several places (OpenAI: 2 separate "
+        "credentials in 3 places, including the same credential in OpenCode (plaintext file) "
+        "and OpenCode (SQLite table))."
+    )

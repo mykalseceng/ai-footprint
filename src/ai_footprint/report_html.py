@@ -433,7 +433,7 @@ def _summary(audit: AuditReport) -> str:
             "Tool",
             "Version",
             "Conversations and history",
-            "Credential locations",
+            "Stored credentials",
             "Approval turned off",
         ],
         _tool_rows(tools),
@@ -474,10 +474,10 @@ def _skill_folds(skills: list[tuple[Extension, list[str]]]) -> str:
     """Skills grouped by where they come from: one fold per plugin, one for user folders."""
     groups: dict[str, list[tuple[Extension, list[str]]]] = {}
     for x, t in skills:
-        key = x.source if x.source.startswith("plugin ") else "User skill folders"
+        key = document.skill_group(x)
         groups.setdefault(key, []).append((x, t))
     out = []
-    for key in sorted(groups, key=lambda k: (k != "User skill folders", k)):
+    for key in sorted(groups, key=lambda k: (k != document.USER_SKILLS, k)):
         rows = [
             [
                 breakable(x.name),
@@ -496,7 +496,7 @@ def _skill_folds(skills: list[tuple[Extension, list[str]]]) -> str:
                 key,
                 body,
                 where=surface.plural(len(rows), "skill"),
-                is_open=key == "User skill folders",
+                is_open=key == document.USER_SKILLS,
             )
         )
     return "".join(out) or "<p class='muted'>None.</p>"

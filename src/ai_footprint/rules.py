@@ -111,7 +111,7 @@ LABELS = {
     "binary-dirs": "Tool launchers in writable folders",
     "other-accounts": "Other local accounts",
     "shared-surfaces": "One folder steers several tools",
-    "duplicate-creds": "Same credentials stored twice",
+    "duplicate-creds": "One provider's credentials in several places",
     "trust": "Trusted folders",
     "account-data": "Work shared with provider services",
     "account-signals": "Signs of use elsewhere",
@@ -1249,28 +1249,43 @@ def rule_shared_surfaces(audit: AuditReport, ctx: RuleContext) -> list[Exposure]
     ]
 
 
-def rule_duplicate_providers(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
-    """The same provider account stored by several tools."""
-    del ctx
-    stores: dict[str, set[str]] = {}
-    names: dict[str, str] = {}
+def _provider_copies(audit: AuditReport) -> dict[str, dict[frozenset[str], list[str]]]:
+    """``{provider: {token fingerprints: [where each copy is stored]}}``."""
+    found: dict[str, dict[frozenset[str], list[str]]] = {}
     for tool in audit.tools:
         for cred in tool.credentials:
-            names.setdefault(cred.provider.lower(), cred.provider)
-            stores.setdefault(cred.provider.lower(), set()).add(
-                f"{tool.display_name} ({cred.store})"
-            )
-    dupes = {p: s for p, s in stores.items() if len(s) > 1}
-    if not dupes:
+            prints = frozenset(t.fingerprint for t in cred.tokens if t.fingerprint)
+            where = f"{tool.display_name} ({cred.store})"
+            found.setdefault(cred.provider, {}).setdefault(prints, []).append(where)
+    return found
+
+
+def rule_duplicate_providers(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
+    """One provider's credentials held in several places: copies and separate logins."""
+    del ctx
+    lines = []
+    for provider, creds in sorted(_provider_copies(audit).items()):
+        places = sum(len(stores) for stores in creds.values())
+        if places < 2:
+            continue
+        copied = [stores for stores in creds.values() if len(stores) > 1]
+        text = f"{provider}: {plural(len(creds), 'separate credential')} in {places} places"
+        if copied:
+            text += f", including the same credential in {join(copied[0])}"
+        lines.append(text)
+    if not lines:
         return []
     return [
         _host(
             "duplicate-creds",
             Lens.CODE,
-            f"Credentials for {join(sorted(names[p] for p in dupes))} are stored in more "
-            "than one place; each "
-            "copy is another place to take them from, often with weaker protection.",
-            evidence=[f"{names[p]}: {', '.join(sorted(s))}" for p, s in sorted(dupes.items())],
+            f"Credentials for one provider are held in several places ({'; '.join(lines)}). "
+            "Each place is another copy to take.",
+            evidence=[
+                f"{provider}: {', '.join(stores)}"
+                for provider, creds in sorted(_provider_copies(audit).items())
+                for stores in creds.values()
+            ],
         )
     ]
 
@@ -1363,13 +1378,16 @@ def rule_control(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
     bridges = [f"{name} ({', '.join(b)})" for name, b in browsers.items()]
     parts = []
     if bridges:
-        parts.append(f"browser bridges that let an extension run a local program: {join(bridges)}")
+        parts.append(
+            f"browser bridges that let an allowed extension start a local program: {join(bridges)}"
+        )
     parts.extend(others)
     return [
         _host(
             "computer-control",
             Lens.MODEL,
-            f"Beyond the terminal, these can act on your computer: {'; '.join(parts)}.",
+            "Beyond the terminal, these are set up to run local programs or hold privacy "
+            f"grants: {'; '.join(parts)}.",
             evidence=sorted({ctx.display(f.path) for f in facts if f.path}),
             fix=Fix(
                 "Remove bridges and permissions you do not use",
@@ -1465,7 +1483,7 @@ HOST_RULES: tuple[HostRule, ...] = (
     HostRule("inherited-creds", "Agents inherit no other credentials", rule_inherited),
     HostRule("computer-control", "Nothing else can drive the computer", rule_control),
     HostRule("backups", "AI-tool history is not copied into backups", rule_backups),
-    HostRule("unattended", "Nothing runs without a session", rule_unattended),
+    HostRule("unattended", "No long-running or orphaned AI processes", rule_unattended),
     HostRule("other-tools", "No other AI tools keep data here", rule_other_tools),
 )
 

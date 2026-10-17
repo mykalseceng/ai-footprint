@@ -1,4 +1,5 @@
 import base64
+import datetime
 import shlex
 from pathlib import Path
 
@@ -43,8 +44,14 @@ def test_reach_reports_presence_never_values(tmp_path: Path):
     facts = {f.name: f for f in hostscan.reach(tmp_path, system)}
     assert facts["SSH key id_ed25519"].detail == "no passphrase"
     assert facts["AWS credentials"].detail == "1 access key(s) in plaintext"
-    assert "keychain" in facts["GitHub CLI"].detail
-    assert "GITHUB_TOKEN" in facts["Secret-looking environment variables"].detail
+    assert (
+        facts["GitHub CLI"].detail
+        == "logged in; hosts.yml holds no token, so it is stored elsewhere"
+    )
+    assert (
+        "GITHUB_TOKEN"
+        in facts["Secret-looking environment variables in the audit's environment"].detail
+    )
     assert secret not in repr(facts)
     assert "ghp_value" not in repr(facts)
 
@@ -85,10 +92,25 @@ def test_orphaned_mcp_servers_are_found():
     system.responders.append(
         lambda argv: ProbeResult(0, rows, "") if argv[0].endswith("ps") else None
     )
-    facts = hostscan.unattended(system, [tool], Path("/none"))
+    facts = hostscan.unattended(system, [tool], Path("/none"), datetime.datetime(2026, 10, 12))
     orphan = next(f for f in facts if "orphaned" in f.detail)
     assert orphan.detail.startswith("1 orphaned process")
     assert "2026-10-04" in orphan.detail
+
+
+def test_tool_processes_running_a_day_or_more_are_reported():
+    tool = ToolReport(name="claude", display_name="Claude Code", installed=True)
+    tool.processes = [
+        ProcessInfo(1, "Sun Oct  4 10:00:00 2026", "claude --dangerously-skip-permissions"),
+        ProcessInfo(2, "Sun Oct 11 23:00:00 2026", "claude"),
+        ProcessInfo(3, "not a date", "claude"),
+    ]
+    facts = hostscan.unattended(
+        FakeSystem(), [tool], Path("/none"), datetime.datetime(2026, 10, 12)
+    )
+    [old] = [f for f in facts if f.name.startswith("pid ")]
+    assert old.name == "pid 1"
+    assert old.detail.startswith("Claude Code running since 2026-10-04: claude --dangerously")
 
 
 def test_other_tools_are_inventoried_with_mcp_servers(tmp_path: Path):
@@ -194,3 +216,24 @@ def test_long_desktop_mcp_commands_are_cut_with_an_ellipsis(tmp_path: Path):
     assert fact.detail.startswith("/opt/server x")
     assert fact.detail.endswith("…")
     assert len(fact.detail) == 240
+
+
+def test_bridges_for_browsers_that_are_not_installed_are_not_concerns(tmp_path: Path):
+    hosts = tmp_path / "Library/Application Support/Microsoft Edge/NativeMessagingHosts"
+    hosts.mkdir(parents=True)
+    (hosts / "com.anthropic.claude_browser_extension.json").write_text(
+        '{"name": "com.anthropic.claude_browser_extension", "path": "/bin/sh"}'
+    )
+    installed = (Path("/Applications") / "Microsoft Edge.app").exists()
+    [fact] = hostscan._native_hosts(tmp_path)
+    assert fact.concern is installed
+    assert ("Edge is not installed" in fact.detail) is not installed
+
+
+def test_other_tools_note_private_keys_without_a_passphrase(tmp_path: Path):
+    ollama = tmp_path / ".ollama"
+    ollama.mkdir()
+    (ollama / "id_ed25519").write_text(openssh_key(b"none"))
+    (ollama / "id_ed25519.pub").write_text("ssh-ed25519 AAAA")
+    facts = {f.name: f for f in hostscan.other_tools(tmp_path)}
+    assert facts["Ollama"].detail.endswith("; private key without a passphrase: id_ed25519")

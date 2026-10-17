@@ -160,9 +160,10 @@ def machine(
         ),
         Figure(
             "credentials",
-            "Credential locations",
+            "Stored credentials",
             len(creds),
             str(len(creds)),
+            f"provider entries in {surface.plural(len({c.location for c in creds}), 'location')}; "
             f"{readable} marked readable by other local accounts",
         ),
         _keys_figure(audit),
@@ -220,9 +221,11 @@ def for_tool(tool: ToolReport, checklist: Checklist) -> list[Figure]:
         ),
         Figure(
             "credentials",
-            "Credential locations",
+            "Stored credentials",
             len(tool.credentials),
             str(len(tool.credentials)),
+            "provider entries in "
+            f"{surface.plural(len({c.location for c in tool.credentials}), 'location')}; "
             f"{readable} marked readable by other local accounts",
         ),
         Figure(

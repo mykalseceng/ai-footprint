@@ -89,7 +89,7 @@ def _views(audit: AuditReport, checklist: Checklist) -> dict[str, Any]:
             for tool, group in surface.merged_credentials(tools)
         ],
         "extensions": [
-            {**dataclasses.asdict(x), "used_by": used_by, "group": _skill_group(x)}
+            {**dataclasses.asdict(x), "used_by": used_by, "group": skill_group(x)}
             for x, used_by in grouped
         ],
         "pages": page_summaries(grouped, audit),
@@ -154,8 +154,11 @@ def grouped_extensions(audit: AuditReport) -> Grouped:
     return list(groups.values())
 
 
-def _skill_group(x: Extension) -> str:
-    return x.source if x.source.startswith("plugin ") else USER_SKILLS
+def skill_group(x: Extension) -> str:
+    """The fold a row is listed under: its plugin, user skill folders, or none."""
+    if x.source.startswith("plugin "):
+        return x.source
+    return USER_SKILLS if x.kind == "skill" else ""
 
 
 def _verb(count: int, singular: str, plural: str) -> str:
@@ -206,11 +209,15 @@ def _mcp_tldr(rows: Grouped) -> str:
     return first + (f" {surface.join(facts)}." if facts else "")
 
 
+def _links_outside_home(x: Extension) -> bool:
+    return x.source.startswith("symlink → ") and not x.source.startswith("symlink → ~")
+
+
 def _skills_tldr(rows: Grouped) -> str:
     if not rows:
         return "No skills are installed."
     from_plugins = sum(1 for x, _t in rows if x.source.startswith("plugin "))
-    linked = sum(1 for x, _t in rows if "symlink" in x.source)
+    linked = sum(1 for x, _t in rows if _links_outside_home(x))
     shared = sum(1 for _x, t in rows if len(t) > 1)
     restricted = sum(1 for x, _t in rows if x.access)
     where = [f"{from_plugins} live in plugin caches"] if from_plugins else []
