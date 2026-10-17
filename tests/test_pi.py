@@ -201,3 +201,13 @@ def test_a_package_you_own_has_no_owner_note(tmp_path: Path):
     report, _facts = pi.collect(context(tmp_path))
     [plugin] = [x for x in report.extensions if x.kind == "plugin"]
     assert plugin.notes == "Loaded in-process"
+
+
+def test_model_catalog_cache_is_a_cache_not_a_credential_store(tmp_path: Path):
+    build_pi_home(tmp_path)
+    store = tmp_path / ".pi" / "agent" / "models-store.json"
+    store.write_text(json.dumps({"catalog": {"type": "api", "key": "sk-" + "m" * 40}}))
+    report, _facts = pi.collect(context(tmp_path))
+    assert "catalog" not in {c.provider for c in report.credentials}
+    [cache] = [a for a in report.artifacts if a.path == str(store)]
+    assert cache.category.value == "cache"

@@ -58,7 +58,9 @@ ARTIFACTS = (
     ArtifactSpec(
         "Model config", "models.json", C.CONFIG, "Provider base URLs, API keys and model lists"
     ),
-    ArtifactSpec("Credential store", "models-store.json", C.CREDENTIAL, "Runtime credential store"),
+    ArtifactSpec(
+        "Model catalog cache", "models-store.json", C.CACHE, "Provider model catalogs pi refreshes"
+    ),
     ArtifactSpec("Settings", "settings.json", C.CONFIG, "Defaults, packages, trust, analytics"),
     ArtifactSpec("Project trust", "trust.json", C.CONFIG, "Trust decision per project folder"),
     ArtifactSpec("MCP servers", "mcp.json", C.EXTENSION, "Global MCP server config"),
@@ -146,7 +148,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("trust store", "trust.json"),
     Claim("MCP config shape", "mcpServers"),
     Claim("credential file", '"auth.json"'),
-    Claim("credential store", "models-store.json"),
+    Claim("model catalog cache", "models-store.json"),
     Claim("shared skill dir ~/.agents/skills", SHARED_SKILLS_MARKER),
 )
 
@@ -194,7 +196,7 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
             workers=ctx.workers,
             display=ctx.display,
             known=facts["fingerprints"],
-            stores=[agent / "auth.json", agent / "models.json", agent / "models-store.json"],
+            stores=[agent / "auth.json", agent / "models.json"],
         )
     return report, facts
 
@@ -229,11 +231,9 @@ def _credentials(ctx: Context, agent: Path) -> tuple[list[Credential], dict[str,
     fingerprints: dict[str, str] = {}
     creds: list[Credential] = []
     providers: set[str] = set()
-    for name in ("auth.json", "models-store.json"):
-        path = agent / name
-        entries = load_json(path)
-        if not isinstance(entries, dict):
-            continue
+    path = agent / "auth.json"
+    entries = load_json(path)
+    if isinstance(entries, dict):
         for provider, entry in entries.items():
             if not isinstance(entry, dict) or not entry.get("type"):
                 continue
@@ -398,7 +398,7 @@ def _settings(
                     "models-store.json",
                     f"could not read {ctx.display(str(store))} (owned by "
                     f"{owner_name(info.st_uid)}, mode {mode_string(info.st_mode)})",
-                    "pi's credential store; credentials in it are not counted here",
+                    "pi's provider model catalog cache",
                 ),
                 "models-store.json",
             )
