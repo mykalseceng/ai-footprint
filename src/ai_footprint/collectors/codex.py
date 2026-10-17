@@ -21,6 +21,7 @@ from ai_footprint.collectors.common import (
     mine_hosts,
     mined_endpoints,
     presence,
+    shell_shortcuts,
 )
 from ai_footprint.fsinfo import mode_string, readable_by_others
 from ai_footprint.host import processes, sockets
@@ -38,7 +39,7 @@ from ai_footprint.model import (
 )
 from ai_footprint.rules import THREADS_WITHOUT_APPROVAL
 from ai_footprint.secrets import scan_paths
-from ai_footprint.surface import when
+from ai_footprint.surface import plural, when
 from ai_footprint.tokens import inspect_token, iso_time, verify_rs256
 
 NAME = "codex"
@@ -134,6 +135,7 @@ LOG_MARKERS = {
     "invalid_grant": "refresh rejected (invalid_grant)",
 }
 NEVER = "never"
+BYPASS_FLAG = "--dangerously-bypass-approvals-and-sandbox"
 CLAIMS: tuple[Claim, ...] = (
     *(Claim(f"endpoint {host}", host) for host in ENDPOINTS),
     *(Claim(f"signature: {label}", marker) for label, _value, marker in FINGERPRINT),
@@ -144,6 +146,7 @@ CLAIMS: tuple[Claim, ...] = (
     *(Claim(f"log marker {marker}", marker) for marker in LOG_MARKERS),
     Claim("approval_policy value", NEVER),
     Claim("sandbox_mode value", "danger-full-access"),
+    Claim("flag that turns off approval and sandbox", BYPASS_FLAG.removeprefix("--")),
     Claim("command rule format", 'decision="allow"'),
 )
 OTHER_APP_BUNDLE = ".app/Contents/"
@@ -177,6 +180,7 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     report.credentials, facts["fingerprints"] = _credentials(ctx, root, config)
     report.processes = _cli_processes(processes(ctx.system, r"(^|/)codex(\s|$)|codex-darwin"))
     report.settings = _settings(ctx, config, root, _vendor_binary(report.binaries))
+    report.settings += shell_shortcuts(ctx, BYPASS_FLAG)
     threads = thread_approval(root)
     if threads is not None:
         report.settings.append(threads)
@@ -590,30 +594,55 @@ def _sandbox_type(policy: str) -> str:
     return str(data.get("type", "")) if isinstance(data, dict) else str(data)
 
 
+def _thread_origin(originator: str, source: str) -> str:
+    """``desktop`` for the desktop app, ``guardian`` for its review subagents, else ``cli``."""
+    if "guardian" in source:
+        return "guardian"
+    return "desktop" if originator == "Codex Desktop" else "cli"
+
+
 def thread_approval(root: Path) -> Setting | None:
-    """How many recorded threads ran with approval off, from the state DB's per-thread modes.
+    """How many recorded CLI threads ran with approval off, from the state DB's per-thread modes.
+
+    Threads written by the Codex desktop app and guardian review subagents share the database;
+    they are counted apart and named, not added to the CLI count.
 
     Returns:
         A setting whose value counts those threads and their sandbox types, or None when the
         state DB or its threads table is not there to read.
     """
+    db = root / "state_5.sqlite"
     rows = _sqlite_rows(
-        root / "state_5.sqlite",
-        "SELECT approval_mode, sandbox_policy, count(*), max(updated_at) FROM threads "
-        "GROUP BY approval_mode, sandbox_policy",
-    )
+        db,
+        "SELECT approval_mode, sandbox_policy, coalesce(originator, ''), coalesce(source, ''), "
+        "updated_at FROM threads",
+    ) or _sqlite_rows(db, "SELECT approval_mode, sandbox_policy, '', '', updated_at FROM threads")
     if rows is None:
         return None
-    total = sum(int(count) for _mode, _policy, count, _updated in rows)
-    never = [row for row in rows if row[0] == NEVER]
+    origins: Counter[str] = Counter()
     sandboxes: Counter[str] = Counter()
-    for _mode, policy, count, _updated in never:
-        sandboxes[_sandbox_type(str(policy))] += int(count)
-    value = f"{sum(sandboxes.values())} of {total} recorded threads"
+    latest = 0
+    for mode, policy, originator, source, updated in rows:
+        origin = _thread_origin(str(originator), str(source))
+        if origin != "cli":
+            origins[origin] += mode == NEVER
+            continue
+        origins["cli"] += 1
+        if mode == NEVER:
+            sandboxes[_sandbox_type(str(policy))] += 1
+            latest = max(latest, int(updated))
+    never = sum(sandboxes.values())
+    value = f"{never} of {origins['cli']} recorded CLI threads"
     if never:
-        latest = iso_time(max(int(row[3]) for row in never))[:10]
         kinds = ", ".join(f"{n} sandbox {kind}" for kind, n in sandboxes.most_common())
-        value += f" ({kinds}; latest updated {latest})"
+        value += f" ({kinds}; latest updated {iso_time(latest)[:10]})"
+    others = [
+        plural(origins[k], label)
+        for k, label in (("desktop", "desktop-app thread"), ("guardian", "guardian review"))
+        if origins[k]
+    ]
+    if others:
+        value += f"; also with approval_mode=never, not counted: {', '.join(others)}"
     return Setting(
         THREADS_WITHOUT_APPROVAL,
         value,

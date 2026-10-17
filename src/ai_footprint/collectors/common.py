@@ -333,6 +333,29 @@ def command_target(command: str, args: list[str]) -> str | None:
     return command
 
 
+SHELL_FILES = (".zshrc", ".bashrc", ".bash_profile", ".zprofile", ".config/fish/config.fish")
+
+
+def shell_shortcuts(ctx: Context, flag: str) -> list[Setting]:
+    """Uncommented lines in your shell startup files that pass ``flag``, one setting each."""
+    out = []
+    for rc in SHELL_FILES:
+        path = ctx.home / rc
+        if not path.is_file():
+            continue
+        for number, line in enumerate(path.read_text(errors="replace").splitlines(), start=1):
+            if flag in line and not line.lstrip().startswith("#"):
+                out.append(
+                    Setting(
+                        f"~/{rc}:{number}",
+                        line.strip()[:120],
+                        f"Shell shortcut that passes {flag}",
+                        concern=True,
+                    )
+                )
+    return out
+
+
 def is_dangling(command: str, args: list[str], *, cwd: Path | None = None) -> bool:
     """True when the program or script a command launches does not exist.
 

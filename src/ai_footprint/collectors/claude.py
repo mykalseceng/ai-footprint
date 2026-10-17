@@ -18,6 +18,7 @@ from ai_footprint.collectors.common import (
     mine_hosts,
     mined_endpoints,
     presence,
+    shell_shortcuts,
 )
 from ai_footprint.fsinfo import mode_string, readable_by_others
 from ai_footprint.host import processes, sockets
@@ -500,21 +501,7 @@ def _bypass_evidence(ctx: Context, report: ToolReport) -> list[Setting]:
                 concern=True,
             )
         )
-    for rc in (".zshrc", ".bashrc", ".bash_profile", ".zprofile", ".config/fish/config.fish"):
-        path = ctx.home / rc
-        if not path.is_file():
-            continue
-        for number, line in enumerate(path.read_text(errors="replace").splitlines(), start=1):
-            if "dangerously-skip-permissions" in line and not line.lstrip().startswith("#"):
-                out.append(
-                    Setting(
-                        f"~/{rc}:{number}",
-                        line.strip()[:120],
-                        "Shell shortcut that launches bypass mode",
-                        concern=True,
-                    )
-                )
-    return out
+    return out + shell_shortcuts(ctx, "--dangerously-skip-permissions")
 
 
 def _instruction_candidates(home: Path, config: dict[str, Any]) -> list[instructions.Candidate]:

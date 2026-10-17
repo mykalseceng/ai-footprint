@@ -193,7 +193,7 @@ def rule_no_approval(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             f"{report.display_name} skips approval prompts in some sessions "
             f"({join(observed)}). In those sessions, text that reaches the model (a web page, a "
             "repo file, an MCP result, an instruction file) can become commands running as you, "
-            "limited only by the deny rules and hooks that still apply.",
+            "limited only by the sandbox, deny rules and hooks that still apply.",
             evidence=[f"{s.key} = {s.value}" for s in configured + running + threads],
             fix=_no_approval_fix(report, ctx),
         )
@@ -232,7 +232,11 @@ def _no_approval_fix(report: ToolReport, ctx: RuleContext) -> Fix:
                     manual=True,
                     markers=("on-request", "workspace-write"),
                     marker_tool="codex",
-                )
+                ),
+                FixCommand(
+                    "Remove shell aliases that add --dangerously-bypass-approvals-and-sandbox",
+                    manual=True,
+                ),
             ],
         )
     return Fix(

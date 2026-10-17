@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ai_footprint import accounts, extensions, figures, rules
 from ai_footprint.collectors import codex
-from ai_footprint.collectors.common import Context
+from ai_footprint.collectors.common import Context, shell_shortcuts
 from ai_footprint.model import HostReport, ProcessInfo, ToolReport
 from ai_footprint.system import ProbeResult
 from tests.conftest import FakeSystem
@@ -61,7 +61,7 @@ def test_empty_threads_table_is_read_and_not_a_concern(tmp_path: Path):
     state_db(tmp_path, THREADS)
     setting = codex.thread_approval(tmp_path)
     assert setting is not None
-    assert setting.value == "0 of 0 recorded threads"
+    assert setting.value == "0 of 0 recorded CLI threads"
     assert not setting.concern
 
 
@@ -80,10 +80,31 @@ def test_threads_that_ran_with_approval_off_are_counted_by_sandbox(tmp_path: Pat
     assert setting is not None
     assert setting.key == rules.THREADS_WITHOUT_APPROVAL
     assert setting.value == (
-        "3 of 4 recorded threads (2 sandbox danger-full-access, 1 sandbox disabled; "
+        "3 of 4 recorded CLI threads (2 sandbox danger-full-access, 1 sandbox disabled; "
         "latest updated 2026-10-17)"
     )
     assert setting.concern
+
+
+def test_desktop_and_guardian_threads_are_named_but_not_counted_as_cli(tmp_path: Path):
+    state_db(
+        tmp_path,
+        "CREATE TABLE threads (approval_mode TEXT, sandbox_policy TEXT, originator TEXT, "
+        "source TEXT, updated_at INTEGER)",
+        [
+            ("never", "danger-full-access", "codex-tui", "cli", UPDATED - 50),
+            ("on-request", "read-only", "codex-tui", "cli", UPDATED),
+            ("never", "managed", "Codex Desktop", "vscode", UPDATED + 99),
+            ("never", "managed", "codex-tui", '{"subagent":{"other":"guardian"}}', UPDATED + 99),
+            ("on-request", "managed", "Codex Desktop", "vscode", UPDATED),
+        ],
+    )
+    setting = codex.thread_approval(tmp_path)
+    assert setting is not None
+    assert setting.value == (
+        "1 of 2 recorded CLI threads (1 sandbox danger-full-access; latest updated 2026-10-17); "
+        "also with approval_mode=never, not counted: 1 desktop-app thread, 1 guardian review"
+    )
 
 
 def test_recorded_threads_drive_the_no_approval_signal_and_figure(tmp_path: Path):
@@ -92,7 +113,7 @@ def test_recorded_threads_drive_the_no_approval_signal_and_figure(tmp_path: Path
     assert setting is not None
     report = codex_report(settings=[setting])
     [found] = rules.rule_no_approval(report, rule_context(tmp_path))
-    assert "threads with approval_mode=never: 1 of 1 recorded threads" in found.statement
+    assert "threads with approval_mode=never: 1 of 1 recorded CLI threads" in found.statement
     report.exposures = [found]
     figure = figures.approval(report)
     assert figure.value == "found"
@@ -227,3 +248,13 @@ def test_plugin_mcp_servers_marked_disabled_do_not_start_automatically(tmp_path:
     assert not rows["off"].autostart
     assert rows["off"].notes.startswith("disabled")
     assert rows["on"].autostart
+
+
+def test_shell_shortcuts_with_the_bypass_flag_are_reported(tmp_path: Path):
+    (tmp_path / ".zshrc").write_text(
+        f"# alias old='codex {codex.BYPASS_FLAG}'\nalias codex-yolo=\"codex {codex.BYPASS_FLAG}\"\n"
+    )
+    ctx = Context(home=tmp_path, system=FakeSystem(), now=0.0)
+    [found] = shell_shortcuts(ctx, codex.BYPASS_FLAG)
+    assert found.key == "~/.zshrc:2"
+    assert found.concern
