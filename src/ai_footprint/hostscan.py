@@ -18,9 +18,16 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from ai_footprint.collectors.common import command_target, load_json
-from ai_footprint.fsinfo import human_size, mode_string, readable_by_others, tilde, tree_stats
+from ai_footprint.fsinfo import (
+    human_size,
+    mode_string,
+    outermost,
+    readable_by_others,
+    tilde,
+    tree_stats,
+)
 from ai_footprint.host import all_processes, started_at
-from ai_footprint.model import HostFact, ProcessInfo, ToolReport
+from ai_footprint.model import Category, HostFact, ProcessInfo, ToolReport
 from ai_footprint.system import System
 
 SECRET_ENV = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.IGNORECASE)
@@ -570,17 +577,15 @@ def _open_keys(paths: list[Path]) -> str:
     return f"; private key without a passphrase: {', '.join(k.name for k in keys)}" if keys else ""
 
 
-DATA_ROOTS = {
-    "claude": (".claude",),
-    "codex": (".codex",),
-    "opencode": (".local/share/opencode", ".config/opencode"),
-    "pi": (".pi/agent",),
-}
-
-
 def scan(home: Path, system: System, tools: list[ToolReport]) -> list[HostFact]:
     """Every host-level observation, in report order."""
-    roots = [home / rel for t in tools if t.installed for rel in DATA_ROOTS.get(t.name, ())]
+    roots = [
+        Path(a.path)
+        for t in tools
+        if t.installed
+        for a in outermost(t.artifacts)
+        if a.exists and a.category is Category.SESSION
+    ]
     return (
         reach(home, system)
         + control(home)

@@ -211,7 +211,7 @@ def _extensions_answer(tool: ToolReport) -> Answer:
 
 
 def _daemons_answer(tool: ToolReport, home: str) -> Answer:
-    question = "What does it keep running in the background?"
+    question = "Which of its processes run detached or accept connections?"
     if not tool.daemons:
         return Answer(question, "No process of this tool is detached from a session or listening.")
     rows = []
@@ -237,7 +237,7 @@ def _program_answer(tool: ToolReport) -> Answer:
         question,
         "",
         ("Program", "Status", "Evidence"),
-        [[p.name, p.status, p.evidence[0]] for p in tool.programs],
+        [[p.name, p.status, evidence] for p in tool.programs for evidence in p.evidence],
     )
 
 
