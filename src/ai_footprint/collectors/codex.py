@@ -632,17 +632,17 @@ def thread_approval(root: Path) -> Setting | None:
             sandboxes[_sandbox_type(str(policy))] += 1
             latest = max(latest, int(updated))
     never = sum(sandboxes.values())
-    value = f"{never} of {origins['cli']} recorded CLI threads"
+    value = f"{never} of {origins['cli']} CLI threads"
     if never:
-        kinds = ", ".join(f"{n} sandbox {kind}" for kind, n in sandboxes.most_common())
-        value += f" ({kinds}; latest updated {iso_time(latest)[:10]})"
+        kinds = ", ".join(f"{n} {kind}" for kind, n in sandboxes.most_common())
+        value += f" (sandbox {kinds}; latest {iso_time(latest)[:10]})"
     others = [
         plural(origins[k], label)
         for k, label in (("desktop", "desktop-app thread"), ("guardian", "guardian review"))
         if origins[k]
     ]
     if others:
-        value += f"; also with approval_mode=never, not counted: {', '.join(others)}"
+        value += f"; not counted: {', '.join(others)}"
     return Setting(
         THREADS_WITHOUT_APPROVAL,
         value,

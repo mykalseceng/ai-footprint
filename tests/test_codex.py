@@ -61,7 +61,7 @@ def test_empty_threads_table_is_read_and_not_a_concern(tmp_path: Path):
     state_db(tmp_path, THREADS)
     setting = codex.thread_approval(tmp_path)
     assert setting is not None
-    assert setting.value == "0 of 0 recorded CLI threads"
+    assert setting.value == "0 of 0 CLI threads"
     assert not setting.concern
 
 
@@ -80,8 +80,7 @@ def test_threads_that_ran_with_approval_off_are_counted_by_sandbox(tmp_path: Pat
     assert setting is not None
     assert setting.key == rules.THREADS_WITHOUT_APPROVAL
     assert setting.value == (
-        "3 of 4 recorded CLI threads (2 sandbox danger-full-access, 1 sandbox disabled; "
-        "latest updated 2026-10-17)"
+        "3 of 4 CLI threads (sandbox 2 danger-full-access, 1 disabled; latest 2026-10-17)"
     )
     assert setting.concern
 
@@ -102,8 +101,8 @@ def test_desktop_and_guardian_threads_are_named_but_not_counted_as_cli(tmp_path:
     setting = codex.thread_approval(tmp_path)
     assert setting is not None
     assert setting.value == (
-        "1 of 2 recorded CLI threads (1 sandbox danger-full-access; latest updated 2026-10-17); "
-        "also with approval_mode=never, not counted: 1 desktop-app thread, 1 guardian review"
+        "1 of 2 CLI threads (sandbox 1 danger-full-access; latest 2026-10-17); "
+        "not counted: 1 desktop-app thread, 1 guardian review"
     )
 
 
@@ -113,7 +112,7 @@ def test_recorded_threads_drive_the_no_approval_signal_and_figure(tmp_path: Path
     assert setting is not None
     report = codex_report(settings=[setting])
     [found] = rules.rule_no_approval(report, rule_context(tmp_path))
-    assert "threads with approval_mode=never: 1 of 1 recorded CLI threads" in found.statement
+    assert "threads with approval_mode=never: 1 of 1 CLI threads" in found.statement
     report.exposures = [found]
     figure = figures.approval(report)
     assert figure.value == "found"
