@@ -284,7 +284,9 @@ def method_summary(audit: AuditReport) -> str:
         else ""
     )
     return (
-        f"The audit is read-only. It ran {surface.plural(len(audit.executed), 'command')}, each "
+        "The audit writes nothing but its own reports; a tool run with --version or --help may "
+        "append to that tool's own log. "
+        f"It ran {surface.plural(len(audit.executed), 'command')}, each "
         f"by absolute path with a fixed PATH: {probe_runs} from its probe registry and "
         f"{tool_runs} of installed AI-tool binaries, limited to --version and --help."
         f"{signature} Secrets were read into memory only to derive metadata. {network}"

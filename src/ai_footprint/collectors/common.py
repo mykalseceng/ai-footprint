@@ -36,7 +36,7 @@ AD_HOC = "ad-hoc signed (no signing identity)"
 HOST_RE = re.compile(rb"https?://([a-z0-9][a-z0-9.-]*\.[a-z]{2,})(?=[/:\"'\s?)\\]|$)")
 INTERPRETERS = frozenset({"node", "python", "python3", "bun", "deno", "uv", "npx", "uvx"})
 SHELLS = frozenset({"bash", "sh", "zsh", "/bin/bash", "/bin/sh", "/bin/zsh"})
-MAX_HOST_BYTES = 256 * 1024 * 1024
+MAX_HOST_BYTES = 256_000_000
 SEARCH_CHUNK_BYTES = 8 * 1024 * 1024
 
 

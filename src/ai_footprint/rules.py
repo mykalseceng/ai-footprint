@@ -888,7 +888,14 @@ def rule_open_server(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
 
 # --- trust, account data, account signals -------------------------------------------------------
 
-BROAD_TRUST = ("Downloads", "Desktop", "tmp", "Library/Application Support", "node_modules")
+BROAD_TRUST = (
+    "Documents",
+    "Downloads",
+    "Desktop",
+    "tmp",
+    "Library/Application Support",
+    "node_modules",
+)
 """Folder names whose contents come from many sources, not one project."""
 
 
@@ -1140,7 +1147,11 @@ TOOL_RULES: tuple[Rule, ...] = (
         _needs_local_mcp,
     ),
     Rule("autostart", "No automatic code execution points", rule_autostart),
-    Rule("daemons", "No process outlives its session or accepts connections", rule_daemons),
+    Rule(
+        "daemons",
+        "No process outlives its session or accepts connections from other accounts or the network",
+        rule_daemons,
+    ),
     Rule("duplicate-installs", "One install per tool", rule_duplicate_installs),
     Rule(
         "creds-readable",
@@ -1160,7 +1171,12 @@ TOOL_RULES: tuple[Rule, ...] = (
         rule_open_server,
         _needs_local_server,
     ),
-    Rule("trust", "Trusted folders are few and owned by you", rule_trust, _needs_trusted_folders),
+    Rule(
+        "trust",
+        "No broad trusted folders and none holding instruction files",
+        rule_trust,
+        _needs_trusted_folders,
+    ),
     Rule(
         "account-data",
         "Provider keeps no extra copies (training, cloud tasks)",

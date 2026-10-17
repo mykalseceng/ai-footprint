@@ -146,7 +146,7 @@ def _validation_summary(audit: AuditReport, style: Style) -> list[str]:
         "(syntax, programs, targets, subcommands, config keys)",
         f"Tool claims:    {sum(c.passed for c in claims)}/{len(claims)} found in the installed "
         "binaries (endpoints, signature traits, config keys, log and behaviour markers)",
-        f"Commands run by this audit: {len(audit.executed)} (all read-only)",
+        f"Commands run by this audit: {len(audit.executed)} (probes and --version/--help runs)",
     ]
     for v in bad_probes + bad_cmds + bad_claims:
         failed = "; ".join(f"{c.name}: {c.detail}" for c in v.checks if not c.passed)

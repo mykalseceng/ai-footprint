@@ -157,7 +157,7 @@ def _connections_answer(tool: ToolReport) -> Answer:
     return Answer(
         question,
         "Only rows marked open now are connections; the rest are names found in the binary, "
-        "the config or local logs.",
+        "the config or local logs (counted over at most the first 256 MB of logs).",
         ("Host", "Evidence", "Count"),
         rows,
     )
@@ -240,7 +240,7 @@ def _program_answer(tool: ToolReport) -> Answer:
         question,
         "",
         ("Program", "Status", "Evidence"),
-        [[p.name, p.status, evidence] for p in tool.programs for evidence in p.evidence],
+        [[p.name, p.status, "; ".join(p.evidence)] for p in tool.programs],
     )
 
 

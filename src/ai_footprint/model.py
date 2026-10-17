@@ -36,7 +36,7 @@ class Lens(StrEnum):
             Lens.CODE: "What can malware or a hijacked session take or leave behind?",
             Lens.MODEL: "What happens when text the tool reads tells it what to do?",
             Lens.ACCOUNT: "What can other users of this machine read or plant?",
-            Lens.COPIES: "Where else does this data live, outside your control?",
+            Lens.COPIES: "Where else is related data kept?",
         }[self]
 
 

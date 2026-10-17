@@ -159,7 +159,8 @@ def test_enabled_remote_control_enrollment_is_a_concern_with_its_record(tmp_path
     config = {"desktop": {"keepRemoteControlAwakeWhilePluggedIn": True}}
     enrolled, awake = accounts._codex_remote(config, tmp_path)
     assert enrolled.text == (
-        "Remote control is enabled for server Studio through client Codex Desktop "
+        "Codex state, shared with the desktop app, records remote control enabled for server "
+        "Studio through client Codex Desktop "
         "(updated 2026-10-17). Which devices are paired now is not recorded locally."
     )
     assert enrolled.source == "~/.codex/state_5.sqlite remote_control_enrollments"
@@ -171,7 +172,7 @@ def test_disabled_enrollment_and_missing_table_raise_no_concern(tmp_path: Path):
     assert accounts._codex_remote({}, tmp_path) == []
     state_db(tmp_path, ENROLLMENTS, [("Codex Desktop", "Studio", 0, UPDATED)])
     [note] = accounts._codex_remote({}, tmp_path)
-    assert note.text.startswith("Remote control is not enabled")
+    assert "records remote control not enabled" in note.text
     assert not note.concern
 
 

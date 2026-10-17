@@ -121,7 +121,7 @@ def proof(audit: AuditReport) -> str:
                     f"`/usr/bin/security` in {match.group(1)} seconds, with no prompt. "
                     "Any program running as you can do the same."
                 )
-    return "This audit is read-only and never writes a secret value to this report."
+    return "This audit never writes a secret value to this report."
 
 
 def _fix_label(validation: CommandValidation) -> dict[str, str]:
@@ -194,7 +194,10 @@ def _mcp_tldr(rows: Grouped) -> str:
     shared = sum(1 for _x, t in rows if len(t) > 1)
     facts = []
     if auto:
-        facts.append(f"{auto} {_verb(auto, 'starts', 'start')} whenever a tool starts")
+        facts.append(
+            f"{auto} {_verb(auto, 'starts', 'start')} automatically, project-scoped ones only in "
+            "their project folder"
+        )
     if dangling:
         facts.append(
             f"{dangling} {_verb(dangling, 'points', 'point')} at a missing file, so whoever "

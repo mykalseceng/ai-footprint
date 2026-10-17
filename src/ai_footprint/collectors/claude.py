@@ -34,6 +34,7 @@ from ai_footprint.model import (
     ToolReport,
 )
 from ai_footprint.secrets import scan_paths
+from ai_footprint.surface import plural
 from ai_footprint.tokens import inspect_token
 
 NAME = "claude"
@@ -728,15 +729,14 @@ def _cvp_status(report: ToolReport) -> ProgramStatus:
     if hit is None:
         return ProgramStatus(
             "Anthropic Cyber Verification Program",
-            "no cyber-safeguard refusals in transcripts",
+            "no refusal marker in Claude Code data",
             ["Enrollment is not recorded locally"],
         )
     return ProgramStatus(
         "Anthropic Cyber Verification Program",
-        "cyber-safeguard refusals in transcripts",
+        "refusal marker found in Claude Code data",
         [
-            f'{hit.count} API responses carried apiRefusalCategory "cyber" across '
-            f"{hit.file_count} transcript(s)",
-            "Enrollment is not recorded locally",
+            f'The marker apiRefusalCategory "cyber" appears {plural(hit.count, "time")} in '
+            f"{plural(hit.file_count, 'file')}; enrollment is not recorded locally",
         ],
     )

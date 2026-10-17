@@ -67,7 +67,11 @@ def short_path(path: str, home: str) -> str:
 
 def plural(count: int, word: str) -> str:
     """``3 credentials`` / ``1 credential``."""
-    return f"{count} {word}{'' if count == 1 else 's'}"
+    if count == 1:
+        return f"{count} {word}"
+    if word.endswith("y") and word[-2:-1] not in "aeiou":
+        return f"{count} {word[:-1]}ies"
+    return f"{count} {word}s"
 
 
 def _sentence(text: str) -> str:
@@ -248,7 +252,7 @@ def _headline(tools: list[ToolReport], exposures: list[Exposure], audit: AuditRe
         )
     copies = sorted({x.label[:1].lower() + x.label[1:] for x in exposures if x.lens is Lens.COPIES})
     if copies:
-        sentences.append(f"Copies also live elsewhere: {join(copies)}.")
+        sentences.append(f"Related data is also kept elsewhere: {join(copies)}.")
     unexpiring = [g for g in accounts if "no recorded expiry" in lifetime(g)]
     if unexpiring:
         sentences.append(

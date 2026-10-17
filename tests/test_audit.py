@@ -147,8 +147,12 @@ def test_faq_answers_every_original_question(audited):
 def test_cvp_evidence_comes_from_refusal_markers(audited):
     audit, _c, _a = audited
     claude = next(t for t in audit.tools if t.name == "claude")
-    assert claude.programs[0].status == "cyber-safeguard refusals in transcripts"
-    assert "1 API responses" in claude.programs[0].evidence[0]
+    assert claude.programs[0].status == "refusal marker found in Claude Code data"
+    assert (
+        claude.programs[0]
+        .evidence[0]
+        .startswith('The marker apiRefusalCategory "cyber" appears 1 time in 1 file')
+    )
 
 
 def test_jwt_claims_and_connector_scopes_are_reported(audited):
@@ -343,3 +347,9 @@ def test_headline_names_every_installed_version():
     assert surface._named(tool) == "OpenCode 1.4.6"
     tool.binaries = []
     assert surface._named(tool) == "OpenCode"
+
+
+def test_plural_handles_words_ending_in_y():
+    assert surface.plural(2, "entry") == "2 entries"
+    assert surface.plural(1, "entry") == "1 entry"
+    assert surface.plural(2, "key") == "2 keys"

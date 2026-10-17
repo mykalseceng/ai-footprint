@@ -55,6 +55,8 @@ PROVIDER_HOSTS = {
     "github-copilot": "api.githubcopilot.com",
     "google": "generativelanguage.googleapis.com",
     "openrouter": "openrouter.ai",
+    "zai": "api.z.ai",
+    "zai-coding-plan": "api.z.ai",
 }
 
 PROVIDER_NAMES = {

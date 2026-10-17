@@ -309,9 +309,9 @@ def _codex_remote(config: dict[str, Any], root: Path) -> list[AccountNote]:
         notes.append(
             _note(
                 "detect",
-                f"Remote control is {state_word} for server {row.server} through client "
-                f"{row.client} (updated {row.updated}). Which devices are paired now is not "
-                "recorded locally.",
+                f"Codex state, shared with the desktop app, records remote control "
+                f"{state_word} for server {row.server} through client {row.client} (updated "
+                f"{row.updated}). Which devices are paired now is not recorded locally.",
                 "~/.codex/state_5.sqlite remote_control_enrollments",
                 concern=row.enabled,
             )
