@@ -215,7 +215,7 @@ def _headline(tools: list[ToolReport], exposures: list[Exposure], audit: AuditRe
             if len(tools) == 1
             else "secret-shaped values (distinct per tool)"
         )
-        history = f", plus history holding {secrets} {counted}" if secrets else ""
+        history = f", plus data files holding {secrets} {counted}" if secrets else ""
         sentences.append(f"Anything that runs as you can take {share} without a prompt{history}.")
     inherited = [f for f in audit.host.facts if f.topic == "reach" and f.concern]
     if inherited and len(tools) > 1:
