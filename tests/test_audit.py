@@ -10,10 +10,20 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import answers, cli, dashboard, document, report_html, reportcheck, surface
+from ai_footprint import (
+    answers,
+    cli,
+    dashboard,
+    document,
+    figures,
+    fsinfo,
+    report_html,
+    reportcheck,
+    surface,
+)
 from ai_footprint.audit import run_audit
 from ai_footprint.model import AuditReport, CommandValidation
-from ai_footprint.report_text import Style, render_doctor
+from ai_footprint.report_text import Style, render_doctor, render_summary
 from tests.conftest import (
     FAKE_ANTHROPIC_ACCESS,
     FAKE_ANTHROPIC_REFRESH,
@@ -310,3 +320,13 @@ def test_dashboard_views_pass_the_consistency_checks(audited):
     assert all(v.ok for v in validations), [
         (v.command, c.name, c.detail) for v in validations for c in v.checks if not c.passed
     ]
+
+
+def test_summary_line_sizes_only_outermost_locations_and_says_how_many(audited):
+    audit, _checklist, _access = audited
+    text = render_summary(audit, Style(enabled=False), [])
+    codex = next(t for t in audit.tools if t.name == "codex")
+    listed = sum(1 for a in figures.outermost(codex.artifacts) if a.exists)
+    size = fsinfo.human_size(figures.disk_bytes(codex.artifacts))
+    line = next(line for line in text.splitlines() if line.strip().startswith("Codex CLI"))
+    assert f"{size} in {surface.plural(listed, 'listed location')} · " in line

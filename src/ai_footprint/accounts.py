@@ -212,31 +212,27 @@ def _claims(report: ToolReport, field: str) -> dict[str, str]:
 def _codex_data(report: ToolReport, root: Path, config: dict[str, Any]) -> list[AccountNote]:
     notes = []
     groups = _claims(report, "id_token").get("https://api.openai.com/auth.groups", "")
-    if "data-sharing" in groups:
+    if groups:
         notes.append(
             _note(
                 "data",
-                f"Your OpenAI identity lists the group(s) {groups}. The data-sharing program "
-                "shares API inputs and outputs with OpenAI for training; confirm under Data "
-                "controls at platform.openai.com.",
+                f"Your OpenAI id_token lists the group(s) {groups}. Data controls for the "
+                "account are at platform.openai.com and chatgpt.com.",
                 "~/.codex/auth.json id_token claims",
-                concern=True,
             )
         )
     state = load_json(root / ".codex-global-state.json") or {}
     atoms = state.get("electron-persisted-atom-state", {})
     cloud = atoms.get("codexCloudAccess")
     repos = sorted({k.split("codex:cloud:", 1)[1] for k in atoms if "codex:cloud:" in k})
-    tasks = len(state.get("electron-remote-hosted-pip-task-visibility-state") or {})
-    if cloud or repos or tasks:
+    if cloud or repos:
         notes.append(
             _note(
                 "data",
                 f"Codex cloud access: {cloud or 'unknown'}; cloud-linked repos: "
-                f"{', '.join(repos) or 'none'}; {tasks} cloud task(s) seen by the desktop app. "
-                "Cloud tasks run on OpenAI's machines with your code.",
+                f"{', '.join(repos) or 'none'}.",
                 "~/.codex/.codex-global-state.json",
-                concern=bool(repos or tasks),
+                concern=bool(repos),
             )
         )
     history = config.get("history") or {}
@@ -254,10 +250,6 @@ def _codex_data(report: ToolReport, root: Path, config: dict[str, Any]) -> list[
 def _codex_revoke(ctx: Context, report: ToolReport, binary: str) -> list[AccountNote]:
     markers = [*codex_cli.REVOKE_MARKERS, codex_cli.REMOTE_REVOKE_MARKER]
     found = ctx.binary_has(binary, markers) if binary else {}
-    expiry = next(
-        (t.expires_at for c in report.credentials for t in c.tokens if t.field == "access_token"),
-        "",
-    )
     if all(found.get(m) for m in codex_cli.REVOKE_MARKERS):
         text = (
             "The installed Codex revokes its auth tokens during `codex logout` "
@@ -268,16 +260,69 @@ def _codex_revoke(ctx: Context, report: ToolReport, binary: str) -> list[Account
             "No token-revocation marker was found in the installed Codex binary, so this "
             "audit cannot say whether `codex logout` revokes anything at OpenAI."
         )
-    if expiry:
-        when = expiry[:16].replace("T", " ")
-        text += f" The access token is a JWT whose exp claim is {when} UTC."
     if found.get(codex_cli.REMOTE_REVOKE_MARKER):
         text += " The binary also carries a remote-control device revocation call."
-    text += " To end every session, use Log out of all devices in ChatGPT security settings."
-    return [_note("revoke", text, "markers in the installed codex binary")]
+    notes = [_note("revoke", text, "markers in the installed codex binary")]
+    expiry = next(
+        (t.expires_at for c in report.credentials for t in c.tokens if t.field == "access_token"),
+        "",
+    )
+    if expiry:
+        notes.append(
+            _note(
+                "revoke",
+                f"The access token is a JWT whose exp claim is {expiry}.",
+                "~/.codex/auth.json access_token",
+            )
+        )
+    notes.append(
+        _note(
+            "revoke",
+            "To end sessions elsewhere, sign out of other devices in ChatGPT security settings.",
+            "manual check",
+        )
+    )
+    return notes
 
 
-def _codex_detect(report: ToolReport, root: Path) -> list[AccountNote]:
+def _codex_remote(config: dict[str, Any], root: Path) -> list[AccountNote]:
+    """Remote-control state as recorded: the desktop app's flag, enrollments and config."""
+    notes = []
+    state = load_json(root / ".codex-global-state.json") or {}
+    if state.get("codex-mobile-has-connected-device"):
+        notes.append(
+            _note(
+                "detect",
+                "The Codex desktop app's state records codex-mobile-has-connected-device = true.",
+                "~/.codex/.codex-global-state.json",
+            )
+        )
+    for row in codex_cli.remote_control_enrollments(root):
+        state_word = "enabled" if row.enabled else "not enabled"
+        notes.append(
+            _note(
+                "detect",
+                f"Remote control is {state_word} for server {row.server} through client "
+                f"{row.client} (updated {row.updated}). Which devices are paired now is not "
+                "recorded locally.",
+                "~/.codex/state_5.sqlite remote_control_enrollments",
+                concern=row.enabled,
+            )
+        )
+    desktop = config.get("desktop") or {}
+    if "keepRemoteControlAwakeWhilePluggedIn" in desktop:
+        notes.append(
+            _note(
+                "detect",
+                "desktop.keepRemoteControlAwakeWhilePluggedIn = "
+                f"{str(desktop['keepRemoteControlAwakeWhilePluggedIn']).lower()}.",
+                "~/.codex/config.toml",
+            )
+        )
+    return notes
+
+
+def _codex_detect(ctx: Context, report: ToolReport, root: Path, binary: str) -> list[AccountNote]:
     claims = _claims(report, "id_token")
     notes = []
     auth_time = claims.get("auth_time")
@@ -305,22 +350,14 @@ def _codex_detect(report: ToolReport, root: Path) -> list[AccountNote]:
                 "~/.codex/auth.json last_refresh",
             )
         )
-    state = load_json(root / ".codex-global-state.json") or {}
-    if state.get("codex-mobile-has-connected-device"):
-        notes.append(
-            _note(
-                "detect",
-                "A mobile device is paired with this Codex install and can drive it remotely.",
-                "~/.codex/.codex-global-state.json",
-                concern=True,
-            )
-        )
-    markers = log_markers([root / "log", root / "logs_2.sqlite"], claude_cli.LOG_MARKERS)
+    known = ctx.binary_has(binary, list(codex_cli.LOG_MARKERS)) if binary else {}
+    labels = {m: label for m, label in codex_cli.LOG_MARKERS.items() if known.get(m)}
+    markers = log_markers([root / "log", root / "logs_2.sqlite"], labels)
     if markers:
         notes.append(
             _note(
                 "detect",
-                f"Auth events in local logs: {_marker_text(markers, claude_cli.LOG_MARKERS)}.",
+                f"Auth events in local logs: {_marker_text(markers, labels)}.",
                 "~/.codex/log, logs_2.sqlite",
             )
         )
@@ -335,7 +372,8 @@ def codex(ctx: Context, report: ToolReport, facts: dict[str, Any]) -> list[Accou
     return (
         _codex_data(report, root, config)
         + _codex_revoke(ctx, report, binary)
-        + _codex_detect(report, root)
+        + _codex_detect(ctx, report, root, binary)
+        + _codex_remote(config, root)
     )
 
 

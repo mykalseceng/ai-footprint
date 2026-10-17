@@ -1,9 +1,11 @@
 """OpenAI Codex CLI (``codex``) footprint collector."""
 
+import json
 import re
 import sqlite3
+from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from ai_footprint import extensions, instructions, live
 from ai_footprint.collectors.common import (
@@ -28,14 +30,16 @@ from ai_footprint.model import (
     Credential,
     Endpoint,
     Extension,
+    ProcessInfo,
     ProgramStatus,
     Setting,
     ToolPresence,
     ToolReport,
 )
+from ai_footprint.rules import THREADS_WITHOUT_APPROVAL
 from ai_footprint.secrets import scan_paths
 from ai_footprint.surface import when
-from ai_footprint.tokens import inspect_token, verify_rs256
+from ai_footprint.tokens import inspect_token, iso_time, verify_rs256
 
 NAME = "codex"
 DISPLAY = "Codex CLI"
@@ -125,6 +129,11 @@ SETTING_KEYS = (
 DAEMON_MARKERS = ("managed-daemon", "pid-update-loop", "daemon stop")
 REVOKE_MARKERS = ("auth/revoke.rs", "failed to revoke auth tokens during logout")
 REMOTE_REVOKE_MARKER = "remoteControl/client/revoke"
+LOG_MARKERS = {
+    "Your access token could not be refreshed": "token refresh failed",
+    "invalid_grant": "refresh rejected (invalid_grant)",
+}
+NEVER = "never"
 CLAIMS: tuple[Claim, ...] = (
     *(Claim(f"endpoint {host}", host) for host in ENDPOINTS),
     *(Claim(f"signature: {label}", marker) for label, _value, marker in FINGERPRINT),
@@ -132,10 +141,22 @@ CLAIMS: tuple[Claim, ...] = (
     *(Claim("logout revokes tokens", marker) for marker in REVOKE_MARKERS),
     Claim("remote-control device revocation", REMOTE_REVOKE_MARKER),
     *(Claim("app-server daemon", marker) for marker in DAEMON_MARKERS),
-    Claim("approval_policy value", "never"),
+    *(Claim(f"log marker {marker}", marker) for marker in LOG_MARKERS),
+    Claim("approval_policy value", NEVER),
     Claim("sandbox_mode value", "danger-full-access"),
     Claim("command rule format", 'decision="allow"'),
 )
+OTHER_APP_BUNDLE = ".app/Contents/"
+"""Path fragment of a codex binary shipped inside another app (the ChatGPT desktop app)."""
+
+
+class RemoteEnrollment(NamedTuple):
+    """One remote-control enrollment row from the state DB."""
+
+    client: str
+    server: str
+    enabled: bool
+    updated: str
 
 
 def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
@@ -154,8 +175,11 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
         return report, facts
     report.artifacts = describe_all(root, ARTIFACTS)
     report.credentials, facts["fingerprints"] = _credentials(ctx, root, config)
-    report.processes = processes(ctx.system, r"(^|/)codex(\s|$)|codex-darwin|CodexCLI")
+    report.processes = _cli_processes(processes(ctx.system, r"(^|/)codex(\s|$)|codex-darwin"))
     report.settings = _settings(ctx, config, root, _vendor_binary(report.binaries))
+    threads = thread_approval(root)
+    if threads is not None:
+        report.settings.append(threads)
     report.trusted_folders = [
         p for p, v in config.get("projects", {}).items() if v.get("trust_level") == "trusted"
     ]
@@ -213,6 +237,11 @@ def _find_vendor(script: Path) -> Path | None:
         if candidate.is_file():
             return candidate
     return None
+
+
+def _cli_processes(found: list[ProcessInfo]) -> list[ProcessInfo]:
+    """Drop codex processes run from inside another app's bundle; they are not Codex CLI."""
+    return [p for p in found if OTHER_APP_BUNDLE not in p.command]
 
 
 def _vendor_binary(binaries: list[BinaryInfo]) -> str:
@@ -305,7 +334,7 @@ def _settings(ctx: Context, config: dict[str, Any], root: Path, binary: str) -> 
                 "approval_policy",
                 _value(config, "approval_policy"),
                 "'never' runs every command without asking",
-                concern=config.get("approval_policy") == "never",
+                concern=config.get("approval_policy") == NEVER,
             ),
             "approval_policy",
         ),
@@ -488,11 +517,15 @@ def _endpoints(ctx: Context, root: Path, report: ToolReport) -> list[Endpoint]:
         out.append(Endpoint(NAME, host, f"remote MCP server '{server}'", "config"))
     counts = mine_hosts([root / "log", root / "logs_2.sqlite"])
     out += mined_endpoints(NAME, counts, ENDPOINTS)
+    pids: dict[str, set[int]] = {}
+    opened: Counter[str] = Counter()
     for sock in sockets(ctx.system, [p.pid for p in report.processes]):
         if sock.remote:
-            out.append(
-                Endpoint(NAME, sock.remote, f"open socket from pid {sock.pid}", "live-socket", 1)
-            )
+            pids.setdefault(sock.remote, set()).add(sock.pid)
+            opened[sock.remote] += 1
+    for remote, count in opened.items():
+        owners = ", ".join(str(pid) for pid in sorted(pids[remote]))
+        out.append(Endpoint(NAME, remote, f"open sockets from pid {owners}", "live-socket", count))
     return out
 
 
@@ -508,30 +541,95 @@ def report_mcp_urls(report: ToolReport) -> list[tuple[str, str]]:
 
 def _stats(root: Path) -> dict[str, str]:
     stats: dict[str, str] = {}
-    sessions = root / "sessions"
-    if sessions.is_dir():
-        stats["session rollouts"] = str(sum(1 for _ in sessions.rglob("rollout-*.jsonl")))
+    folders = [root / "sessions", root / "archived_sessions"]
+    if any(folder.is_dir() for folder in folders):
+        stats["session rollouts"] = str(sum(_rollout_count(folder) for folder in folders))
     history = root / "history.jsonl"
     if history.is_file():
         stats["typed prompts"] = str(sum(1 for _ in history.open("rb")))
-    threads = _sqlite_count(root / "state_5.sqlite", "threads")
-    if threads is not None:
-        stats["threads (state DB)"] = str(threads)
+    threads = _sqlite_rows(root / "state_5.sqlite", "SELECT count(*) FROM threads")
+    if threads:
+        stats["threads (state DB)"] = str(threads[0][0])
     install = root / "installation_id"
     if install.is_file():
         stats["installation id"] = install.read_text().strip()[:8] + "…"
     return stats
 
 
-def _sqlite_count(path: Path, table: str) -> int | None:
-    if not path.is_file() or not re.fullmatch(r"\w+", table):
+def _rollout_count(folder: Path) -> int:
+    """Rollout files, plain or zstd-compressed, under one sessions folder."""
+    if not folder.is_dir():
+        return 0
+    return sum(
+        1
+        for path in folder.rglob("rollout-*")
+        if path.name.endswith((".jsonl", ".jsonl.zst")) and path.is_file()
+    )
+
+
+def _sqlite_rows(path: Path, query: str) -> list[tuple[Any, ...]] | None:
+    """Rows from a read-only query, or None when the file or the queried table is missing."""
+    if not path.is_file():
         return None
     try:
         with sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2) as conn:
-            row = conn.execute(f"SELECT count(*) FROM {table}").fetchone()  # noqa: S608
+            return conn.execute(query).fetchall()
     except sqlite3.Error:
         return None
-    return int(row[0]) if row else None
+
+
+def _sandbox_type(policy: str) -> str:
+    """The sandbox type from a thread's ``sandbox_policy`` (JSON object or bare string)."""
+    try:
+        data = json.loads(policy)
+    except ValueError:
+        return policy
+    return str(data.get("type", "")) if isinstance(data, dict) else str(data)
+
+
+def thread_approval(root: Path) -> Setting | None:
+    """How many recorded threads ran with approval off, from the state DB's per-thread modes.
+
+    Returns:
+        A setting whose value counts those threads and their sandbox types, or None when the
+        state DB or its threads table is not there to read.
+    """
+    rows = _sqlite_rows(
+        root / "state_5.sqlite",
+        "SELECT approval_mode, sandbox_policy, count(*), max(updated_at) FROM threads "
+        "GROUP BY approval_mode, sandbox_policy",
+    )
+    if rows is None:
+        return None
+    total = sum(int(count) for _mode, _policy, count, _updated in rows)
+    never = [row for row in rows if row[0] == NEVER]
+    sandboxes: Counter[str] = Counter()
+    for _mode, policy, count, _updated in never:
+        sandboxes[_sandbox_type(str(policy))] += int(count)
+    value = f"{sum(sandboxes.values())} of {total} recorded threads"
+    if never:
+        latest = iso_time(max(int(row[3]) for row in never))[:10]
+        kinds = ", ".join(f"{n} sandbox {kind}" for kind, n in sandboxes.most_common())
+        value += f" ({kinds}; latest updated {latest})"
+    return Setting(
+        THREADS_WITHOUT_APPROVAL,
+        value,
+        "Approval mode each thread ran with, as recorded in ~/.codex/state_5.sqlite",
+        concern=bool(never),
+    )
+
+
+def remote_control_enrollments(root: Path) -> list[RemoteEnrollment]:
+    """Remote-control enrollments recorded in the state DB, newest first."""
+    rows = _sqlite_rows(
+        root / "state_5.sqlite",
+        "SELECT app_server_client_name, server_name, remote_control_enabled, updated_at "
+        "FROM remote_control_enrollments ORDER BY updated_at DESC",
+    )
+    return [
+        RemoteEnrollment(str(client), str(server), bool(enabled), iso_time(int(updated))[:10])
+        for client, server, enabled, updated in rows or []
+    ]
 
 
 def _tac_status(report: ToolReport) -> ProgramStatus:

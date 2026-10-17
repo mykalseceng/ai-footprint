@@ -6,7 +6,7 @@ import textwrap
 from collections import Counter
 from collections.abc import Iterable
 
-from ai_footprint import reportcheck, surface
+from ai_footprint import figures, reportcheck, surface
 from ai_footprint.fsinfo import human_size
 from ai_footprint.model import AuditReport, CommandValidation, Fix, ToolPresence
 from ai_footprint.rules import Check
@@ -173,8 +173,12 @@ def render_summary(audit: AuditReport, style: Style, outputs: list[tuple[str, st
             if scan
             else "not scanned"
         )
-        size = human_size(sum(a.size_bytes for a in tool.artifacts))
-        out.append(f"  {tool.display_name:<12} v{version:<10} {size:>9} on disk · {scanned}")
+        listed = sum(1 for a in figures.outermost(tool.artifacts) if a.exists)
+        size = human_size(figures.disk_bytes(tool.artifacts))
+        out.append(
+            f"  {tool.display_name:<12} v{version:<10} {size:>9} in "
+            f"{surface.plural(listed, 'listed location')} · {scanned}"
+        )
     out.append("")
     out.extend(render_narrative(audit, style))
     out.extend([*_validation_summary(audit, style), ""])
