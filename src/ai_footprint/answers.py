@@ -13,7 +13,6 @@ from ai_footprint.fsinfo import human_size
 from ai_footprint.model import Artifact, Category, TokenInfo, ToolReport
 from ai_footprint.surface import plural, sentences, when
 
-TOP = 8
 EVIDENCE = {
     "binary": "in the binary",
     "config": "configured",
@@ -47,15 +46,14 @@ def _file_rows(artifacts: list[Artifact], home: str) -> list[list[str]]:
             f"{a.file_count:,}" if a.is_dir else "",
             a.oldest,
         ]
-        for a in ranked[:TOP]
+        for a in ranked
     ]
 
 
 def _files_answer(question: str, artifacts: list[Artifact], home: str) -> Answer:
     if not artifacts:
         return Answer(question, "None found.")
-    more = f"{len(artifacts) - TOP} more not shown." if len(artifacts) > TOP else ""
-    return Answer(question, more, ("Path", "Size", "Files", "Since"), _file_rows(artifacts, home))
+    return Answer(question, "", ("Path", "Size", "Files", "Since"), _file_rows(artifacts, home))
 
 
 def _store_answer(tool: ToolReport, home: str) -> Answer:
@@ -108,7 +106,7 @@ def _expiry_answer(tool: ToolReport) -> Answer:
         question,
         "Claims are listed under Credentials in the inventory.",
         ("Token", "Type", "Expires", "Scopes", "Signature"),
-        [_token_row(t) for t in tokens[:TOP]],
+        [_token_row(t) for t in tokens],
     )
 
 
@@ -124,7 +122,7 @@ def _readers_answer(tool: ToolReport, home: str) -> Answer:
         question,
         text,
         ("Path", "Mode"),
-        [[f"`{_tilde(a.path, home)}`", a.mode] for a in exposed[:TOP]],
+        [[f"`{_tilde(a.path, home)}`", a.mode] for a in exposed],
     )
 
 
@@ -136,7 +134,7 @@ def _connections_answer(tool: ToolReport) -> Answer:
         [x.host, EVIDENCE.get(x.source, x.source), f"{x.count:,}" if x.count else ""]
         for x in tool.endpoints
     ]
-    return Answer(question, "", ("Host", "Evidence", "Mentions"), rows[: TOP * 2])
+    return Answer(question, "", ("Host", "Evidence", "Mentions"), rows)
 
 
 def _signature_answer(tool: ToolReport) -> Answer:
@@ -167,7 +165,7 @@ def _instructions_answer(tool: ToolReport, home: str) -> Answer:
             ", ".join(i.loaded_by),
             "; ".join(i.markers) or "nothing flagged",
         ]
-        for i in tool.instructions[: TOP * 2]
+        for i in tool.instructions
     ]
     return Answer(question, "", ("File", "Scope", "Loaded by", "Flagged"), rows)
 
@@ -192,7 +190,7 @@ def _daemons_answer(tool: ToolReport, home: str) -> Answer:
     if not tool.daemons:
         return Answer(question, "No process of this tool is detached from a session or listening.")
     rows = []
-    for d in tool.daemons[:TOP]:
+    for d in tool.daemons:
         what, listens, notes = daemons.describe(d, home)
         rows.append(
             [
@@ -229,12 +227,12 @@ def _trust_answer(tool: ToolReport, home: str) -> Answer:
     question = "What does my trust list let a cloned repo do?"
     if not tool.trusted_folders:
         return Answer(question, "This tool keeps no trusted-folder list, or none are trusted.")
-    shown = min(len(tool.trusted_folders), TOP)
+    count = len(tool.trusted_folders)
     return Answer(
         question,
-        f"{plural(len(tool.trusted_folders), 'folder')} are trusted ({shown} shown).",
+        f"{plural(count, 'folder')} {'is' if count == 1 else 'are'} trusted.",
         ("Trusted folder",),
-        [[f"`{_tilde(f, home)}`"] for f in tool.trusted_folders[:TOP]],
+        [[f"`{_tilde(f, home)}`"] for f in tool.trusted_folders],
     )
 
 

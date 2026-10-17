@@ -4,7 +4,7 @@ import json
 import time
 from pathlib import Path
 
-from ai_footprint import extensions, report_html
+from ai_footprint import document, extensions
 from ai_footprint.collectors import claude, opencode
 from ai_footprint.collectors.common import Context
 from ai_footprint.model import AuditReport, Extension, HostReport
@@ -131,14 +131,16 @@ def test_extensions_page_lists_a_shared_skill_once_with_both_tools(tmp_path: Pat
     audit = AuditReport(
         generated_at="", auditor_version="0", host=host, tools=[claude_report, opencode_report]
     )
-    grouped = report_html._grouped_extensions(audit)
+    grouped = document.grouped_extensions(audit)
     [(skill, used_by)] = [(x, t) for x, t in grouped if x.kind == "skill" and x.name == "grill"]
     assert used_by == ["Claude Code", "OpenCode"]
     assert skill.description == "Interview the user about a plan until every branch is settled."
-    pages = report_html._extension_pages(audit)
-    assert 'id="skills"' in pages and 'id="mcp"' in pages and 'id="plugins"' in pages
-    assert "1 skill" in pages and "Read, Grep" in pages
-    assert pages.count(">grill<") == 1
+    views = document.build(audit, [])["views"]
+    [row] = [x for x in views["extensions"] if x["name"] == "grill"]
+    assert row["used_by"] == ["Claude Code", "OpenCode"]
+    assert row["group"] == document.USER_SKILLS
+    assert "Read, Grep" in row["access"]
+    assert "loaded by more than one tool" in views["pages"]["skills"]
 
 
 def test_tool_lists_are_summarised_not_listed():

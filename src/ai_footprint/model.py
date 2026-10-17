@@ -141,7 +141,13 @@ class Artifact:
 
 @dataclass
 class TokenInfo:
-    """Non-secret metadata about one credential value."""
+    """Non-secret metadata about one credential value.
+
+    Attributes:
+        last4: Last four characters of a value of 20 or more characters that is not a JWT,
+            so a key can be matched to the provider console when rotating it; empty
+            otherwise.
+    """
 
     field: str
     kind: str
@@ -149,6 +155,7 @@ class TokenInfo:
     prefix: str
     length: int
     fingerprint: str
+    last4: str = ""
     issuer: str = ""
     audience: str = ""
     algorithm: str = ""
@@ -163,7 +170,12 @@ class TokenInfo:
 
 @dataclass
 class Credential:
-    """Where a tool keeps a credential and how well it is protected."""
+    """Where a tool keeps a credential and how well it is protected.
+
+    Attributes:
+        owner: The account the credential belongs to, when a file on disk records it.
+        owner_source: The file and field ``owner`` was read from.
+    """
 
     tool: str
     provider: str
@@ -173,6 +185,8 @@ class Credential:
     readable_by_others: bool = False
     tokens: list[TokenInfo] = field(default_factory=list)
     live_check: str = ""
+    owner: str = ""
+    owner_source: str = ""
 
 
 @dataclass
@@ -458,6 +472,7 @@ class AuditReport:
     option_validation: list[CommandValidation] = field(default_factory=list)
     claim_validation: list[CommandValidation] = field(default_factory=list)
     report_validation: list[CommandValidation] = field(default_factory=list)
+    figure_validation: list[CommandValidation] = field(default_factory=list)
 
     def all_exposures(self) -> list[Exposure]:
         """Every exposure across tools and the host, grouped by lens in a fixed order."""

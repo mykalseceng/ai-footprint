@@ -10,4 +10,5 @@ wheels/
 .venv
 
 # Audit output maps your attack surface; never commit it
-ai-footprint-report.*
+ai-footprint-*.html
+ai-footprint-*.json

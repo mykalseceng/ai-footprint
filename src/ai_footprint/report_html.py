@@ -11,10 +11,11 @@ import html
 import re
 from collections.abc import Iterable, Sequence
 
-from ai_footprint import answers, surface
+from ai_footprint import answers, document, figures, keys, surface
 from ai_footprint.fsinfo import human_size
 from ai_footprint.model import (
     AuditReport,
+    Category,
     Credential,
     Exposure,
     Extension,
@@ -23,7 +24,7 @@ from ai_footprint.model import (
     ToolReport,
 )
 from ai_footprint.report_text import validation_label
-from ai_footprint.rules import Checklist
+from ai_footprint.rules import Check, Checklist
 
 LONG_RUN = re.compile(r"\S{24,}")
 SEPARATOR = re.compile(r"([/._:=|,@])")
@@ -119,19 +120,6 @@ def _lens_folds(story: surface.Narrative, *, show_tool: bool) -> str:
     return "".join(out) or '<p class="muted">Nothing found from any position.</p>'
 
 
-def _proof(audit: AuditReport) -> str:
-    for tool in audit.tools:
-        for cred in tool.credentials:
-            match = re.search(r"read it via /usr/bin/security in ([\d.]+)s", cred.protection)
-            if match:
-                return (
-                    f"This audit read your {e(cred.provider)} token from the Keychain through "
-                    f"<code>/usr/bin/security</code> in {match.group(1)} seconds, with no prompt. "
-                    "Any program running as you can do the same."
-                )
-    return "This audit is read-only and never writes a secret value to this report."
-
-
 def _fix_steps(fix: Fix) -> str:
     items = []
     for cmd, validation in zip(fix.commands, fix.validations, strict=False):
@@ -170,9 +158,9 @@ def _close_folds(exposures: list[Exposure]) -> str:
     if not out:
         return ""
     return (
-        "<h2>How to close it</h2><p>Each fix was checked against this machine before it was "
-        "printed: shell syntax, programs, targets, subcommands and config keys. Open a badge to "
-        "see the checks.</p>" + "".join(out)
+        "<h2>How to close it</h2><p>Each fix command was checked against this machine before "
+        "it was printed (shell syntax, programs, targets, subcommands and config keys); manual "
+        "steps cannot be checked. Open a badge to see the checks.</p>" + "".join(out)
     )
 
 
@@ -201,7 +189,7 @@ def _credential_card(cred: Credential) -> str:
         [
             t.field,
             t.description,
-            f"{t.prefix} · {t.length} chars",
+            f"{t.prefix}{t.last4} · {t.length} chars",
             (surface.when(t.expires_at) if t.expires_at else "—")
             + (" (expired)" if t.expired else ""),
             ", ".join(t.scopes) or "—",
@@ -312,8 +300,8 @@ def _network_tables(tool: ToolReport) -> str:
         raw=True,
     )
     return (
-        f"{endpoints}<p class='sub'>Signature</p><p class='small muted'>Only traits and hosts "
-        f"found in the installed binary are listed.</p>{traits}"
+        f"{endpoints}<p class='sub'>Signature</p><p class='small muted'>Each trait below was "
+        f"found in the installed binary.</p>{traits}"
     )
 
 
@@ -398,16 +386,21 @@ def _inventory(tool: ToolReport, home: str) -> str:
 
 
 def _tool_rows(tools: list[ToolReport]) -> list[list[str]]:
-    return [
-        [
-            f"<a href='#tool-{e(t.name)}'>{e(t.display_name)}</a>",
-            e(t.binaries[0].version if t.binaries else "?"),
-            e(human_size(sum(a.size_bytes for a in t.artifacts if a.category.value == "session"))),
-            e(str(len(t.credentials))),
-            "no" if any(x.id == f"{t.name}:no-approval" for x in t.exposures) else "yes",
-        ]
-        for t in tools
-    ]
+    rows = []
+    for t in tools:
+        approval = figures.approval(t)
+        tone = {"found": "concern", "not checked": "neutral"}.get(str(approval.value), "ok")
+        rows.append(
+            [
+                f"<a href='#tool-{e(t.name)}'>{e(t.display_name)}</a>",
+                e(t.binaries[0].version if t.binaries else "?"),
+                e(human_size(figures.disk_bytes(t.artifacts, Category.SESSION))),
+                e(str(len(t.credentials))),
+                pill(approval.display, tone)
+                + f" <span class='small'>{breakable(approval.detail)}</span>",
+            ]
+        )
+    return rows
 
 
 def _credential_rows(tools: list[ToolReport]) -> list[list[str]]:
@@ -439,8 +432,8 @@ def _summary(audit: AuditReport) -> str:
             "Tool",
             "Version",
             "Conversations and history",
-            "Credential stores",
-            "Asks before running commands",
+            "Credential locations",
+            "Approval turned off",
         ],
         _tool_rows(tools),
         raw=True,
@@ -452,28 +445,14 @@ def _summary(audit: AuditReport) -> str:
     )
     return f"""<section class="view" id="summary">
 {_header(eyebrow, "Attack surface of your AI coding tools", e(" ".join(story.headline)))}
-<div class="callout"><span class="ico">★</span><div>{_proof(audit)}</div></div>
-<h2>Four ways in</h2>
+<div class="callout"><span class="ico">★</span><div>{rich(document.proof(audit))}</div></div>
+<h2>Ways in, by attacker position</h2>
 <p>What an attacker gets from each position. Every line is something this audit observed on
 this machine; nothing is rated.</p>
 {_lens_folds(story, show_tool=True)}
 <h2>Tools</h2>{tool_table}
 <h2>Credentials</h2>{cred_table}
 </section>"""
-
-
-def _grouped_extensions(audit: AuditReport) -> list[tuple[Extension, list[str]]]:
-    """Every extension across installed tools, one entry per identity, with the tools using it."""
-    groups: dict[tuple[str, str], tuple[Extension, list[str]]] = {}
-    for tool in audit.tools:
-        if not tool.installed:
-            continue
-        for x in tool.extensions:
-            key = (x.kind, x.identity or f"{x.name} {x.detail}")
-            entry = groups.setdefault(key, (x, []))
-            if tool.display_name not in entry[1]:
-                entry[1].append(tool.display_name)
-    return list(groups.values())
 
 
 def _used_by(tools: list[str]) -> str:
@@ -488,106 +467,6 @@ OWN_WORDS = (
     "<p class='small muted'>\"Says it does\" is each item's own manifest text; a placeholder "
     "means nothing on disk describes it.</p>"
 )
-Grouped = list[tuple[Extension, list[str]]]
-
-
-def _verb(count: int, singular: str, plural: str) -> str:
-    return singular if count == 1 else plural
-
-
-def _mcp_tldr(rows: Grouped) -> str:
-    local = [x for x, _t in rows if x.kind == "mcp" and x.access == "stdio"]
-    remote = [x for x, _t in rows if x.kind == "mcp" and x.access != "stdio"]
-    connectors = [x for x, _t in rows if x.kind == "connector"]
-    parts = []
-    if local:
-        parts.append(
-            f"{surface.plural(len(local), 'server')} run as local processes with your permissions"
-        )
-    if remote:
-        parts.append(f"{len(remote)} are remote servers that receive what the model sends")
-    if connectors:
-        parts.append(f"{len(connectors)} are claude.ai connectors reached with the OAuth token")
-    first = surface.join(parts) + "." if parts else "No MCP servers are configured."
-    auto = sum(1 for x, _t in rows if x.autostart and x.kind == "mcp")
-    dangling = sum(1 for x, _t in rows if x.dangling)
-    env = sum(1 for x, _t in rows if "env:" in x.notes)
-    shared = sum(1 for _x, t in rows if len(t) > 1)
-    facts = []
-    if auto:
-        facts.append(f"{auto} {_verb(auto, 'starts', 'start')} whenever a tool starts")
-    if dangling:
-        facts.append(
-            f"{dangling} {_verb(dangling, 'points', 'point')} at a missing file, so whoever "
-            "creates it runs code"
-        )
-    if env:
-        facts.append(
-            f"{env} {_verb(env, 'receives', 'receive')} environment variables from the config"
-        )
-    if shared:
-        facts.append(f"{shared} {_verb(shared, 'is', 'are')} configured in more than one tool")
-    return first + (f" {surface.join(facts)}." if facts else "")
-
-
-def _skills_tldr(rows: Grouped) -> str:
-    if not rows:
-        return "No skills are installed."
-    from_plugins = sum(1 for x, _t in rows if x.source.startswith("plugin "))
-    linked = sum(1 for x, _t in rows if "symlink" in x.source)
-    shared = sum(1 for _x, t in rows if len(t) > 1)
-    restricted = sum(1 for x, _t in rows if x.access)
-    where = [f"{from_plugins} live in plugin caches"] if from_plugins else []
-    if len(rows) - from_plugins:
-        where.append(f"{len(rows) - from_plugins} in user folders")
-    if linked:
-        where.append(f"{linked} of those are symlinks to a folder outside your home")
-    text = (
-        "Skills are Markdown instructions loaded into the model's context; whoever can write "
-        f"them steers every session that loads them. {surface.join(where)}."
-    )
-    if shared:
-        text += (
-            f" {shared} {_verb(shared, 'is', 'are')} loaded by more than one tool, so one edit "
-            "reaches all of them."
-        )
-    plain = len(rows) - restricted
-    return text + (
-        f" {restricted} {_verb(restricted, 'declares', 'declare')} a tool restriction; "
-        f"{plain} {_verb(plain, 'declares', 'declare')} none."
-    )
-
-
-def _plugins_tldr(rows: Grouped, audit: AuditReport) -> str:
-    if not rows:
-        return "No plugins are installed."
-    shipped = [
-        x
-        for t in audit.tools
-        if t.installed
-        for x in t.extensions
-        if x.source.startswith("plugin ") and x.kind in {"skill", "mcp", "hook"}
-    ]
-    counts = {kind: sum(1 for x in shipped if x.kind == kind) for kind in ("skill", "mcp", "hook")}
-    markets = sorted(
-        {
-            x.source.removeprefix("marketplace ")
-            if x.source.startswith("marketplace ")
-            else x.name.partition("@")[2] or x.source
-            for x, _t in rows
-        }
-    )
-    ships = [
-        f"{counts['skill']} skills" if counts["skill"] else "",
-        surface.plural(counts["mcp"], "MCP server") if counts["mcp"] else "",
-        f"{surface.plural(counts['hook'], 'hook')} that run shell commands automatically"
-        if counts["hook"]
-        else "",
-    ]
-    text = f"Plugins come from {surface.plural(len(markets), 'source')}: {', '.join(markets)}."
-    if any(ships):
-        text += f" Together they ship {surface.join([s for s in ships if s])}."
-    return text + " Whoever can change a source or its cache folder changes what runs next session."
 
 
 def _skill_folds(skills: list[tuple[Extension, list[str]]]) -> str:
@@ -623,7 +502,8 @@ def _skill_folds(skills: list[tuple[Extension, list[str]]]) -> str:
 
 
 def _extension_pages(audit: AuditReport) -> str:
-    grouped = _grouped_extensions(audit)
+    grouped = document.grouped_extensions(audit)
+    summaries = document.page_summaries(grouped, audit)
     mcp = [(x, t) for x, t in grouped if x.kind in {"mcp", "connector"}]
     skills = [(x, t) for x, t in grouped if x.kind == "skill"]
     plugins = [(x, t) for x, t in grouped if x.kind == "plugin"]
@@ -652,9 +532,9 @@ def _extension_pages(audit: AuditReport) -> str:
     )
     return "".join(
         [
-            _page("mcp", "MCP servers", _mcp_tldr(mcp), OWN_WORDS + mcp_table),
-            _page("skills", "Skills", _skills_tldr(skills), OWN_WORDS + skill_table),
-            _page("plugins", "Plugins", _plugins_tldr(plugins, audit), OWN_WORDS + plugin_table),
+            _page("mcp", "MCP servers", summaries["mcp"], OWN_WORDS + mcp_table),
+            _page("skills", "Skills", summaries["skills"], OWN_WORDS + skill_table),
+            _page("plugins", "Plugins", summaries["plugins"], OWN_WORDS + plugin_table),
         ]
     )
 
@@ -675,18 +555,11 @@ def _tool_view(audit: AuditReport, tool: ToolReport) -> str:
 </section>"""
 
 
-HOST_SCOPE = (
-    "What the rest of this Mac adds to the AI tools' exposure: other logins an agent can use, "
-    "software that can drive the computer, what keeps running when you are away, and setup "
-    "shared across tools."
-)
-
-
 def _host_tldr(findings: list[Exposure]) -> str:
     if not findings:
-        return f"{e(HOST_SCOPE)} Nothing found."
+        return f"{e(document.HOST_SCOPE)} Nothing found."
     links = "".join(f'<li><a href="#{e(x.id)}">{e(x.label)}</a></li>' for x in findings)
-    return f"{e(HOST_SCOPE)} {e(surface.plural(len(findings), 'finding'))}:<ul>{links}</ul>"
+    return f"{e(document.HOST_SCOPE)} {e(surface.plural(len(findings), 'signal'))} to review:<ul>{links}</ul>"
 
 
 def _facts_table(facts: list[HostFact], home: str) -> str:
@@ -771,19 +644,66 @@ def _host_view(audit: AuditReport) -> str:
 </section>"""
 
 
+def _check_status(check: Check) -> str:
+    if check.found:
+        return pill("review", "concern")
+    return pill("not checked", "neutral") if check.unchecked else pill("clear", "ok")
+
+
+def _key_locations(row: keys.KeyRow, home: str) -> str:
+    return "<br>".join(
+        f"{e(loc.tool)} · {e(loc.store)}"
+        + (" " + pill("readable by other accounts", "concern") if loc.readable_by_others else "")
+        + f"<br><code>{breakable(loc.location.replace(home, '~', 1))}</code>"
+        for loc in row.locations
+    )
+
+
+def _keys_view(audit: AuditReport) -> str:
+    rows = keys.rows(audit)
+    api = sum(1 for r in rows if r.kind == keys.API_KEY)
+    table_rows = [
+        [
+            e(r.provider),
+            e(r.kind),
+            f"<code>{breakable(r.shown)}</code>"
+            + (f"<br>{r.length} characters" if r.length else "")
+            + f"<br><span class='small muted'>fingerprint {e(', '.join(r.fingerprints))}</span>",
+            (f"{breakable(r.owner)}<br><span class='small muted'>from {e(r.owner_source)}</span>")
+            if r.owner
+            else "<span class='muted'>not recorded on disk</span>",
+            _key_locations(r, audit.host.home),
+            e(r.lifetime),
+        ]
+        for r in rows
+    ]
+    headers = ["Provider", "Type", "Key", "Belongs to", "Stored in", "Keeps working"]
+    tldr = (
+        f"{len(rows)} stored {'key or login' if len(rows) == 1 else 'keys and logins'} across "
+        "the audited tools, "
+        f"{api} of them API keys. Values are never kept: only the start, the last four "
+        "characters of values 20 characters or longer, and a fingerprint that marks the same "
+        "value stored in several places."
+    )
+    return f"""<section class="view" id="keys">
+{_header("Across tools", "Keys", e(tldr))}
+{table(headers, table_rows, raw=True)}
+</section>"""
+
+
 def _checklist_view(checklist: Checklist) -> str:
     rows = [
         [
-            e(scope),
-            pill("exposed", "concern") if found else pill("clear", "ok"),
-            e(check),
-            e(" ".join(x.statement for x in found)[:260]),
+            e(c.scope),
+            _check_status(c),
+            e(c.check),
+            e(" ".join(x.statement for x in c.found)[:260] or c.unchecked),
         ]
-        for scope, check, found in checklist
+        for c in checklist
     ]
     return f"""<section class="view" id="checklist">
 <header><div class="eyebrow">Same checks as ai-footprint --doctor</div><h1>Checklist</h1></header>
-{table(["Scope", "Status", "Check", "What was found"], rows, raw=True)}
+{table(["Scope", "Status", "Check", "What was found, or why not checked"], rows, raw=True)}
 </section>"""
 
 
@@ -809,12 +729,9 @@ def _method_view(audit: AuditReport) -> str:
         ],
         cls="pre",
     )
-    network = "Live checks were enabled." if audit.live else "No network requests were made."
     return f"""<section class="view" id="method">
 <header><div class="eyebrow">Provenance</div><h1>How this was measured</h1>
-<div class="tldr"><b>TL;DR</b> — The audit is read-only. It ran {len(audit.executed)} commands,
-each by absolute path with a fixed PATH and, on macOS, only after verifying an Apple code
-signature. Secrets were read into memory only to derive metadata. {network}</div></header>
+<div class="tldr"><b>TL;DR</b> — {e(figures.method_summary(audit))}</div></header>
 <h2>Probe registry</h2>{probes}
 {fold("Every command executed", executed, where=f"{len(audit.executed)} commands")}
 </section>"""
@@ -827,6 +744,7 @@ def _nav(audit: AuditReport) -> tuple[str, list[str]]:
         ("mcp", "MCP servers"),
         ("skills", "Skills"),
         ("plugins", "Plugins"),
+        ("keys", "Keys"),
         ("host", "This machine"),
         ("checklist", "Checklist"),
         ("method", "How this was measured"),
@@ -872,6 +790,7 @@ def render(audit: AuditReport, checklist: Checklist) -> str:
 {tools}
 {_extension_pages(audit)}
 {_host_view(audit)}
+{_keys_view(audit)}
 {_checklist_view(checklist)}
 {_method_view(audit)}
 <footer>ai-footprint {e(audit.auditor_version)} · {e(audit.generated_at)} · Private: this file maps

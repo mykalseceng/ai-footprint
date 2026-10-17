@@ -34,6 +34,9 @@ KNOWN_PREFIXES: tuple[tuple[str, str, str], ...] = (
 _DROPPED_CLAIMS = frozenset({"jti", "at_hash", "nonce", "c_hash", "sid", "session_id"})
 _SHA256_DIGEST_INFO = bytes.fromhex("3031300d060960864801650304020105000420")
 _MAX_CLAIMS = 40
+LAST4_MIN_LENGTH = 20
+"""Shorter values keep no last four characters: together with the prefix they would show
+too much of the secret."""
 
 
 def fingerprint(value: str) -> str:
@@ -139,6 +142,7 @@ def inspect_token(
             prefix=shown + "…",
             length=len(value),
             fingerprint=fingerprint(value),
+            last4=value[-4:] if len(value) >= LAST4_MIN_LENGTH else "",
             expires_at=iso_time(expires_at),
             expired=is_expired(expires_at, now),
             scopes=list(scopes or []),

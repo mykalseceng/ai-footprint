@@ -56,7 +56,7 @@ def test_list_shows_installed_and_missing_tools(home: Path, capsys):
 
 def test_doctor_marks_exposures_and_exits_one(home: Path, capsys):
     assert run(home, "all", "--doctor") == 1
-    assert "EXPOSED  Commands require approval" in capsys.readouterr().out
+    assert "REVIEW   Approval not turned off by a recorded setting" in capsys.readouterr().out
 
 
 def test_validate_exit_code_matches_reported_failures(home: Path, capsys):
@@ -66,18 +66,35 @@ def test_validate_exit_code_matches_reported_failures(home: Path, capsys):
     assert code == int("FAIL" in out)
 
 
-def test_html_writes_private_report_at_given_path(home: Path):
+def test_dashboard_writes_private_file_at_given_path(home: Path):
     out = home / "nested" / "r.html"
-    assert run(home, "claude", "--html", str(out)) == 0
+    assert run(home, "claude", "--dashboard", str(out)) == 0
     assert stat.S_IMODE(out.stat().st_mode) == 0o600
-    assert 'id="tool-claude"' in out.read_text()
+    assert '"display_name":"Claude Code"' in out.read_text()
+
+
+def test_html_writes_the_static_report_alongside_the_dashboard(home: Path):
+    dashboard, report = home / "d.html", home / "r.html"
+    assert run(home, "claude", "--dashboard", str(dashboard), "--html", str(report)) == 0
+    assert stat.S_IMODE(report.stat().st_mode) == 0o600
+    page = report.read_text()
+    assert 'id="tool-claude"' in page and "<script" not in page
+    assert 'id="audit-data"' in dashboard.read_text()
+
+
+def test_html_is_not_written_unless_asked(home: Path):
+    assert run(home, "claude", "--dashboard", str(home / "d.html")) == 0
+    assert not list(home.glob("*report*.html"))
 
 
 def test_json_writes_private_parseable_report(home: Path):
     out = home / "r.json"
-    assert run(home, "codex", "--html", str(home / "r.html"), "--json", str(out)) == 0
+    assert run(home, "codex", "--dashboard", str(home / "r.html"), "--json", str(out)) == 0
     assert stat.S_IMODE(out.stat().st_mode) == 0o600
-    assert [t["name"] for t in json.loads(out.read_text())["tools"]] == ["codex"]
+    data = json.loads(out.read_text())
+    assert [t["name"] for t in data["tools"]] == ["codex"]
+    assert list(data["views"]["tools"]) == ["codex"]
+    assert data["checklist"] and all("exposed" in c for c in data["checklist"])
 
 
 def test_live_verifies_signatures_only_when_asked(home: Path, monkeypatch: pytest.MonkeyPatch):
@@ -89,9 +106,11 @@ def test_live_verifies_signatures_only_when_asked(home: Path, monkeypatch: pytes
 
     monkeypatch.setattr(live, "openid_jwks", fake_jwks)
     out = home / "r.json"
-    assert run(home, "codex", "--html", str(home / "a.html"), "--json", str(out)) == 0
+    assert run(home, "codex", "--dashboard", str(home / "a.html"), "--json", str(out)) == 0
     assert calls == []
-    assert run(home, "codex", "--live", "--html", str(home / "b.html"), "--json", str(out)) == 0
+    assert (
+        run(home, "codex", "--live", "--dashboard", str(home / "b.html"), "--json", str(out)) == 0
+    )
     assert calls == ["https://auth.example.com"]
     tokens = json.loads(out.read_text())["tools"][0]["credentials"][0]["tokens"]
     access = next(t for t in tokens if t["field"] == "access_token")
@@ -136,7 +155,8 @@ OPTION_TESTS = {
     "list": test_list_shows_installed_and_missing_tools,
     "doctor": test_doctor_marks_exposures_and_exits_one,
     "validate": test_validate_exit_code_matches_reported_failures,
-    "html": test_html_writes_private_report_at_given_path,
+    "dashboard": test_dashboard_writes_private_file_at_given_path,
+    "html": test_html_writes_the_static_report_alongside_the_dashboard,
     "json": test_json_writes_private_parseable_report,
     "live": test_live_verifies_signatures_only_when_asked,
     "workers": test_workers_reaches_the_scanner,

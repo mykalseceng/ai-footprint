@@ -200,6 +200,7 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
         return report, facts
     report.artifacts = describe_all(home, ARTIFACTS)
     report.credentials, facts["fingerprints"] = _credentials(ctx, report.binaries)
+    _set_owner(report.credentials, config)
     report.processes = processes(ctx.system, r"(^|/)claude(\s|$)")
     report.settings = _settings(ctx, settings, config, report)
     report.trusted_folders = [
@@ -269,6 +270,17 @@ def _credentials(
         creds.append(cred)
     creds.extend(_env_credentials(ctx, fingerprints))
     return creds, fingerprints
+
+
+def _set_owner(creds: list[Credential], config: dict[str, Any]) -> None:
+    """The claude.ai login belongs to the account ~/.claude.json records; API keys do not."""
+    email = config.get("oauthAccount", {}).get("emailAddress")
+    if not isinstance(email, str) or not email:
+        return
+    for cred in creds:
+        if cred.store != "environment variable":
+            cred.owner = email
+            cred.owner_source = "~/.claude.json oauthAccount.emailAddress"
 
 
 def _keychain_credential(

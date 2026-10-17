@@ -1,14 +1,21 @@
 """Command-line entry point for ai-footprint."""
 
 import argparse
-import dataclasses
 import json
 import os
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from ai_footprint import __version__, optioncheck, report_html, reportcheck
+from ai_footprint import (
+    __version__,
+    dashboard,
+    document,
+    figurecheck,
+    optioncheck,
+    report_html,
+    reportcheck,
+)
 from ai_footprint.audit import TOOLS, detect_tools, run_audit
 from ai_footprint.model import ToolPresence
 from ai_footprint.report_text import (
@@ -31,7 +38,8 @@ which installed tools to audit; otherwise every installed tool is audited.
   ai-footprint --list              show supported tools and which are installed
   ai-footprint                     audit installed tools (asks first in a terminal)
   ai-footprint codex opencode      audit only these
-  ai-footprint all --doctor        exposed/clear checklist for every installed tool
+  ai-footprint all --html r.html   also write the static report (no scripts)
+  ai-footprint all --doctor        each check: review, clear or not checked
 """
 
 
@@ -57,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument(
         "--doctor",
         action="store_true",
-        help="mark each check exposed or clear, with validated fixes (no secret scan)",
+        help="mark each check review, clear or not checked, with validated fixes (no secret scan)",
     )
     mode.add_argument(
         "--validate",
@@ -65,12 +73,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="verify probe binaries and every fix command; exit 1 on any failure",
     )
     parser.add_argument(
-        "--html",
+        "--dashboard",
         type=Path,
-        default=Path("ai-footprint-report.html"),
-        help="HTML report path (default: %(default)s)",
+        default=Path("ai-footprint-dashboard.html"),
+        help="dashboard path (default: %(default)s)",
     )
-    parser.add_argument("--json", type=Path, help="also write the full report as JSON")
+    parser.add_argument(
+        "--html", type=Path, help="also write the static report (no scripts) to this path"
+    )
+    parser.add_argument("--json", type=Path, help="also write the data the dashboard shows as JSON")
     parser.add_argument(
         "--live",
         action="store_true",
@@ -191,7 +202,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             select=lambda names, found: select_tools(names, found, ask=None),
             tool_names=list(TOOLS),
         )
-        audit.report_validation = reportcheck.check_report(report_html.render(audit, checklist))
+        data = document.build(audit, checklist)
+        audit.report_validation = [
+            *reportcheck.check_report(report_html.render(audit, checklist)),
+            *reportcheck.check_document(data),
+            reportcheck.check_wording(data, dashboard.script()),
+        ]
+        audit.figure_validation = figurecheck.check_figures(data)
         text, code = render_validation(audit, style)
         print(text)
         return code
@@ -199,12 +216,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         text, code = render_doctor(audit, checklist, style)
         print(text)
         return code
-    outputs = []
-    write_private(args.html, report_html.render(audit, checklist))
-    outputs.append(str(args.html.resolve()))
+    data = document.build(audit, checklist)
+    write_private(args.dashboard, dashboard.render(data))
+    outputs = [("Dashboard", str(args.dashboard.resolve()))]
+    if args.html:
+        write_private(args.html, report_html.render(audit, checklist))
+        outputs.append(("Report", str(args.html.resolve())))
     if args.json:
-        write_private(args.json, json.dumps(dataclasses.asdict(audit), indent=2, default=str))
-        outputs.append(str(args.json.resolve()))
+        write_private(args.json, json.dumps(data, indent=2, ensure_ascii=False))
+        outputs.append(("Data", str(args.json.resolve())))
     print(render_summary(audit, style, outputs))
     return 0
 

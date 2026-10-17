@@ -1,7 +1,7 @@
-"""End-to-end: fake homes for all three tools through collectors, rules, validator, renderers."""
+"""End-to-end: fake homes for every tool through collectors, rules, validator, renderers."""
 
-import dataclasses
 import json
+import re
 import shutil
 import stat
 import tempfile
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import answers, cli, report_html, reportcheck, surface
+from ai_footprint import answers, cli, dashboard, document, report_html, reportcheck, surface
 from ai_footprint.audit import run_audit
 from ai_footprint.model import AuditReport, CommandValidation
 from ai_footprint.report_text import Style, render_doctor
@@ -159,8 +159,10 @@ def test_jwt_claims_and_connector_scopes_are_reported(audited):
 
 def test_no_secret_value_reaches_any_output(audited):
     audit, checklist, access = audited
-    page = report_html.render(audit, checklist)
-    dump = json.dumps(dataclasses.asdict(audit), default=str)
+    data = document.build(audit, checklist)
+    page = dashboard.render(data)
+    report = report_html.render(audit, checklist)
+    dump = json.dumps(data)
     doctor, _code = render_doctor(audit, checklist, Style(enabled=False))
     for secret in (
         FAKE_ANTHROPIC_ACCESS,
@@ -171,11 +173,29 @@ def test_no_secret_value_reaches_any_output(audited):
         "rt.1." + "R" * 80,
     ):
         assert secret not in page
+        assert secret not in report
         assert secret not in dump
         assert secret not in doctor
 
 
-def test_html_escapes_collected_strings_and_blocks_scripts(audited):
+def test_collected_markup_stays_data_and_only_pinned_code_runs(audited):
+    audit, checklist, _a = audited
+    data = document.build(audit, checklist)
+    page = dashboard.render(data)
+    assert "<script>alert(1)</script>" not in page
+    assert "\\u003cscript\\u003ealert(1)\\u003c/script\\u003e" in page
+    scripts = re.findall(r"<script>(.*?)</script>", page, re.S)
+    styles = re.findall(r"<style>(.*?)</style>", page, re.S)
+    assert len(scripts) == 1 and len(styles) == 1
+    [policy] = re.findall(r'http-equiv="Content-Security-Policy" content="([^"]+)"', page)
+    assert "default-src &#x27;none&#x27;" in policy
+    assert dashboard.csp_hash(scripts[0]).replace("'", "&#x27;") in policy
+    assert dashboard.csp_hash(styles[0]).replace("'", "&#x27;") in policy
+    assert "unsafe" not in policy
+    assert "<link" not in page and " src=" not in page
+
+
+def test_static_report_escapes_collected_strings_and_has_no_scripts(audited):
     audit, checklist, _a = audited
     page = report_html.render(audit, checklist)
     assert "<script>alert(1)</script>" not in page
@@ -183,36 +203,65 @@ def test_html_escapes_collected_strings_and_blocks_scripts(audited):
     assert "default-src 'none'" in page
     assert "<script" not in page
     assert "<link" not in page
-
-
-def test_report_opens_on_summary_with_a_tab_per_tool(audited):
-    audit, checklist, _a = audited
-    page = report_html.render(audit, checklist)
-    for page_id in (
-        "summary",
-        "tool-claude",
-        "tool-codex",
-        "tool-opencode",
-        "host",
-        "checklist",
-        "method",
-    ):
+    for page_id in ("summary", "tool-claude", "tool-codex", "host", "checklist", "method"):
         assert f'<section class="view" id="{page_id}">' in page
-        assert f'href="#{page_id}"' in page
-    assert ".pages:not(:has(:target)) > #summary { display: block; }" in page
-    assert "<b>TL;DR</b>" in page
-    assert "critical" not in page.lower()
 
 
-def test_each_exposure_lives_in_its_own_tool_page(audited):
+def test_static_report_passes_its_layout_checks(audited):
     audit, checklist, _a = audited
-    page = report_html.render(audit, checklist)
-    for tool in ("claude", "codex", "opencode"):
-        start = page.index(f'id="tool-{tool}"')
-        end = page.index('<section class="view"', start + 1)
-        tab = page[start:end]
-        assert f'id="{tool}:no-approval"' in tab or tool == "opencode"
-        assert f'id="{tool}:creds-' in tab
+    validations = reportcheck.check_report(report_html.render(audit, checklist))
+    assert {v.command for v in validations} >= {"page summary", "page skills", "page host"}
+    assert all(v.ok for v in validations), [
+        (v.command, c.name, c.detail) for v in validations for c in v.checks if not c.passed
+    ]
+
+
+def test_dashboard_embeds_the_document_unchanged(audited):
+    audit, checklist, _a = audited
+    data = document.build(audit, checklist)
+    page = dashboard.render(data)
+    [embedded] = re.findall(
+        r'<script type="application/json" id="audit-data">(.*?)</script>', page, re.S
+    )
+    assert json.loads(embedded) == json.loads(json.dumps(data))
+
+
+def test_document_has_a_view_per_installed_tool_and_resolvable_links(audited):
+    audit, checklist, _a = audited
+    data = document.build(audit, checklist)
+    views = data["views"]
+    assert list(views["tools"]) == [t.name for t in audit.tools if t.installed]
+    exposure_ids = {x.id for x in audit.all_exposures()}
+    linked = {c for row in data["checklist"] for c in row["exposures"]}
+    linked |= {
+        p["exposure_id"]
+        for lenses in [views["machine"]["lenses"], *(t["lenses"] for t in views["tools"].values())]
+        for lens in lenses
+        for p in lens["points"]
+        if p["exposure_id"]
+    }
+    assert linked and linked <= exposure_ids
+    assert set(views["fix_labels"]) == {x.id for x in audit.all_exposures() if x.fix}
+    assert len(data["checklist"]) == len(checklist)
+    assert [lens["id"] for lens in views["lenses"]] == [
+        "remote",
+        "code",
+        "model",
+        "account",
+        "copies",
+    ]
+    assert "critical" not in json.dumps(views).lower()
+
+
+def test_each_tool_answers_every_question_without_cutting_rows(audited):
+    audit, checklist, _a = audited
+    views = document.build(audit, checklist)["views"]
+    codex = next(t for t in audit.tools if t.name == "codex")
+    [trusted] = [
+        a for a in views["tools"]["codex"]["answers"] if a["question"].startswith("What does my")
+    ]
+    assert len(trusted["rows"]) == len(codex.trusted_folders)
+    assert "shown" not in trusted["text"]
 
 
 def test_every_fix_command_was_validated(audited):
@@ -223,11 +272,11 @@ def test_every_fix_command_was_validated(audited):
         assert len(fix.validations) == len(fix.commands)
 
 
-def test_doctor_fails_on_exposed_home(audited):
+def test_doctor_fails_when_anything_needs_review(audited):
     audit, checklist, _a = audited
     text, code = render_doctor(audit, checklist, Style(enabled=False))
     assert code == 1
-    assert "EXPOSED  Commands require approval" in text
+    assert "REVIEW   Approval not turned off by a recorded setting" in text
 
 
 def test_clean_home_passes_doctor(tmp_path: Path):
@@ -237,11 +286,11 @@ def test_clean_home_passes_doctor(tmp_path: Path):
     assert all(not t.installed for t in audit.tools)
 
 
-def test_cli_writes_private_html_report(open_home: Path, monkeypatch: pytest.MonkeyPatch):
+def test_cli_writes_private_dashboard(open_home: Path, monkeypatch: pytest.MonkeyPatch):
     build_claude_home(open_home)
     monkeypatch.setattr(cli, "System", QuietFakeSystem)
-    out = open_home / "report.html"
-    code = cli.main(["claude", "--home", str(open_home), "--html", str(out), "--workers", "1"])
+    out = open_home / "dashboard.html"
+    code = cli.main(["claude", "--home", str(open_home), "--dashboard", str(out), "--workers", "1"])
     assert code == 0
     assert stat.S_IMODE(out.stat().st_mode) == 0o600
     assert "Claude Code" in out.read_text()
@@ -254,10 +303,9 @@ def test_cli_rejects_unknown_tool(open_home: Path, monkeypatch: pytest.MonkeyPat
         cli.main(["--doctor", "cursor", "--home", str(open_home)])
 
 
-def test_rendered_report_passes_the_layout_checks(audited):
+def test_dashboard_views_pass_the_consistency_checks(audited):
     audit, checklist, _a = audited
-    page = report_html.render(audit, checklist)
-    validations = reportcheck.check_report(page)
+    validations = reportcheck.check_document(document.build(audit, checklist))
     assert {v.command for v in validations} >= {"page summary", "page skills", "page host"}
     assert all(v.ok for v in validations), [
         (v.command, c.name, c.detail) for v in validations for c in v.checks if not c.passed
