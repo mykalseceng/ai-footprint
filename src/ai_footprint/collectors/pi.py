@@ -20,17 +20,18 @@ from ai_footprint.collectors.common import (
     Claim,
     Context,
     binary_info,
+    binary_path,
     confirmed_settings,
     describe_all,
+    endpoints,
     fingerprint_items,
     load_json,
-    mine_hosts,
-    mined_endpoints,
     presence,
     provider_credential,
+    value_or_unset,
 )
 from ai_footprint.fsinfo import mode_string, owner_name, readable_by_others
-from ai_footprint.host import processes, sockets
+from ai_footprint.host import processes
 from ai_footprint.model import (
     BinaryInfo,
     Category,
@@ -176,7 +177,7 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     report.artifacts = describe_all(agent, ARTIFACTS)
     report.credentials, facts["fingerprints"], providers = _credentials(ctx, agent)
     report.processes = processes(ctx.system, rf"(^|/)pi(\s|$)|{PACKAGE}")
-    binary = report.binaries[0].resolved if report.binaries else ""
+    binary = binary_path(report)
     report.trusted_folders = _trusted(agent)
     report.settings = _settings(ctx, settings, agent, binary, len(report.trusted_folders))
     projects = sorted(set(report.trusted_folders) | _session_cwds(_sessions_dir(ctx, agent)))
@@ -313,10 +314,6 @@ def _session_cwds(sessions: Path) -> set[str]:
     return cwds
 
 
-def _value(mapping: dict[str, Any], key: str) -> str:
-    return str(mapping[key]) if key in mapping else "not set"
-
-
 def _settings(
     ctx: Context, settings: dict[str, Any], agent: Path, binary: str, trusted: int
 ) -> list[Setting]:
@@ -325,7 +322,7 @@ def _settings(
         (
             Setting(
                 "defaultProjectTrust",
-                _value(settings, "defaultProjectTrust"),
+                value_or_unset(settings, "defaultProjectTrust"),
                 "Trust applied to projects without a decision in trust.json",
                 concern=settings.get("defaultProjectTrust") == "trusted",
             ),
@@ -334,7 +331,7 @@ def _settings(
         (
             Setting(
                 "enableAnalytics",
-                _value(settings, "enableAnalytics"),
+                value_or_unset(settings, "enableAnalytics"),
                 "Opt in to analytics data sharing (pi's own description)",
                 concern=bool(settings.get("enableAnalytics")),
             ),
@@ -343,7 +340,7 @@ def _settings(
         (
             Setting(
                 "enableInstallTelemetry",
-                _value(settings, "enableInstallTelemetry"),
+                value_or_unset(settings, "enableInstallTelemetry"),
                 "Version and update ping after updates (pi's own description)",
             ),
             "enableInstallTelemetry",
@@ -360,7 +357,7 @@ def _settings(
         (
             Setting(
                 "shellCommandPrefix",
-                _value(settings, "shellCommandPrefix"),
+                value_or_unset(settings, "shellCommandPrefix"),
                 "Prefix added to every shell command",
             ),
             "shellCommandPrefix",
@@ -368,7 +365,8 @@ def _settings(
         (
             Setting(
                 "defaultProvider",
-                f"{_value(settings, 'defaultProvider')} / {_value(settings, 'defaultModel')}",
+                f"{value_or_unset(settings, 'defaultProvider')} / "
+                f"{value_or_unset(settings, 'defaultModel')}",
                 "Provider and model used by default",
             ),
             "defaultProvider",
@@ -384,7 +382,7 @@ def _settings(
     ]
     rows += [
         (
-            Setting(f"env.{var}", _value(ctx.system.env, var), "Set in this environment"),
+            Setting(f"env.{var}", value_or_unset(ctx.system.env, var), "Set in this environment"),
             ENV_MARKERS.get(var, var),
         )
         for var in ENV_VARS
@@ -471,25 +469,12 @@ def _mcp_rows(path: Path, source: str) -> list[Extension]:
 def _endpoints(
     ctx: Context, agent: Path, report: ToolReport, providers: set[str]
 ) -> list[Endpoint]:
-    binary = report.binaries[0].resolved if report.binaries else ""
-    markers = {host: ENDPOINT_MARKERS.get(host, host) for host in ENDPOINTS}
-    present = ctx.binary_has(binary, list(markers.values())) if binary else {}
-    out = [
-        Endpoint(NAME, host, purpose, "binary")
-        for host, purpose in ENDPOINTS.items()
-        if present.get(markers[host])
-    ]
-    out += [
+    hosts = [
         Endpoint(NAME, PROVIDER_HOSTS[p], f"{p} provider API", "credentials")
         for p in sorted(providers & set(PROVIDER_HOSTS))
     ]
-    out += mined_endpoints(NAME, mine_hosts([agent / "pi-debug.log"]), ENDPOINTS)
-    for sock in sockets(ctx.system, [p.pid for p in report.processes]):
-        if sock.remote:
-            out.append(
-                Endpoint(NAME, sock.remote, f"open socket from pid {sock.pid}", "live-socket", 1)
-            )
-    return out
+    logs = [agent / "pi-debug.log"]
+    return endpoints(ctx, report, ENDPOINTS, logs, markers=ENDPOINT_MARKERS, extra=hosts)
 
 
 def _stats(sessions: Path, projects: list[str]) -> dict[str, str]:

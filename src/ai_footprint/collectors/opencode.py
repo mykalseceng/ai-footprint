@@ -13,15 +13,16 @@ from ai_footprint.collectors.common import (
     Claim,
     Context,
     binary_info,
+    binary_path,
     confirmed_settings,
     describe_all,
+    endpoints,
     fingerprint_items,
     load_json,
     load_jsonc,
-    mine_hosts,
-    mined_endpoints,
     presence,
     provider_credential,
+    value_or_unset,
 )
 from ai_footprint.fsinfo import mode_string, readable_by_others
 from ai_footprint.host import Socket, processes, sockets
@@ -218,7 +219,7 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     report.credentials, facts["fingerprints"], providers = _credentials(ctx, roots, db)
     report.processes = processes(ctx.system, PROCESS)
     socks = sockets(ctx.system, [p.pid for p in report.processes])
-    binary = report.binaries[0].resolved if report.binaries else ""
+    binary = binary_path(report)
     report.settings = _settings(ctx, config, db, binary)
     projects = _projects(db)
     report.instructions = instructions.collect(
@@ -376,7 +377,7 @@ def _settings(ctx: Context, config: dict[str, Any], db: Path, binary: str) -> li
         (
             Setting(
                 "share",
-                _value(config, "share"),
+                value_or_unset(config, "share"),
                 "'auto' uploads every new session to a share link",
                 concern=config.get("share") == "auto",
             ),
@@ -392,7 +393,7 @@ def _settings(ctx: Context, config: dict[str, Any], db: Path, binary: str) -> li
             "",
         ),
         (
-            Setting("autoupdate", _value(config, "autoupdate"), "Self-update behaviour"),
+            Setting("autoupdate", value_or_unset(config, "autoupdate"), "Self-update behaviour"),
             "autoupdate:",
         ),
         (
@@ -415,10 +416,6 @@ def _settings(ctx: Context, config: dict[str, Any], db: Path, binary: str) -> li
         ),
     ]
     return confirmed_settings(ctx, binary, rows)
-
-
-def _value(mapping: dict[str, Any], key: str) -> str:
-    return str(mapping[key]) if key in mapping else "not set"
 
 
 def _instruction_candidates(
@@ -493,29 +490,12 @@ def _endpoints(
     providers: set[str],
     socks: list[Socket],
 ) -> list[Endpoint]:
-    binary = report.binaries[0].resolved if report.binaries else ""
-    present = ctx.binary_has(binary, list(ENDPOINTS)) if binary else {}
-    out = [
-        Endpoint(NAME, host, purpose, "binary")
-        for host, purpose in ENDPOINTS.items()
-        if present.get(host)
-    ]
-    out += [
+    hosts = [
         Endpoint(NAME, PROVIDER_HOSTS[p], f"{p} provider API", "credentials")
         for p in sorted(providers & set(PROVIDER_HOSTS))
     ]
-    out += mined_endpoints(NAME, mine_hosts([roots["data"] / "log"]), ENDPOINTS)
-    listening = {s.local for s in socks if s.state == "LISTEN"}
-    for sock in socks:
-        if sock.remote and sock.local in listening:
-            continue
-        label = sock.remote or f"{sock.local} (listening)"
-        out.append(
-            Endpoint(
-                NAME, label, f"socket of pid {sock.pid} {sock.state}".strip(), "live-socket", 1
-            )
-        )
-    return out
+    logs = [roots["data"] / "log"]
+    return endpoints(ctx, report, ENDPOINTS, logs, extra=hosts, socks=socks)
 
 
 def _server_setting(ctx: Context, roots: dict[str, Path], socks: list[Socket]) -> Setting | None:

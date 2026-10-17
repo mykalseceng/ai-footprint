@@ -125,7 +125,8 @@ def test_the_2x_session_process_is_matched_and_incoming_sockets_are_not_destinat
     assert [p.pid for p in report.processes] == [50614, 50615]
     live = [e.host for e in report.endpoints if e.source == "live-socket"]
     assert "127.0.0.1:60006" not in live
-    assert "104.18.0.1:443" in live and "127.0.0.1:49374 (listening)" in live
+    assert "104.18.0.1:443" in live
+    assert not any(host.endswith("(listening)") for host in live)
 
 
 def test_v2_tables_are_counted_once_with_legacy_rows(tmp_path: Path):

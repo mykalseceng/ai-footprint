@@ -13,18 +13,19 @@ from ai_footprint.collectors.common import (
     Claim,
     Context,
     binary_info,
+    binary_path,
     confirmed_settings,
     describe_all,
+    endpoints,
     fingerprint_items,
     load_json,
     load_toml,
-    mine_hosts,
-    mined_endpoints,
     presence,
     shell_shortcuts,
+    value_or_unset,
 )
 from ai_footprint.fsinfo import mode_string, readable_by_others
-from ai_footprint.host import processes, sockets
+from ai_footprint.host import processes
 from ai_footprint.model import (
     BinaryInfo,
     Category,
@@ -179,7 +180,7 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     report.artifacts = describe_all(root, ARTIFACTS)
     report.credentials, facts["fingerprints"] = _credentials(ctx, root, config)
     report.processes = _cli_processes(processes(ctx.system, r"(^|/)codex(\s|$)|codex-darwin"))
-    report.settings = _settings(ctx, config, root, _vendor_binary(report.binaries))
+    report.settings = _settings(ctx, config, root, binary_path(report))
     report.settings += shell_shortcuts(ctx, BYPASS_FLAG)
     threads = thread_approval(root)
     if threads is not None:
@@ -190,7 +191,7 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     report.instructions = instructions.collect(_instruction_candidates(root, config))
     report.extensions = _extensions(ctx, root, config)
     report.endpoints = _endpoints(ctx, root, report)
-    binary = _vendor_binary(report.binaries)
+    binary = binary_path(report)
     version = report.binaries[0].version if report.binaries else "?"
     rows = [(label, value.format(version=version), marker) for label, value, marker in FINGERPRINT]
     report.fingerprint = fingerprint_items(ctx, binary, rows)
@@ -247,10 +248,6 @@ def _find_vendor(script: Path) -> Path | None:
 def _cli_processes(found: list[ProcessInfo]) -> list[ProcessInfo]:
     """Drop codex processes run from inside another app's bundle; they are not Codex CLI."""
     return [p for p in found if OTHER_APP_BUNDLE not in p.command]
-
-
-def _vendor_binary(binaries: list[BinaryInfo]) -> str:
-    return binaries[0].resolved if binaries else ""
 
 
 def _credentials(
@@ -337,7 +334,7 @@ def _settings(ctx: Context, config: dict[str, Any], root: Path, binary: str) -> 
         (
             Setting(
                 "approval_policy",
-                _value(config, "approval_policy"),
+                value_or_unset(config, "approval_policy"),
                 "'never' runs every command without asking",
                 concern=config.get("approval_policy") == NEVER,
             ),
@@ -346,13 +343,13 @@ def _settings(ctx: Context, config: dict[str, Any], root: Path, binary: str) -> 
         (
             Setting(
                 "sandbox_mode",
-                _value(config, "sandbox_mode"),
+                value_or_unset(config, "sandbox_mode"),
                 "'danger-full-access' removes the filesystem and network sandbox",
                 concern=config.get("sandbox_mode") == "danger-full-access",
             ),
             "sandbox_mode",
         ),
-        (Setting("model", _value(config, "model"), "Model in use"), ""),
+        (Setting("model", value_or_unset(config, "model"), "Model in use"), ""),
         (
             Setting(
                 "trusted projects",
@@ -381,7 +378,7 @@ def _settings(ctx: Context, config: dict[str, Any], root: Path, binary: str) -> 
         (
             Setting(
                 "cli_auth_credentials_store",
-                _value(config, "cli_auth_credentials_store"),
+                value_or_unset(config, "cli_auth_credentials_store"),
                 "'keyring' moves tokens out of plaintext auth.json",
             ),
             "cli_auth_credentials_store",
@@ -389,7 +386,7 @@ def _settings(ctx: Context, config: dict[str, Any], root: Path, binary: str) -> 
         (
             Setting(
                 "history.persistence",
-                _value(history, "persistence"),
+                value_or_unset(history, "persistence"),
                 "Whether prompts are written to history.jsonl",
             ),
             "persistence",
@@ -397,17 +394,13 @@ def _settings(ctx: Context, config: dict[str, Any], root: Path, binary: str) -> 
         (
             Setting(
                 "features.daemon_auto_start",
-                _value(features, "daemon_auto_start"),
+                value_or_unset(features, "daemon_auto_start"),
                 "Starts the managed app-server daemon automatically",
             ),
             "daemon_auto_start",
         ),
     ]
     return confirmed_settings(ctx, binary, rows)
-
-
-def _value(mapping: dict[str, Any], key: str) -> str:
-    return str(mapping[key]) if key in mapping else "not set"
 
 
 def _rule_count(directory: Path) -> int:
@@ -513,27 +506,12 @@ def _mcp(name: str, spec: dict[str, Any], root: Path) -> Extension:
 
 
 def _endpoints(ctx: Context, root: Path, report: ToolReport) -> list[Endpoint]:
-    binary = _vendor_binary(report.binaries)
-    present = ctx.binary_has(binary, list(ENDPOINTS)) if binary else {}
-    out = [
-        Endpoint(NAME, host, purpose, "binary")
-        for host, purpose in ENDPOINTS.items()
-        if present.get(host)
+    remote = [
+        Endpoint(NAME, host, f"remote MCP server '{server}'", "config")
+        for host, server in report_mcp_urls(report)
     ]
-    for host, server in report_mcp_urls(report):
-        out.append(Endpoint(NAME, host, f"remote MCP server '{server}'", "config"))
-    counts = mine_hosts([root / "log", root / "logs_2.sqlite"])
-    out += mined_endpoints(NAME, counts, ENDPOINTS)
-    pids: dict[str, set[int]] = {}
-    opened: Counter[str] = Counter()
-    for sock in sockets(ctx.system, [p.pid for p in report.processes]):
-        if sock.remote:
-            pids.setdefault(sock.remote, set()).add(sock.pid)
-            opened[sock.remote] += 1
-    for remote, count in opened.items():
-        owners = ", ".join(str(pid) for pid in sorted(pids[remote]))
-        out.append(Endpoint(NAME, remote, f"open sockets from pid {owners}", "live-socket", count))
-    return out
+    logs = [root / "log", root / "logs_2.sqlite"]
+    return endpoints(ctx, report, ENDPOINTS, logs, extra=remote)
 
 
 def report_mcp_urls(report: ToolReport) -> list[tuple[str, str]]:

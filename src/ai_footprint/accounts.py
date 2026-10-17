@@ -14,7 +14,7 @@ from typing import Any
 from ai_footprint.collectors import claude as claude_cli
 from ai_footprint.collectors import codex as codex_cli
 from ai_footprint.collectors import pi as pi_cli
-from ai_footprint.collectors.common import Context, load_json
+from ai_footprint.collectors.common import Context, binary_path, load_json
 from ai_footprint.model import AccountNote, ToolReport
 from ai_footprint.surface import join, when
 from ai_footprint.tokens import iso_time
@@ -196,7 +196,7 @@ def _claude_detect(ctx: Context, report: ToolReport, config: dict[str, Any]) -> 
 
 def claude(ctx: Context, report: ToolReport, facts: dict[str, Any]) -> list[AccountNote]:
     """Account evidence for Claude Code."""
-    binary = report.binaries[0].resolved if report.binaries else ""
+    binary = binary_path(report)
     config = facts.get("config", {})
     return (
         _claude_data(ctx, config, binary)
@@ -374,7 +374,7 @@ def _codex_detect(ctx: Context, report: ToolReport, root: Path, binary: str) -> 
 def codex(ctx: Context, report: ToolReport, facts: dict[str, Any]) -> list[AccountNote]:
     """Account evidence for Codex CLI."""
     root = Path(facts.get("root", ctx.home / ".codex"))
-    binary = report.binaries[0].resolved if report.binaries else ""
+    binary = binary_path(report)
     config = facts.get("config", {})
     return (
         _codex_data(report, root, config)
@@ -455,7 +455,7 @@ def _unused_logins(report: ToolReport) -> list[AccountNote]:
 def pi(ctx: Context, report: ToolReport, facts: dict[str, Any]) -> list[AccountNote]:
     """Account evidence for pi: analytics settings, sharing, and whether logout revokes."""
     settings = facts.get("settings", {})
-    binary = report.binaries[0].resolved if report.binaries else ""
+    binary = binary_path(report)
     viewer_url = pi_cli.ENDPOINT_MARKERS["pi.dev"]
     viewer = ctx.binary_has(binary, [viewer_url]) if binary else {}
     providers = sorted({c.provider for c in report.credentials})

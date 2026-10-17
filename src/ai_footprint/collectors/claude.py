@@ -11,17 +11,18 @@ from ai_footprint.collectors.common import (
     Claim,
     Context,
     binary_info,
+    binary_path,
     confirmed_settings,
     describe_all,
+    endpoints,
     fingerprint_items,
     load_json,
-    mine_hosts,
-    mined_endpoints,
     presence,
     shell_shortcuts,
+    value_or_unset,
 )
 from ai_footprint.fsinfo import mode_string, readable_by_others
-from ai_footprint.host import processes, sockets
+from ai_footprint.host import processes
 from ai_footprint.model import (
     BinaryInfo,
     Category,
@@ -215,7 +216,7 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     report.instructions = instructions.collect(_instruction_candidates(home, config))
     report.extensions = _extensions(ctx, settings, config)
     report.endpoints = _endpoints(ctx, report)
-    binary = report.binaries[0].resolved if report.binaries else ""
+    binary = binary_path(report)
     version = report.binaries[0].version if report.binaries else "?"
     rows = [(label, value.format(version=version), marker) for label, value, marker in FINGERPRINT]
     report.fingerprint = fingerprint_items(ctx, binary, rows)
@@ -381,7 +382,7 @@ def _settings(
         (
             Setting(
                 "permissions.defaultMode",
-                _value(perms, "defaultMode"),
+                value_or_unset(perms, "defaultMode"),
                 f"{BYPASS_MODE} runs every tool without asking",
                 concern=perms.get("defaultMode") == BYPASS_MODE,
             ),
@@ -390,7 +391,7 @@ def _settings(
         (
             Setting(
                 "skipDangerousModePermissionPrompt",
-                _value(settings, "skipDangerousModePermissionPrompt"),
+                value_or_unset(settings, "skipDangerousModePermissionPrompt"),
                 "Skips the confirmation shown before --dangerously-skip-permissions",
                 concern=bool(settings.get("skipDangerousModePermissionPrompt")),
             ),
@@ -399,7 +400,7 @@ def _settings(
         (
             Setting(
                 "permissions.disableBypassPermissionsMode",
-                _value(perms, "disableBypassPermissionsMode"),
+                value_or_unset(perms, "disableBypassPermissionsMode"),
                 "'disable' blocks bypass mode",
             ),
             "disableBypassPermissionsMode",
@@ -415,7 +416,7 @@ def _settings(
         (
             Setting(
                 "enableAllProjectMcpServers",
-                _value(settings, "enableAllProjectMcpServers"),
+                value_or_unset(settings, "enableAllProjectMcpServers"),
                 "true starts MCP servers from any repo's .mcp.json without asking",
                 concern=bool(settings.get("enableAllProjectMcpServers")),
             ),
@@ -424,7 +425,7 @@ def _settings(
         (
             Setting(
                 "cleanupPeriodDays",
-                _value(settings, "cleanupPeriodDays"),
+                value_or_unset(settings, "cleanupPeriodDays"),
                 "Days transcripts are kept",
                 concern=isinstance(cleanup, int) and cleanup > 30,
             ),
@@ -434,12 +435,8 @@ def _settings(
     rows += _settings_env(settings)
     rows += _settings_account(config)
     rows += [(setting, "") for setting in _bypass_evidence(ctx, report)]
-    binary = report.binaries[0].resolved if report.binaries else ""
+    binary = binary_path(report)
     return confirmed_settings(ctx, binary, rows)
-
-
-def _value(mapping: dict[str, Any], key: str) -> str:
-    return str(mapping[key]) if key in mapping else "not set"
 
 
 def _settings_env(settings: dict[str, Any]) -> list[tuple[Setting, str]]:
@@ -450,7 +447,12 @@ def _settings_env(settings: dict[str, Any]) -> list[tuple[Setting, str]]:
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
     )
     return [
-        (Setting(f"env.{flag}", _value(env, flag), "Turns off a class of outbound traffic"), flag)
+        (
+            Setting(
+                f"env.{flag}", value_or_unset(env, flag), "Turns off a class of outbound traffic"
+            ),
+            flag,
+        )
         for flag in flags
     ]
 
@@ -481,7 +483,7 @@ def _settings_account(config: dict[str, Any]) -> list[tuple[Setting, str]]:
         (
             Setting(
                 "claudeInChromeDefaultEnabled",
-                _value(config, "claudeInChromeDefaultEnabled"),
+                value_or_unset(config, "claudeInChromeDefaultEnabled"),
                 "Claude in Chrome enabled by default",
                 concern=bool(config.get("claudeInChromeDefaultEnabled")),
             ),
@@ -672,24 +674,8 @@ def _chrome_extensions(ctx: Context, config: dict[str, Any]) -> list[Extension]:
 
 
 def _endpoints(ctx: Context, report: ToolReport) -> list[Endpoint]:
-    binary = report.binaries[0].resolved if report.binaries else ""
-    markers = {host: ENDPOINT_MARKERS.get(host, host) for host in ENDPOINTS}
-    in_binary = ctx.binary_has(binary, list(markers.values())) if binary else {}
-    out = [
-        Endpoint(NAME, host, purpose, "binary")
-        for host, purpose in ENDPOINTS.items()
-        if in_binary.get(markers[host])
-    ]
-    counts = mine_hosts(
-        [ctx.home / ".claude" / "debug", ctx.home / "Library/Caches/claude-cli-nodejs"]
-    )
-    out += mined_endpoints(NAME, counts, ENDPOINTS)
-    for sock in sockets(ctx.system, [p.pid for p in report.processes]):
-        if sock.remote:
-            out.append(
-                Endpoint(NAME, sock.remote, f"open socket from pid {sock.pid}", "live-socket", 1)
-            )
-    return out
+    logs = [ctx.home / ".claude" / "debug", ctx.home / "Library/Caches/claude-cli-nodejs"]
+    return endpoints(ctx, report, ENDPOINTS, logs, markers=ENDPOINT_MARKERS)
 
 
 def _stats(ctx: Context, config: dict[str, Any]) -> dict[str, str]:

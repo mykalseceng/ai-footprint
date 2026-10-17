@@ -7,7 +7,8 @@ from pathlib import Path
 
 from ai_footprint import accounts, extensions, figures, rules
 from ai_footprint.collectors import codex
-from ai_footprint.collectors.common import Context, shell_shortcuts
+from ai_footprint.collectors.common import Context, shell_shortcuts, socket_endpoints
+from ai_footprint.host import Socket
 from ai_footprint.model import HostReport, ProcessInfo, ToolReport
 from ai_footprint.system import ProbeResult
 from tests.conftest import FakeSystem
@@ -229,7 +230,7 @@ def test_live_sockets_to_one_host_become_one_row_with_a_count(tmp_path: Path):
     live = [e for e in codex._endpoints(ctx, tmp_path, report) if e.source == "live-socket"]
     assert [(e.host, e.count, e.purpose) for e in live] == [
         ("104.18.32.47:443", 3, "open sockets from pid 7, 8"),
-        ("160.79.104.10:443", 1, "open sockets from pid 8"),
+        ("160.79.104.10:443", 1, "open socket from pid 8"),
     ]
 
 
@@ -258,3 +259,14 @@ def test_shell_shortcuts_with_the_bypass_flag_are_reported(tmp_path: Path):
     [found] = shell_shortcuts(ctx, codex.BYPASS_FLAG)
     assert found.key == "~/.zshrc:2"
     assert found.concern
+
+
+def test_every_tool_merges_socket_rows_and_skips_inbound_connections():
+    socks = [
+        Socket(1, "x", "10.0.0.2:5000", "1.1.1.1:443", "ESTABLISHED"),
+        Socket(2, "x", "10.0.0.2:5001", "1.1.1.1:443", "ESTABLISHED"),
+        Socket(2, "x", "127.0.0.1:8080", "", "LISTEN"),
+        Socket(2, "x", "127.0.0.1:8080", "127.0.0.1:6000", "ESTABLISHED"),
+    ]
+    [row] = socket_endpoints("pi", socks)
+    assert (row.host, row.count, row.purpose) == ("1.1.1.1:443", 2, "open sockets from pid 1, 2")

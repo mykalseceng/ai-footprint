@@ -6,7 +6,7 @@ import shlex
 import stat
 import tomllib
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -19,6 +19,7 @@ from ai_footprint.fsinfo import (
     tilde,
     tree_stats,
 )
+from ai_footprint.host import Socket, sockets
 from ai_footprint.model import (
     Artifact,
     BinaryInfo,
@@ -28,6 +29,7 @@ from ai_footprint.model import (
     FingerprintItem,
     Setting,
     ToolPresence,
+    ToolReport,
 )
 from ai_footprint.system import System
 from ai_footprint.tokens import inspect_token
@@ -313,6 +315,73 @@ def mined_endpoints(
         )
         for host, count in counts.most_common(top)
     ]
+
+
+def socket_endpoints(tool: str, socks: Iterable[Socket]) -> list[Endpoint]:
+    """One row per remote host the tool's processes have open, with a count and their pids.
+
+    Connections into a port the tool itself listens on are inbound, so they are left out.
+    """
+    socks = list(socks)
+    listening = {s.local for s in socks if s.state == "LISTEN"}
+    pids: dict[str, set[int]] = {}
+    opened: Counter[str] = Counter()
+    for sock in socks:
+        if sock.remote and sock.local not in listening:
+            pids.setdefault(sock.remote, set()).add(sock.pid)
+            opened[sock.remote] += 1
+    out = []
+    for remote, count in opened.items():
+        owners = ", ".join(str(pid) for pid in sorted(pids[remote]))
+        noun = "socket" if count == 1 else "sockets"
+        out.append(Endpoint(tool, remote, f"open {noun} from pid {owners}", "live-socket", count))
+    return out
+
+
+def endpoints(
+    ctx: Context,
+    report: ToolReport,
+    known: Mapping[str, str],
+    log_paths: Iterable[Path],
+    *,
+    markers: Mapping[str, str] | None = None,
+    extra: Iterable[Endpoint] = (),
+    socks: Iterable[Socket] | None = None,
+) -> list[Endpoint]:
+    """Hosts the tool names or connects to, in report order.
+
+    Args:
+        ctx: Collection context.
+        report: The tool's report; its binary and processes are read.
+        known: ``{host: purpose}`` the collector knows about.
+        log_paths: Local logs to mine for host names.
+        markers: ``{host: string}`` to look for in the binary when it differs from the host.
+        extra: Tool-specific rows (config or credential hosts), listed after the binary's.
+        socks: The tool's sockets when the collector already listed them.
+    """
+    binary = binary_path(report)
+    wanted = {host: (markers or {}).get(host, host) for host in known}
+    present = ctx.binary_has(binary, list(wanted.values())) if binary else {}
+    out = [
+        Endpoint(report.name, host, purpose, "binary")
+        for host, purpose in known.items()
+        if present.get(wanted[host])
+    ]
+    out += list(extra)
+    out += mined_endpoints(report.name, mine_hosts(log_paths), dict(known))
+    if socks is None:
+        socks = sockets(ctx.system, [p.pid for p in report.processes])
+    return out + socket_endpoints(report.name, socks)
+
+
+def binary_path(report: ToolReport) -> str:
+    """The resolved path of the tool's first binary on PATH, or empty when none is installed."""
+    return report.binaries[0].resolved if report.binaries else ""
+
+
+def value_or_unset(mapping: Mapping[str, Any], key: str) -> str:
+    """A config value as text, or ``not set`` when the key is absent."""
+    return str(mapping[key]) if key in mapping else "not set"
 
 
 def command_target(command: str, args: list[str]) -> str | None:
