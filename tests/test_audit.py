@@ -22,7 +22,7 @@ from ai_footprint import (
     surface,
 )
 from ai_footprint.audit import run_audit
-from ai_footprint.model import AuditReport, CommandValidation
+from ai_footprint.model import AuditReport, BinaryInfo, CommandValidation, ToolReport
 from ai_footprint.report_text import Style, render_doctor, render_summary
 from tests.conftest import (
     FAKE_ANTHROPIC_ACCESS,
@@ -330,3 +330,16 @@ def test_summary_line_sizes_only_outermost_locations_and_says_how_many(audited):
     size = fsinfo.human_size(figures.disk_bytes(codex.artifacts))
     line = next(line for line in text.splitlines() if line.strip().startswith("Codex CLI"))
     assert f"{size} in {surface.plural(listed, 'listed location')} · " in line
+
+
+def test_headline_names_every_installed_version():
+    tool = ToolReport(name="opencode", display_name="OpenCode", installed=True)
+    tool.binaries = [
+        BinaryInfo(path="/a/opencode", resolved="/a/opencode", version="1.4.6"),
+        BinaryInfo(path="/b/opencode", resolved="/b/opencode", version="2.0.26"),
+    ]
+    assert surface._named(tool) == "OpenCode (1.4.6 and 2.0.26)"
+    tool.binaries = tool.binaries[:1]
+    assert surface._named(tool) == "OpenCode 1.4.6"
+    tool.binaries = []
+    assert surface._named(tool) == "OpenCode"

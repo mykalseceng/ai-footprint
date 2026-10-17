@@ -394,7 +394,7 @@ def _tool_rows(tools: list[ToolReport]) -> list[list[str]]:
         rows.append(
             [
                 f"<a href='#tool-{e(t.name)}'>{e(t.display_name)}</a>",
-                e(t.binaries[0].version if t.binaries else "?"),
+                e(surface.join(t.versions()) or "?"),
                 e(human_size(disk_bytes(t.artifacts, Category.SESSION))),
                 e(str(len(t.credentials))),
                 pill(approval.display, tone)
@@ -542,7 +542,7 @@ def _extension_pages(audit: AuditReport) -> str:
 
 def _tool_view(audit: AuditReport, tool: ToolReport) -> str:
     story = surface.for_tool(audit, tool)
-    version = tool.binaries[0].version if tool.binaries else "?"
+    version = surface.join(tool.versions()) or "?"
     roots = ", ".join((tool.secret_scan.roots if tool.secret_scan else [])[:2])
     eyebrow = f"Tool · v{version}" + (f" · {roots}" if roots else "")
     home = audit.host.home

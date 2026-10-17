@@ -9,6 +9,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from ai_footprint import daemons
+from ai_footprint.collectors.common import AD_HOC
 from ai_footprint.fsinfo import human_size, tilde
 from ai_footprint.model import Artifact, Category, HostReport, TokenInfo, ToolReport
 from ai_footprint.surface import plural, sentences, when
@@ -170,6 +171,8 @@ def _signature_answer(tool: ToolReport) -> Answer:
     text = "Each trait was found in the installed binary"
     if binary and binary.signer.startswith("unsigned"):
         text += ", which is not code-signed."
+    elif binary and binary.signer == AD_HOC:
+        text += ", which is ad-hoc signed, with no signing identity."
     elif binary and binary.signer:
         text += f", which is signed by {binary.signer}."
     else:

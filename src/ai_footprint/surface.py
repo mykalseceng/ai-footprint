@@ -186,10 +186,16 @@ def _takeable(creds: list[Credential]) -> bool:
     )
 
 
+def _named(tool: ToolReport) -> str:
+    """``pi 1.2.0``, or ``OpenCode (1.4.6 and 2.0.26)`` when several versions are installed."""
+    versions = tool.versions()
+    if len(versions) > 1:
+        return f"{tool.display_name} ({join(versions)})"
+    return f"{tool.display_name} {join(versions)}".strip()
+
+
 def _inventory(tools: list[ToolReport], accounts: list[list[Credential]]) -> str:
-    named = join(
-        [f"{t.display_name} {t.binaries[0].version if t.binaries else ''}".strip() for t in tools]
-    )
+    named = join([_named(t) for t in tools])
     providers = sorted({g[0].provider for g in accounts})
     size = sum(disk_bytes(t.artifacts, Category.SESSION) for t in tools)
     holding = (
