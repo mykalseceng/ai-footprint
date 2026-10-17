@@ -196,8 +196,12 @@ def _artifact_specs(roots: dict[str, Path]) -> list[ArtifactSpec]:
     ]
 
 
-def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
+def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport, dict[str, Any]]:
     """Collect OpenCode's footprint.
+
+    Args:
+        ctx: Collection context.
+        found: This tool's presence when already detected, so binaries are probed once.
 
     Returns:
         The report and private facts for the rule engine.
@@ -209,8 +213,9 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
         or load_jsonc(roots["config"] / "opencode.json")
         or {}
     )
-    report.binaries = _binaries(ctx)
-    report.installed = bool(report.binaries) or any(p.exists() for p in _presence_roots(roots))
+    found = found or detect(ctx, sized=False)
+    report.binaries = found.binaries
+    report.installed = found.installed
     db = roots["data"] / "opencode.db"
     facts: dict[str, Any] = {"config": config, "roots": roots, "db": db}
     if not report.installed:
@@ -245,9 +250,9 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     return report, facts
 
 
-def detect(ctx: Context) -> ToolPresence:
+def detect(ctx: Context, *, sized: bool = True) -> ToolPresence:
     """Is OpenCode installed, and where?"""
-    return presence(NAME, DISPLAY, _binaries(ctx), _presence_roots(_roots(ctx)))
+    return presence(NAME, DISPLAY, _binaries(ctx), _presence_roots(_roots(ctx)), sized=sized)
 
 
 def _binaries(ctx: Context) -> list[BinaryInfo]:

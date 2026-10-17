@@ -193,6 +193,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         live=args.live,
         scan=not quick,
         workers=args.workers,
+        presences=presences,
     )
     if args.validate:
         audit.option_validation = optioncheck.validate(

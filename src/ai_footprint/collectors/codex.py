@@ -163,8 +163,12 @@ class RemoteEnrollment(NamedTuple):
     updated: str
 
 
-def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
+def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport, dict[str, Any]]:
     """Collect Codex CLI's footprint.
+
+    Args:
+        ctx: Collection context.
+        found: This tool's presence when already detected, so binaries are probed once.
 
     Returns:
         The report and private facts for the rule engine.
@@ -172,8 +176,9 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     report = ToolReport(name=NAME, display_name=DISPLAY)
     root = home_dir(ctx)
     config = load_toml(root / "config.toml") or {}
-    report.binaries = _binaries(ctx)
-    report.installed = bool(report.binaries) or root.is_dir()
+    found = found or detect(ctx, sized=False)
+    report.binaries = found.binaries
+    report.installed = found.installed
     facts: dict[str, Any] = {"config": config, "root": root}
     if not report.installed:
         return report, facts
@@ -214,9 +219,9 @@ def home_dir(ctx: Context) -> Path:
     return Path(ctx.system.env.get("CODEX_HOME") or ctx.home / ".codex")
 
 
-def detect(ctx: Context) -> ToolPresence:
+def detect(ctx: Context, *, sized: bool = True) -> ToolPresence:
     """Is Codex CLI installed, and where?"""
-    return presence(NAME, DISPLAY, _binaries(ctx), [home_dir(ctx)])
+    return presence(NAME, DISPLAY, _binaries(ctx), [home_dir(ctx)], sized=sized)
 
 
 def _binaries(ctx: Context) -> list[BinaryInfo]:

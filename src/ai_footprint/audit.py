@@ -15,7 +15,7 @@ from ai_footprint.model import AuditReport, ToolPresence, ToolReport
 from ai_footprint.rules import Checklist
 from ai_footprint.system import System
 
-Collector = Callable[[Context], tuple[ToolReport, dict[str, Any]]]
+Collector = Callable[[Context, ToolPresence | None], tuple[ToolReport, dict[str, Any]]]
 Detector = Callable[[Context], ToolPresence]
 
 
@@ -57,6 +57,7 @@ def run_audit(
     live: bool = False,
     scan: bool = True,
     workers: int | None = None,
+    presences: Sequence[ToolPresence] = (),
 ) -> tuple[AuditReport, Checklist]:
     """Audit the selected tools.
 
@@ -67,16 +68,19 @@ def run_audit(
         live: Allow opt-in network checks.
         scan: Run the full secret scan.
         workers: Scanner process count.
+        presences: Results of ``detect_tools`` already run; a tool without one is detected
+            here. Reusing them probes each binary once per audit.
 
     Returns:
         The report and the doctor checklist.
     """
     ctx = Context(home=home, system=system, now=time.time(), live=live, scan=scan, workers=workers)
     host = collect_host(system, home)
+    found = {p.name: p for p in presences}
     reports: list[ToolReport] = []
     facts: dict[str, dict[str, Any]] = {}
     for name in tools:
-        report, tool_facts = TOOLS[name].collect(ctx)
+        report, tool_facts = TOOLS[name].collect(ctx, found.get(name))
         report.daemons = daemons.collect(ctx, report)
         report.account = accounts.collect(ctx, report, tool_facts)
         reports.append(report)

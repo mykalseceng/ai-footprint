@@ -454,9 +454,18 @@ def fingerprint_items(
 
 
 def presence(
-    name: str, display_name: str, binaries: list[BinaryInfo], paths: list[Path]
+    name: str,
+    display_name: str,
+    binaries: list[BinaryInfo],
+    paths: list[Path],
+    *,
+    sized: bool = True,
 ) -> ToolPresence:
-    """Presence record: installed when a binary is on PATH or a data folder exists."""
+    """Presence record: installed when a binary is on PATH or a data folder exists.
+
+    ``sized`` totals the data folders for ``--list``; a full audit measures each location
+    itself, so it skips that walk.
+    """
     existing = [p for p in paths if p.exists()]
     return ToolPresence(
         name=name,
@@ -464,5 +473,5 @@ def presence(
         installed=bool(binaries or existing),
         binaries=binaries,
         data_paths=[str(p) for p in existing],
-        size_bytes=sum(tree_stats(p).size_bytes for p in existing),
+        size_bytes=sum(tree_stats(p).size_bytes for p in existing) if sized else 0,
     )

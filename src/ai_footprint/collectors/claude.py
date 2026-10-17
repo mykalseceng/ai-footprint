@@ -190,8 +190,12 @@ CLAIMS: tuple[Claim, ...] = (
 )
 
 
-def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
+def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport, dict[str, Any]]:
     """Collect Claude Code's footprint.
+
+    Args:
+        ctx: Collection context.
+        found: This tool's presence when already detected, so binaries are probed once.
 
     Returns:
         The report and a private ``facts`` dict the rule engine uses (never rendered).
@@ -200,8 +204,9 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     home = ctx.home
     config = load_json(home / ".claude.json") or {}
     settings = load_json(home / ".claude" / "settings.json") or {}
-    report.binaries = _binaries(ctx)
-    report.installed = bool(report.binaries) or any(p.exists() for p in data_paths(ctx))
+    found = found or detect(ctx, sized=False)
+    report.binaries = found.binaries
+    report.installed = found.installed
     facts: dict[str, Any] = {"config": config, "settings": settings}
     if not report.installed:
         return report, facts
@@ -240,9 +245,9 @@ def data_paths(ctx: Context) -> list[Path]:
     return [ctx.home / ".claude", ctx.home / ".claude.json"]
 
 
-def detect(ctx: Context) -> ToolPresence:
+def detect(ctx: Context, *, sized: bool = True) -> ToolPresence:
     """Is Claude Code installed, and where?"""
-    return presence(NAME, DISPLAY, _binaries(ctx), data_paths(ctx))
+    return presence(NAME, DISPLAY, _binaries(ctx), data_paths(ctx), sized=sized)
 
 
 def _binaries(ctx: Context) -> list[BinaryInfo]:

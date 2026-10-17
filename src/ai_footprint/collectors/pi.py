@@ -160,8 +160,12 @@ def agent_dir(ctx: Context) -> Path:
     return Path(custom).expanduser() if custom else ctx.home / ".pi" / "agent"
 
 
-def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
+def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport, dict[str, Any]]:
     """Collect pi's footprint.
+
+    Args:
+        ctx: Collection context.
+        found: This tool's presence when already detected, so binaries are probed once.
 
     Returns:
         The report and private facts for the rule engine.
@@ -169,8 +173,9 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     report = ToolReport(name=NAME, display_name=DISPLAY)
     agent = agent_dir(ctx)
     settings = load_json(agent / "settings.json") or {}
-    report.binaries = _binaries(ctx)
-    report.installed = bool(report.binaries) or agent.is_dir()
+    found = found or detect(ctx, sized=False)
+    report.binaries = found.binaries
+    report.installed = found.installed
     facts: dict[str, Any] = {"settings": settings, "agent": agent}
     if not report.installed:
         return report, facts
@@ -202,9 +207,9 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     return report, facts
 
 
-def detect(ctx: Context) -> ToolPresence:
+def detect(ctx: Context, *, sized: bool = True) -> ToolPresence:
     """Is pi installed, and where?"""
-    return presence(NAME, DISPLAY, _binaries(ctx), [agent_dir(ctx)])
+    return presence(NAME, DISPLAY, _binaries(ctx), [agent_dir(ctx)], sized=sized)
 
 
 def _binaries(ctx: Context) -> list[BinaryInfo]:

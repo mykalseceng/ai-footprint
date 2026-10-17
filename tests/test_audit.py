@@ -21,7 +21,7 @@ from ai_footprint import (
     reportcheck,
     surface,
 )
-from ai_footprint.audit import run_audit
+from ai_footprint.audit import detect_tools, run_audit
 from ai_footprint.model import (
     Artifact,
     AuditReport,
@@ -398,3 +398,26 @@ def test_readers_answer_says_how_many_files_the_group_can_read(tmp_path: Path):
         "group `staff`: file names only",
         "group `staff`: 3 of 4 files",
     ]
+
+
+def test_detected_binaries_are_probed_once_per_audit(tmp_path: Path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    binary = bin_dir / "claude"
+    binary.write_text("#!/bin/sh\n")
+    binary.chmod(0o755)
+    system = QuietFakeSystem(path=str(bin_dir))
+    presences = detect_tools(system=system, home=tmp_path)
+    run_audit(system=system, home=tmp_path, tools=["claude"], scan=False, presences=presences)
+    resolved = str(binary.resolve())
+    signature_checks = [r for r in system.executed if r.argv[-1:] == [resolved]]
+    version_runs = [r for r in system.executed if r.argv == [resolved, "--version"]]
+    assert len(signature_checks) == 1
+    assert len(version_runs) == 1
+
+
+def test_collect_detects_by_itself_when_no_presence_is_given(tmp_path: Path):
+    (tmp_path / ".claude").mkdir()
+    audit, _checklist = run_audit(system=QuietFakeSystem(), home=tmp_path, scan=False)
+    installed = {t.name: t.installed for t in audit.tools}
+    assert installed == {"claude": True, "codex": False, "opencode": False, "pi": False}
