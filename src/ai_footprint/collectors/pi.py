@@ -8,9 +8,11 @@ so claims are searched for across that folder.
 """
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from ai_footprint import extensions, instructions
 from ai_footprint.collectors.common import (
@@ -25,8 +27,9 @@ from ai_footprint.collectors.common import (
     mine_hosts,
     mined_endpoints,
     presence,
+    provider_credential,
 )
-from ai_footprint.fsinfo import mode_string, readable_by_others
+from ai_footprint.fsinfo import mode_string, owner_name, readable_by_others
 from ai_footprint.host import processes, sockets
 from ai_footprint.model import (
     BinaryInfo,
@@ -131,6 +134,8 @@ SETTING_KEYS = (
 ENV_VARS = ("PI_TELEMETRY", "PI_OFFLINE", "PI_SHARE_VIEWER_URL", SESSION_DIR_VAR)
 ENV_MARKERS = {SESSION_DIR_VAR: "_CODING_AGENT_SESSION_DIR"}
 CONTEXT_FILES = ("AGENTS.override.md", "AGENTS.md", "CLAUDE.md")
+SHARED_SKILLS_MARKER = '".agents","skills"'
+LOOPBACK = frozenset({"127.0.0.1", "localhost", "::1"})
 DATED = re.compile(r"\d{4}-\d{2}-\d{2}")
 PROJECT_PROMPTS = (".pi/SYSTEM.md", ".pi/APPEND_SYSTEM.md")
 CLAIMS: tuple[Claim, ...] = (
@@ -142,6 +147,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("MCP config shape", "mcpServers"),
     Claim("credential file", '"auth.json"'),
     Claim("credential store", "models-store.json"),
+    Claim("shared skill dir ~/.agents/skills", SHARED_SKILLS_MARKER),
 )
 
 
@@ -166,7 +172,7 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     if not report.installed:
         return report, facts
     report.artifacts = describe_all(agent, ARTIFACTS)
-    report.credentials, facts["fingerprints"] = _credentials(ctx, agent)
+    report.credentials, facts["fingerprints"], providers = _credentials(ctx, agent)
     report.processes = processes(ctx.system, rf"(^|/)pi(\s|$)|{PACKAGE}")
     binary = report.binaries[0].resolved if report.binaries else ""
     report.trusted_folders = _trusted(agent)
@@ -174,7 +180,10 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     projects = sorted(set(report.trusted_folders) | _session_cwds(_sessions_dir(ctx, agent)))
     report.instructions = instructions.collect(_instruction_candidates(projects))
     report.extensions = _extensions(ctx, agent, settings, report.trusted_folders)
-    report.endpoints = _endpoints(ctx, agent, report)
+    if binary and ctx.binary_has(binary, [SHARED_SKILLS_MARKER])[SHARED_SKILLS_MARKER]:
+        shared = extensions.skill_rows(ctx.home / ".agents" / "skills", NAME, ctx)
+        report.extensions = extensions.dedupe(report.extensions + shared)
+    report.endpoints = _endpoints(ctx, agent, report, providers)
     version = report.binaries[0].version if report.binaries else "?"
     rows = [(label, value.format(version=version), marker) for label, value, marker in FINGERPRINT]
     report.fingerprint = fingerprint_items(ctx, binary, rows)
@@ -215,61 +224,63 @@ def _sessions_dir(ctx: Context, agent: Path) -> Path:
     return Path(custom).expanduser() if custom else agent / "sessions"
 
 
-def _credentials(ctx: Context, agent: Path) -> tuple[list[Credential], dict[str, str]]:
+def _credentials(ctx: Context, agent: Path) -> tuple[list[Credential], dict[str, str], set[str]]:
+    """Stored credentials, their fingerprints, and the provider ids they belong to."""
     fingerprints: dict[str, str] = {}
     creds: list[Credential] = []
+    providers: set[str] = set()
     for name in ("auth.json", "models-store.json"):
         path = agent / name
         entries = load_json(path)
         if not isinstance(entries, dict):
             continue
         for provider, entry in entries.items():
-            if isinstance(entry, dict) and entry.get("type"):
-                creds.append(_provider_credential(ctx, provider, entry, path, fingerprints))
+            if not isinstance(entry, dict) or not entry.get("type"):
+                continue
+            providers.add(provider)
+            creds.append(
+                provider_credential(
+                    ctx,
+                    entry,
+                    tool=NAME,
+                    provider=PROVIDER_NAMES.get(provider, provider),
+                    store="plaintext file",
+                    path=path,
+                    fingerprints=fingerprints,
+                    label=f"pi {provider}",
+                )
+            )
     models = agent / "models.json"
     for provider, spec in ((load_json(models) or {}).get("providers") or {}).items():
         key = spec.get("apiKey") if isinstance(spec, dict) else None
-        if isinstance(key, str) and key:
-            info = inspect_token("key", key, now=ctx.now)
-            fingerprints.setdefault(info.fingerprint, f"pi models.json apiKey for {provider}")
-            creds.append(
-                Credential(
-                    NAME,
-                    PROVIDER_NAMES.get(provider, provider),
-                    "plaintext file",
-                    str(models),
-                    f"apiKey in provider config; baseUrl {spec.get('baseUrl', 'not set')}; "
-                    f"file mode {mode_string(models.stat().st_mode)}",
-                    readable_by_others=readable_by_others(models),
-                    tokens=[info],
-                )
+        if not isinstance(key, str) or not key or is_placeholder(provider, spec):
+            continue
+        providers.add(provider)
+        info = inspect_token("key", key, now=ctx.now)
+        fingerprints.setdefault(info.fingerprint, f"pi models.json apiKey for {provider}")
+        creds.append(
+            Credential(
+                NAME,
+                PROVIDER_NAMES.get(provider, provider),
+                "plaintext file",
+                str(models),
+                f"apiKey in provider config; baseUrl {spec.get('baseUrl', 'not set')}; "
+                f"file mode {mode_string(models.stat().st_mode)}",
+                readable_by_others=readable_by_others(models),
+                tokens=[info],
             )
-    return creds, fingerprints
+        )
+    return creds, fingerprints, providers
 
 
-def _provider_credential(
-    ctx: Context, provider: str, entry: dict[str, Any], path: Path, fingerprints: dict[str, str]
-) -> Credential:
-    cred = Credential(
-        NAME,
-        PROVIDER_NAMES.get(provider, provider),
-        "plaintext file",
-        str(path),
-        f"{entry['type']} credential; file mode {mode_string(path.stat().st_mode)}",
-        readable_by_others=readable_by_others(path),
-    )
-    for field in ("access", "refresh", "key"):
-        value = entry.get(field)
-        if isinstance(value, str) and value:
-            info = inspect_token(
-                field,
-                value,
-                now=ctx.now,
-                expires_at=entry.get("expires") if field == "access" else None,
-            )
-            cred.tokens.append(info)
-            fingerprints.setdefault(info.fingerprint, f"pi {provider} {field}")
-    return cred
+def is_placeholder(provider: str, spec: dict[str, Any]) -> bool:
+    """A models.json key that only fills the field: the provider's own name, on loopback.
+
+    A provider served from this machine (Ollama, say) with ``apiKey`` equal to its name holds
+    no secret, so it is not reported as a credential.
+    """
+    host = urlsplit(str(spec.get("baseUrl", ""))).hostname or ""
+    return host in LOOPBACK and str(spec.get("apiKey", "")).lower() == provider.lower()
 
 
 def _trusted(agent: Path) -> list[str]:
@@ -378,6 +389,20 @@ def _settings(
         )
         for var in ENV_VARS
     ]
+    store = agent / "models-store.json"
+    if store.is_file() and not os.access(store, os.R_OK):
+        info = store.stat()
+        rows.append(
+            (
+                Setting(
+                    "models-store.json",
+                    f"could not read {ctx.display(str(store))} (owned by "
+                    f"{owner_name(info.st_uid)}, mode {mode_string(info.st_mode)})",
+                    "pi's credential store; credentials in it are not counted here",
+                ),
+                "models-store.json",
+            )
+        )
     return confirmed_settings(ctx, binary, rows)
 
 
@@ -406,7 +431,7 @@ def _extensions(
                 "settings.packages",
                 ctx.display(str(node_modules / name)),
                 autostart=True,
-                notes="Loaded in-process",
+                notes="Loaded in-process" + _foreign_owner(node_modules / name),
                 description=extensions.package_description(node_modules, name)
                 or extensions.NO_MANIFEST,
                 access="npm package",
@@ -425,6 +450,15 @@ def _extensions(
     return extensions.dedupe(out)
 
 
+def _foreign_owner(path: Path) -> str:
+    """``; files owned by root`` when another account owns an installed package."""
+    try:
+        uid = path.stat().st_uid
+    except OSError:
+        return ""
+    return "" if uid == os.getuid() else f"; files owned by {owner_name(uid)}"
+
+
 def _mcp_rows(path: Path, source: str) -> list[Extension]:
     servers = (load_json(path) or {}).get("mcpServers") or {}
     return [
@@ -434,7 +468,9 @@ def _mcp_rows(path: Path, source: str) -> list[Extension]:
     ]
 
 
-def _endpoints(ctx: Context, agent: Path, report: ToolReport) -> list[Endpoint]:
+def _endpoints(
+    ctx: Context, agent: Path, report: ToolReport, providers: set[str]
+) -> list[Endpoint]:
     binary = report.binaries[0].resolved if report.binaries else ""
     markers = {host: ENDPOINT_MARKERS.get(host, host) for host in ENDPOINTS}
     present = ctx.binary_has(binary, list(markers.values())) if binary else {}
@@ -443,12 +479,9 @@ def _endpoints(ctx: Context, agent: Path, report: ToolReport) -> list[Endpoint]:
         for host, purpose in ENDPOINTS.items()
         if present.get(markers[host])
     ]
-    raw = {name: key for key, name in PROVIDER_NAMES.items()}
-    providers = sorted(
-        {raw.get(c.provider, c.provider) for c in report.credentials} & set(PROVIDER_HOSTS)
-    )
     out += [
-        Endpoint(NAME, PROVIDER_HOSTS[p], f"{p} provider API", "credentials") for p in providers
+        Endpoint(NAME, PROVIDER_HOSTS[p], f"{p} provider API", "credentials")
+        for p in sorted(providers & set(PROVIDER_HOSTS))
     ]
     out += mined_endpoints(NAME, mine_hosts([agent / "pi-debug.log"]), ENDPOINTS)
     for sock in sockets(ctx.system, [p.pid for p in report.processes]):

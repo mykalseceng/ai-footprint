@@ -3,10 +3,9 @@
 import json
 import re
 import sqlite3
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from ai_footprint import extensions, instructions
 from ai_footprint.collectors.common import (
@@ -22,9 +21,10 @@ from ai_footprint.collectors.common import (
     mine_hosts,
     mined_endpoints,
     presence,
+    provider_credential,
 )
 from ai_footprint.fsinfo import mode_string, readable_by_others
-from ai_footprint.host import processes, sockets
+from ai_footprint.host import Socket, processes, sockets
 from ai_footprint.model import (
     BinaryInfo,
     Category,
@@ -40,6 +40,10 @@ from ai_footprint.tokens import inspect_token, iso_time
 
 NAME = "opencode"
 DISPLAY = "OpenCode"
+PROCESS = r"(^|/)opencode2?(\.exe)?(\s|$)"
+"""OpenCode's command line; 2.x sessions set their process title to ``opencode2``."""
+SESSION_TABLES = ("session", "session_v2")
+MESSAGE_TABLES = ("message", "session_message")
 C = Category
 
 PROVIDER_HOSTS = {
@@ -112,8 +116,17 @@ def _roots(ctx: Context) -> dict[str, Path]:
     }
 
 
+def _service_files(roots: dict[str, Path]) -> list[Path]:
+    """Files holding the local server password: the configured one and the running server's."""
+    return [roots["config"] / "service.json", roots["state"] / "service.json"]
+
+
+def _presence_roots(roots: dict[str, Path]) -> list[Path]:
+    return [roots["data"], roots["config"], roots["install"]]
+
+
 def _artifact_specs(roots: dict[str, Path]) -> list[ArtifactSpec]:
-    data, config = roots["data"], roots["config"]
+    data, config, state = roots["data"], roots["config"], roots["state"]
     return [
         ArtifactSpec(
             "Provider credentials",
@@ -134,7 +147,7 @@ def _artifact_specs(roots: dict[str, Path]) -> list[ArtifactSpec]:
         ArtifactSpec(
             "Snapshots",
             str(data / "snapshot"),
-            C.SESSION,
+            C.CACHE,
             "Git snapshots of project files for undo",
         ),
         ArtifactSpec("Tool output", str(data / "tool-output"), C.SESSION, "Large tool results"),
@@ -159,7 +172,22 @@ def _artifact_specs(roots: dict[str, Path]) -> list[ArtifactSpec]:
             C.EXTENSION,
             "npm packages loaded by plugins",
         ),
-        ArtifactSpec("State", str(roots["state"]), C.CACHE, "UI state, prompt history"),
+        ArtifactSpec(
+            "Prompt history",
+            str(state / "prompt-history.jsonl"),
+            C.SESSION,
+            "Prompts typed into the TUI",
+        ),
+        ArtifactSpec(
+            "Server registration",
+            str(state / "service.json"),
+            C.CREDENTIAL,
+            "URL, pid and Basic-auth password of the running local server",
+        ),
+        ArtifactSpec(
+            "Model state", str(state / "model.json"), C.CACHE, "Recent and favourite models"
+        ),
+        ArtifactSpec("TUI state", str(state / "latest"), C.CACHE, "TUI state and locks"),
         ArtifactSpec("Cache", str(roots["cache"]), C.CACHE, "Model catalog, downloads"),
         ArtifactSpec("Install", str(roots["install"]), C.BINARY, "Installed binary and deps"),
     ]
@@ -179,14 +207,15 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
         or {}
     )
     report.binaries = _binaries(ctx)
-    report.installed = bool(report.binaries) or roots["data"].is_dir()
+    report.installed = bool(report.binaries) or any(p.exists() for p in _presence_roots(roots))
     db = roots["data"] / "opencode.db"
     facts: dict[str, Any] = {"config": config, "roots": roots, "db": db}
     if not report.installed:
         return report, facts
     report.artifacts = describe_all(Path("/"), _artifact_specs(roots))
-    report.credentials, facts["fingerprints"] = _credentials(ctx, roots, db)
-    report.processes = processes(ctx.system, r"(^|/)opencode(\.exe)?(\s|$)")
+    report.credentials, facts["fingerprints"], providers = _credentials(ctx, roots, db)
+    report.processes = processes(ctx.system, PROCESS)
+    socks = sockets(ctx.system, [p.pid for p in report.processes])
     binary = report.binaries[0].resolved if report.binaries else ""
     report.settings = _settings(ctx, config, db, binary)
     projects = _projects(db)
@@ -194,10 +223,10 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
         _instruction_candidates(ctx, roots, config, projects)
     )
     report.extensions = _extensions(ctx, roots, config)
-    report.endpoints = _endpoints(ctx, roots, report)
-    facts["server"] = _server_probe(ctx, report)
-    if facts["server"]:
-        report.settings.append(facts["server"])
+    report.endpoints = _endpoints(ctx, roots, report, providers, socks)
+    server = _server_setting(ctx, roots, socks)
+    if server:
+        report.settings.append(server)
     version = report.binaries[0].version if report.binaries else "?"
     rows = [(label, value.format(version=version), marker) for label, value, marker in FINGERPRINT]
     report.fingerprint = fingerprint_items(ctx, binary, rows)
@@ -208,17 +237,14 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
             workers=ctx.workers,
             display=ctx.display,
             known=facts["fingerprints"],
-            stores=[roots["data"] / "auth.json", db, roots["config"] / "service.json"],
+            stores=[roots["data"] / "auth.json", db, *_service_files(roots)],
         )
     return report, facts
 
 
 def detect(ctx: Context) -> ToolPresence:
     """Is OpenCode installed, and where?"""
-    roots = _roots(ctx)
-    return presence(
-        NAME, DISPLAY, _binaries(ctx), [roots["data"], roots["config"], roots["install"]]
-    )
+    return presence(NAME, DISPLAY, _binaries(ctx), _presence_roots(_roots(ctx)))
 
 
 def _binaries(ctx: Context) -> list[BinaryInfo]:
@@ -233,23 +259,34 @@ def _binaries(ctx: Context) -> list[BinaryInfo]:
 
 def _credentials(
     ctx: Context, roots: dict[str, Path], db: Path
-) -> tuple[list[Credential], dict[str, str]]:
+) -> tuple[list[Credential], dict[str, str], set[str]]:
+    """Stored credentials, their fingerprints, and the provider ids they belong to."""
     fingerprints: dict[str, str] = {}
     creds: list[Credential] = []
     auth = roots["data"] / "auth.json"
-    for provider, entry in (load_json(auth) or {}).items():
+    stored = [(p, e, "plaintext file", auth) for p, e in (load_json(auth) or {}).items()]
+    stored += [(p, e, "SQLite table credential", db) for p, e in _db_credentials(db)]
+    for provider, entry, store, path in stored:
+        if not isinstance(entry, dict):
+            continue
         creds.append(
-            _provider_credential(ctx, provider, entry, "plaintext file", auth, fingerprints)
+            provider_credential(
+                ctx,
+                entry,
+                tool=NAME,
+                provider=PROVIDER_NAMES.get(provider, provider),
+                store=store,
+                path=path,
+                fingerprints=fingerprints,
+                label=f"OpenCode {provider}",
+            )
         )
-    for provider, entry in _db_credentials(db):
-        creds.append(
-            _provider_credential(ctx, provider, entry, "SQLite table credential", db, fingerprints)
-        )
-    service = roots["config"] / "service.json"
-    password = (load_json(service) or {}).get("password")
-    if isinstance(password, str) and password:
+    for service in _service_files(roots):
+        password = (load_json(service) or {}).get("password")
+        if not isinstance(password, str) or not password:
+            continue
         info = inspect_token("password", password, now=ctx.now)
-        fingerprints[info.fingerprint] = "OpenCode server password"
+        fingerprints.setdefault(info.fingerprint, "OpenCode server password")
         creds.append(
             Credential(
                 NAME,
@@ -261,7 +298,7 @@ def _credentials(
                 tokens=[info],
             )
         )
-    return creds, fingerprints
+    return creds, fingerprints, {p for p, e, _s, _p in stored if isinstance(e, dict)}
 
 
 def _db_credentials(db: Path) -> list[tuple[str, dict[str, Any]]]:
@@ -277,37 +314,6 @@ def _db_credentials(db: Path) -> list[tuple[str, dict[str, Any]]]:
     return out
 
 
-def _provider_credential(
-    ctx: Context,
-    provider: str,
-    entry: dict[str, Any],
-    store: str,
-    path: Path,
-    fingerprints: dict[str, str],
-) -> Credential:
-    kind = str(entry.get("type", "?"))
-    cred = Credential(
-        NAME,
-        PROVIDER_NAMES.get(provider, provider),
-        store,
-        str(path),
-        f"{kind} credential; file mode {mode_string(path.stat().st_mode)}",
-        readable_by_others=readable_by_others(path),
-    )
-    for field in ("access", "refresh", "key"):
-        value = entry.get(field)
-        if isinstance(value, str) and value:
-            info = inspect_token(
-                field,
-                value,
-                now=ctx.now,
-                expires_at=entry.get("expires") if field == "access" else None,
-            )
-            cred.tokens.append(info)
-            fingerprints.setdefault(info.fingerprint, f"OpenCode {provider} {field}")
-    return cred
-
-
 def _query(db: Path, sql: str) -> list[tuple[Any, ...]]:
     if not db.is_file():
         return []
@@ -316,6 +322,22 @@ def _query(db: Path, sql: str) -> list[tuple[Any, ...]]:
             return list(conn.execute(sql).fetchall())
     except sqlite3.Error:
         return []
+
+
+def _tables(db: Path, names: tuple[str, ...]) -> list[str]:
+    """Which of ``names`` exist; OpenCode 2.x adds ``*_v2`` tables beside the legacy ones."""
+    present = {str(row[0]) for row in _query(db, "SELECT name FROM sqlite_master")}
+    return [name for name in names if name in present]
+
+
+def _distinct_count(db: Path, tables: tuple[str, ...], where: str = "1") -> int:
+    """Distinct ids across tables, since 2.x copies legacy rows with the same ids."""
+    union = " UNION ".join(
+        f"SELECT id FROM {t} WHERE {where}"  # noqa: S608 - fixed table names and conditions
+        for t in _tables(db, tables)
+    )
+    rows = _query(db, f"SELECT count(*) FROM ({union})") if union else []  # noqa: S608 - same
+    return int(rows[0][0]) if rows else 0
 
 
 def _projects(db: Path) -> list[str]:
@@ -329,8 +351,7 @@ def _projects(db: Path) -> list[str]:
 def _settings(ctx: Context, config: dict[str, Any], db: Path, binary: str) -> list[Setting]:
     permission = config.get("permission")
     saved = _query(db, "SELECT action, count(*) FROM permission GROUP BY action")
-    shares = _query(db, "SELECT count(*) FROM session WHERE share_url IS NOT NULL")
-    share_count = int(shares[0][0]) if shares else 0
+    share_count = _distinct_count(db, SESSION_TABLES, "share_url IS NOT NULL")
     plugins = config.get("plugin", [])
     extra = config.get("instructions", [])
     rows: list[tuple[Setting, str]] = [
@@ -463,7 +484,13 @@ def _mcp(name: str, spec: dict[str, Any]) -> Extension:
     return extensions.mcp_row(NAME, name, stdio, "opencode config", enabled=enabled)
 
 
-def _endpoints(ctx: Context, roots: dict[str, Path], report: ToolReport) -> list[Endpoint]:
+def _endpoints(
+    ctx: Context,
+    roots: dict[str, Path],
+    report: ToolReport,
+    providers: set[str],
+    socks: list[Socket],
+) -> list[Endpoint]:
     binary = report.binaries[0].resolved if report.binaries else ""
     present = ctx.binary_has(binary, list(ENDPOINTS)) if binary else {}
     out = [
@@ -471,15 +498,15 @@ def _endpoints(ctx: Context, roots: dict[str, Path], report: ToolReport) -> list
         for host, purpose in ENDPOINTS.items()
         if present.get(host)
     ]
-    raw = {name: key for key, name in PROVIDER_NAMES.items()}
-    providers = sorted(
-        {raw.get(c.provider, c.provider) for c in report.credentials} & set(PROVIDER_HOSTS)
-    )
     out += [
-        Endpoint(NAME, PROVIDER_HOSTS[p], f"{p} provider API", "credentials") for p in providers
+        Endpoint(NAME, PROVIDER_HOSTS[p], f"{p} provider API", "credentials")
+        for p in sorted(providers & set(PROVIDER_HOSTS))
     ]
     out += mined_endpoints(NAME, mine_hosts([roots["data"] / "log"]), ENDPOINTS)
-    for sock in sockets(ctx.system, [p.pid for p in report.processes]):
+    listening = {s.local for s in socks if s.state == "LISTEN"}
+    for sock in socks:
+        if sock.remote and sock.local in listening:
+            continue
         label = sock.remote or f"{sock.local} (listening)"
         out.append(
             Endpoint(
@@ -489,41 +516,53 @@ def _endpoints(ctx: Context, roots: dict[str, Path], report: ToolReport) -> list
     return out
 
 
-def _server_probe(ctx: Context, report: ToolReport) -> Setting | None:
-    """Ask each loopback opencode listener whether it demands authentication."""
-    listeners = [
-        s
-        for s in sockets(ctx.system, [p.pid for p in report.processes])
-        if s.state == "LISTEN" and s.local.startswith(("127.0.0.1:", "localhost:"))
-    ]
+def _server_setting(ctx: Context, roots: dict[str, Path], socks: list[Socket]) -> Setting | None:
+    """Whether the listening server's own registration records a password.
+
+    OpenCode 2.x writes each running server's URL, pid and password to service.json in its
+    state folder. Only a registration for the listening port says anything about that server;
+    without one the password is not checked, since the audit sends the server no requests.
+    """
+    listeners = [s for s in socks if s.state == "LISTEN"]
     if not listeners:
         return None
-    port = listeners[0].local.rsplit(":", 1)[-1]
-    url = f"http://127.0.0.1:{port}/session"
-    try:
-        with urllib.request.urlopen(url, timeout=3) as response:  # noqa: S310 - fixed loopback URL
-            status = response.status
-    except urllib.error.HTTPError as exc:
-        status = exc.code
-    except (urllib.error.URLError, TimeoutError):
-        return None
-    open_server = status == 200
+    address = listeners[0].local
+    path = roots["state"] / "service.json"
+    record = load_json(path) or {}
+    url = str(record.get("url", ""))
+    if not url or str(urlsplit(url).port) != address.rsplit(":", 1)[-1]:
+        return Setting(
+            f"listening server {address}",
+            "no service.json registration for this port; password not checked",
+            "OpenCode records each running server's password in its state folder",
+        )
+    password = record.get("password")
+    has_password = isinstance(password, str) and bool(password)
+    where = ctx.display(str(path))
     return Setting(
-        f"local server 127.0.0.1:{port}",
-        "no authentication" if open_server else f"HTTP {status} without credentials",
-        "Any local process or user can drive an unauthenticated server",
-        concern=bool(open_server),
+        f"local server {address}",
+        f"password set ({where})" if has_password else f"no password in its registration ({where})",
+        "Any local process or user can drive a server without a password",
+        concern=not has_password,
     )
 
 
 def _stats(db: Path) -> dict[str, str]:
     stats = {}
-    for table in ("session", "message", "part", "project"):
+    for key, tables in (("sessions", SESSION_TABLES), ("messages", MESSAGE_TABLES)):
+        if _tables(db, tables):
+            stats[key] = str(_distinct_count(db, tables))
+    for table in ("part", "project"):
         rows = _query(db, f"SELECT count(*) FROM {table}")  # noqa: S608 - fixed table names
         if rows:
             stats[f"{table}s"] = str(rows[0][0])
-    span = _query(db, "SELECT min(time_created), max(time_created) FROM session")
-    if span and span[0][0]:
-        stats["first session"] = iso_time(span[0][0])[:10]
-        stats["last session"] = iso_time(span[0][1])[:10]
+    spans = [
+        row
+        for table in _tables(db, SESSION_TABLES)
+        for row in _query(db, f"SELECT min(time_created), max(time_created) FROM {table}")  # noqa: S608 - fixed table names
+        if row[0]
+    ]
+    if spans:
+        stats["first session"] = iso_time(min(r[0] for r in spans))[:10]
+        stats["last session"] = iso_time(max(r[1] for r in spans))[:10]
     return stats

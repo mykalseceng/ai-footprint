@@ -389,6 +389,7 @@ class SecretScan:
     unreadable: list[str] = field(default_factory=list)
     kinds: list[SecretKindSummary] = field(default_factory=list)
     current_credential_hits: list[str] = field(default_factory=list)
+    current_credential_values: int = 0
     markers: list[MarkerHit] = field(default_factory=list)
 
 
@@ -415,6 +416,10 @@ class ToolReport:
     stats: dict[str, str] = field(default_factory=dict)
     secret_scan: SecretScan | None = None
     exposures: list[Exposure] = field(default_factory=list)
+
+    def versions(self) -> list[str]:
+        """Every distinct installed version, in PATH order."""
+        return list(dict.fromkeys(b.version for b in self.binaries if b.version))
 
 
 @dataclass

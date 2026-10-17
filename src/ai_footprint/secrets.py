@@ -257,6 +257,7 @@ def scan_paths(
     scan.unreadable = sorted(display(u) for u in totals.unreadable)
     scan.kinds = _summaries(totals, display)
     scan.current_credential_hits = _known_hits(totals, known or {}, display)
+    scan.current_credential_values = sum(1 for fp in known or {} if totals.fp_files.get(fp))
     scan.markers = [
         MarkerHit(
             marker=key,

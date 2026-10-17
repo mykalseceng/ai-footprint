@@ -7,6 +7,7 @@ Fix commands carry the hints the validator needs: ``--help`` probes that prove a
 exists, and binary markers that prove a recommended config key is real.
 """
 
+import re
 import shlex
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -18,6 +19,7 @@ from ai_footprint.fsinfo import tilde
 from ai_footprint.host import first_system_index
 from ai_footprint.model import (
     AuditReport,
+    BinaryInfo,
     Category,
     Daemon,
     Exposure,
@@ -101,7 +103,7 @@ LABELS = {
     "secrets-at-rest": "Secret-shaped values in history and logs",
     "secrets": "Secret-shaped values in history and logs",
     "autostart": "Code that runs automatically",
-    "daemons": "Background processes outlive sessions",
+    "daemons": "Background processes and listening sessions",
     "dangling": "Autostart command points at a missing file",
     "duplicate-installs": "Stale second install",
     "creds-readable": "Credentials readable by other accounts",
@@ -114,7 +116,7 @@ LABELS = {
     "duplicate-creds": "One provider's credentials in several places",
     "trust": "Trusted folders",
     "account-data": "Work shared with provider services",
-    "account-signals": "Signs of use elsewhere",
+    "account-signals": "Paired devices and unused logins",
     "inherited-creds": "Other credentials an agent inherits",
     "computer-control": "Software that can drive the computer",
     "backups": "History copied into backups",
@@ -465,18 +467,26 @@ def rule_secrets(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     if scan is None or not scan.kinds:
         return []
     out = []
-    if scan.current_credential_hits:
+    current = scan.current_credential_values
+    if current:
         out.append(
             _exposure(
                 report,
                 "live-token-on-disk",
                 Lens.CODE,
-                f"Current {report.display_name} credentials are copied into data files outside "
-                "their credential store.",
+                f"{plural(current, f'current {report.display_name} credential')} "
+                f"{'is' if current == 1 else 'are'} copied into data files outside "
+                f"{'its' if current == 1 else 'their'} credential store.",
                 evidence=scan.current_credential_hits[:10],
                 fix=Fix(
                     "Rotate the credential and delete the copies",
-                    [FixCommand("Log out and back in, then delete the listed files", manual=True)],
+                    [
+                        FixCommand(
+                            "Rotate API keys in the provider's console and log out and back in "
+                            "for logins, then delete the listed files",
+                            manual=True,
+                        )
+                    ],
                 ),
             )
         )
@@ -485,14 +495,18 @@ def rule_secrets(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     kinds = ", ".join(f"{k.unique} {k.label}" for k in ranked[:4])
     if len(ranked) > 4:
         kinds += f" and {len(ranked) - 4} more types"
+    others = (
+        " Some may be test data from targets you worked on."
+        if total > current
+        else " Each is a current credential of this tool."
+    )
     out.append(
         _exposure(
             report,
             "secrets-at-rest",
             Lens.CODE,
             f"{report.display_name} data files hold {total} distinct secret-shaped values: "
-            f"{kinds}. "
-            "Some may be test data from targets you worked on.",
+            f"{kinds}.{others}",
             evidence=[
                 f"{k.label}: e.g. {k.locations[0] if k.locations else '?'}" for k in scan.kinds
             ],
@@ -586,26 +600,52 @@ def _open_to_others(mode: str) -> bool:
 
 
 def rule_daemons(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
-    """Processes launchd started for the tool, or that listen beyond a session's own socket."""
-    found = [
+    """Processes launchd started for the tool, and session processes that accept connections."""
+    detached = [d for d in report.daemons if d.detached]
+    servers = [
         d
         for d in report.daemons
-        if d.detached or any(ln.kind == "tcp" or _open_to_others(ln.mode) for ln in d.listeners)
+        if not d.detached
+        and any(ln.kind == "tcp" or _open_to_others(ln.mode) for ln in d.listeners)
     ]
-    if not found:
+    if not detached and not servers:
         return []
-    count = f"{len(found)} background process{'es' if len(found) != 1 else ''}"
+    parts = []
+    if detached:
+        count = f"{len(detached)} background process{'es' if len(detached) != 1 else ''}"
+        parts.append(
+            f"{report.display_name} keeps {count} running outside any session (started by "
+            f"launchd): {join([_daemon_line(d, ctx.home) for d in detached])}."
+        )
+    if servers:
+        parts.append(
+            f"{report.display_name} sessions accept connections: "
+            f"{join([_server_line(d, ctx.home) for d in servers])}."
+        )
+    fix = _daemon_fix(report, detached) if detached else Fix("Quit sessions you no longer use")
+    fix.commands += [
+        FixCommand(f"Quit the session (pid {d.ppid}) that started pid {d.pid}", manual=True)
+        for d in servers
+    ]
     return [
         _exposure(
             report,
             "daemons",
             Lens.CODE,
-            f"{report.display_name} keeps {count} running outside any session: "
-            f"{join([_daemon_line(d, ctx.home) for d in found])}.",
-            evidence=[f"pid {d.pid} started {d.started}: {d.command}" for d in found],
-            fix=_daemon_fix(report, found),
+            " ".join(parts),
+            evidence=[
+                f"pid {d.pid} (parent {d.ppid}) started {d.started}: {d.command}"
+                for d in detached + servers
+            ],
+            fix=fix,
         )
     ]
+
+
+def _server_line(daemon: Daemon, home: Path) -> str:
+    what, listens, _notes = daemons.describe(daemon, str(home))
+    where = "; ".join(listens)
+    return f"pid {daemon.pid} `{what}`, started by session pid {daemon.ppid}, on {where}"
 
 
 def rule_dangling(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
@@ -703,32 +743,55 @@ def _dangling_fix(report: ToolReport, name: str, source: str, home: Path) -> Fix
 
 def rule_duplicate_installs(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     """Several installs of one tool, where PATH order decides which runs."""
-    del ctx
     if len(report.binaries) < 2 or len({b.version for b in report.binaries}) < 2:
         return []
-    active, *shadowed = report.binaries
-    commands = []
-    for binary in shadowed:
-        package = _npm_package(binary.resolved)
-        if package:
-            commands.append(FixCommand(f"npm uninstall -g {_q(package)}"))
-        else:
-            commands.append(FixCommand(f"Remove {binary.path} ({binary.resolved})", manual=True))
+    first = report.binaries[0]
+    newest = max(report.binaries, key=lambda b: _version_key(b.version))
+    older = [b for b in report.binaries if _version_key(b.version) < _version_key(newest.version)]
+    running = {p.command.split()[0] for p in report.processes if p.command}
+    commands = [_remove_install(b) for b in older]
+    if first in older:
+        commands.append(
+            FixCommand(
+                f"Or put {Path(newest.path).parent} ahead of {Path(first.path).parent} on PATH",
+                manual=True,
+            )
+        )
+    copies = join(
+        [f"{b.version or 'unknown version'} at `{ctx.display(b.path)}`" for b in report.binaries]
+    )
+    statement = (
+        f"{len(report.binaries)} copies of {report.display_name} are installed: {copies}. "
+        f"A shell runs the first on PATH, {first.version or 'of unknown version'}"
+    )
+    statement += f", which is older than {newest.version}." if first in older else ", the newest."
     return [
         _exposure(
             report,
             "duplicate-installs",
             Lens.CODE,
-            f"{len(report.binaries)} copies of {report.display_name} are installed with different "
-            "versions. PATH order decides which runs; the stale copy gets no updates.",
+            statement,
             evidence=[
-                f"{'active' if b is active else 'shadowed'}: {b.path} → {b.resolved} "
+                f"{'first on PATH' if b is first else 'later on PATH'}: {b.path} → {b.resolved} "
                 f"v{b.version or '?'}"
+                + ("; a running process uses it" if b.resolved in running else "")
                 for b in report.binaries
             ],
-            fix=Fix("Remove the stale install", commands),
+            fix=Fix("Remove the older install", commands),
         )
     ]
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    """Numeric parts of a version for ordering; an unknown version sorts first."""
+    return tuple(int(part) for part in re.findall(r"\d+", version))
+
+
+def _remove_install(binary: BinaryInfo) -> FixCommand:
+    package = _npm_package(binary.resolved)
+    if package:
+        return FixCommand(f"npm uninstall -g {_q(package)}")
+    return FixCommand(f"Remove {binary.path} ({binary.resolved}) v{binary.version}", manual=True)
 
 
 def _npm_package(resolved: str) -> str:
@@ -810,8 +873,9 @@ def rule_open_server(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             report,
             "open-server",
             Lens.ACCOUNT,
-            f"The local {report.display_name} server accepts requests without a password, so "
-            "any local process or account can run prompts and tools as you.",
+            f"The local {report.display_name} server's own registration records no password, "
+            "so any local process or account that reaches its port can run prompts and tools "
+            "as you.",
             evidence=[f"{s.key}: {s.value}" for s in open_servers],
             fix=Fix("Stop the server", [FixCommand(f"kill {' '.join(pids) or '<pid>'}")]),
         )
@@ -1017,6 +1081,8 @@ def _needs_local_server(report: ToolReport, ctx: RuleContext) -> str:
     del ctx
     if any(s.key.startswith("local server") for s in report.settings):
         return ""
+    if any(s.key.startswith("listening server") for s in report.settings):
+        return "no registration on disk records the listening server's password"
     return f"this audit records no local server for {report.display_name}"
 
 
@@ -1070,7 +1136,7 @@ TOOL_RULES: tuple[Rule, ...] = (
         _needs_local_mcp,
     ),
     Rule("autostart", "No automatic code execution points", rule_autostart),
-    Rule("daemons", "No background process outlives its session", rule_daemons),
+    Rule("daemons", "No process outlives its session or accepts connections", rule_daemons),
     Rule("duplicate-installs", "One install per tool", rule_duplicate_installs),
     Rule(
         "creds-readable",
@@ -1099,7 +1165,7 @@ TOOL_RULES: tuple[Rule, ...] = (
     ),
     Rule(
         "account-signals",
-        "No local signs of use elsewhere",
+        "No paired devices or unused stored logins",
         rule_account_signals,
         _needs_signal_source,
     ),
