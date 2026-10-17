@@ -177,6 +177,8 @@ def _signature_answer(tool: ToolReport) -> Answer:
         return Answer(question, "No signature traits were found in the installed binary.")
     binary = tool.binaries[0] if tool.binaries else None
     text = "Each trait was found in the installed binary"
+    if binary and len(tool.versions()) > 1:
+        text = f"Each trait was found in the binary first on PATH ({binary.version})"
     if binary and binary.signer.startswith("unsigned"):
         text += ", which is not code-signed."
     elif binary and binary.signer == AD_HOC:
