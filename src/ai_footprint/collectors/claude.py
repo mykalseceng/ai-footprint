@@ -11,17 +11,20 @@ from ai_footprint.collectors.common import (
     Claim,
     Context,
     binary_info,
+    binary_path,
     confirmed_settings,
     describe_all,
+    endpoints,
     fingerprint_items,
     load_json,
-    mine_hosts,
-    mined_endpoints,
     presence,
+    shell_shortcuts,
+    value_or_unset,
 )
 from ai_footprint.fsinfo import mode_string, readable_by_others
-from ai_footprint.host import processes, sockets
+from ai_footprint.host import processes
 from ai_footprint.model import (
+    BARE_SECURITY,
     BinaryInfo,
     Category,
     Credential,
@@ -29,10 +32,12 @@ from ai_footprint.model import (
     Extension,
     ProgramStatus,
     Setting,
+    StoreKind,
     ToolPresence,
     ToolReport,
 )
 from ai_footprint.secrets import scan_paths
+from ai_footprint.surface import plural
 from ai_footprint.tokens import inspect_token
 
 NAME = "claude"
@@ -146,7 +151,7 @@ FINGERPRINT = (
     ),
     (
         "Keychain read",
-        'spawns "security" by bare name (PATH lookup)',
+        BARE_SECURITY,
         '"security",["find-generic-password"',
     ),
 )
@@ -166,6 +171,8 @@ SETTING_KEYS = (
 REVOKE_MARKERS = ("oauth_token_revoke", "continuing with local logout")
 OAUTH_URL = "https://platform.claude.com/v1/oauth/token"
 TRAINING_MARKERS = ("Help improve our AI models", "extends data retention from 30 days to 5 years")
+GROVE_NOTICE_MARKER = "Grove notice config"
+NATIVE_HOST = "com.anthropic.claude_code_browser_extension"
 LOG_MARKERS = {
     "invalid_grant": "refresh rejected (invalid_grant)",
     "Please run /login": "asked to log in again",
@@ -178,13 +185,19 @@ CLAIMS: tuple[Claim, ...] = (
     *(Claim("logout revokes the token", marker) for marker in REVOKE_MARKERS),
     Claim("OAuth token endpoint", OAUTH_URL),
     *(Claim("training setting wording", marker) for marker in TRAINING_MARKERS),
+    Claim("groveConfigCache holds the Grove notice config", GROVE_NOTICE_MARKER),
+    Claim("browser native host name", NATIVE_HOST),
     *(Claim(f"log marker {marker}", marker) for marker in LOG_MARKERS),
     Claim("refusal category in transcripts", "apiRefusalCategory"),
 )
 
 
-def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
+def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport, dict[str, Any]]:
     """Collect Claude Code's footprint.
+
+    Args:
+        ctx: Collection context.
+        found: This tool's presence when already detected, so binaries are probed once.
 
     Returns:
         The report and a private ``facts`` dict the rule engine uses (never rendered).
@@ -193,8 +206,9 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     home = ctx.home
     config = load_json(home / ".claude.json") or {}
     settings = load_json(home / ".claude" / "settings.json") or {}
-    report.binaries = _binaries(ctx)
-    report.installed = bool(report.binaries) or any(p.exists() for p in data_paths(ctx))
+    found = found or detect(ctx, sized=False)
+    report.binaries = found.binaries
+    report.installed = found.installed
     facts: dict[str, Any] = {"config": config, "settings": settings}
     if not report.installed:
         return report, facts
@@ -209,7 +223,7 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     report.instructions = instructions.collect(_instruction_candidates(home, config))
     report.extensions = _extensions(ctx, settings, config)
     report.endpoints = _endpoints(ctx, report)
-    binary = report.binaries[0].resolved if report.binaries else ""
+    binary = binary_path(report)
     version = report.binaries[0].version if report.binaries else "?"
     rows = [(label, value.format(version=version), marker) for label, value, marker in FINGERPRINT]
     report.fingerprint = fingerprint_items(ctx, binary, rows)
@@ -222,6 +236,7 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
             markers={"cyber": ("Cyber-safeguard refusals", CYBER_MARKER)},
             known=facts["fingerprints"],
             stores=[home / ".claude" / ".credentials.json"],
+            exclude=[home / ".claude" / "plugins"],
         )
     report.programs = [_cvp_status(report)]
     return report, facts
@@ -232,9 +247,9 @@ def data_paths(ctx: Context) -> list[Path]:
     return [ctx.home / ".claude", ctx.home / ".claude.json"]
 
 
-def detect(ctx: Context) -> ToolPresence:
+def detect(ctx: Context, *, sized: bool = True) -> ToolPresence:
     """Is Claude Code installed, and where?"""
-    return presence(NAME, DISPLAY, _binaries(ctx), data_paths(ctx))
+    return presence(NAME, DISPLAY, _binaries(ctx), data_paths(ctx), sized=sized)
 
 
 def _binaries(ctx: Context) -> list[BinaryInfo]:
@@ -263,7 +278,7 @@ def _credentials(
     if file_path.is_file():
         data = load_json(file_path) or {}
         cred = _oauth_credential(
-            ctx, data, store="plaintext file", location=str(file_path), fingerprints=fingerprints
+            ctx, data, store=StoreKind.FILE, location=str(file_path), fingerprints=fingerprints
         )
         cred.readable_by_others = readable_by_others(file_path)
         cred.protection = f"file mode {mode_string(file_path.stat().st_mode)}"
@@ -278,7 +293,7 @@ def _set_owner(creds: list[Credential], config: dict[str, Any]) -> None:
     if not isinstance(email, str) or not email:
         return
     for cred in creds:
-        if cred.store != "environment variable":
+        if cred.store is not StoreKind.ENV:
             cred.owner = email
             cred.owner_source = "~/.claude.json oauthAccount.emailAddress"
 
@@ -297,7 +312,7 @@ def _keychain_credential(
     cred = _oauth_credential(
         ctx,
         data,
-        store="macOS Keychain",
+        store=StoreKind.KEYCHAIN,
         location=f"{item.keychain} · service '{KEYCHAIN_SERVICE}'",
         fingerprints=fingerprints,
     )
@@ -310,6 +325,8 @@ def _keychain_credential(
             else ""
         )
     )
+    cred.keychain_written = item.modified
+    cred.silent_read_seconds = read.seconds if read.silent else None
     access = data.get("claudeAiOauth", {}).get("accessToken")
     if ctx.live and isinstance(access, str):
         try:
@@ -320,7 +337,12 @@ def _keychain_credential(
 
 
 def _oauth_credential(
-    ctx: Context, data: dict[str, Any], *, store: str, location: str, fingerprints: dict[str, str]
+    ctx: Context,
+    data: dict[str, Any],
+    *,
+    store: StoreKind,
+    location: str,
+    fingerprints: dict[str, str],
 ) -> Credential:
     oauth = data.get("claudeAiOauth", {}) if isinstance(data, dict) else {}
     cred = Credential(
@@ -356,7 +378,7 @@ def _env_credentials(ctx: Context, fingerprints: dict[str, str]) -> list[Credent
             Credential(
                 tool=NAME,
                 provider="Anthropic",
-                store="environment variable",
+                store=StoreKind.ENV,
                 location=f"${var}",
                 protection="inherited by every child process",
                 tokens=[info],
@@ -374,7 +396,7 @@ def _settings(
         (
             Setting(
                 "permissions.defaultMode",
-                _value(perms, "defaultMode"),
+                value_or_unset(perms, "defaultMode"),
                 f"{BYPASS_MODE} runs every tool without asking",
                 concern=perms.get("defaultMode") == BYPASS_MODE,
             ),
@@ -383,7 +405,7 @@ def _settings(
         (
             Setting(
                 "skipDangerousModePermissionPrompt",
-                _value(settings, "skipDangerousModePermissionPrompt"),
+                value_or_unset(settings, "skipDangerousModePermissionPrompt"),
                 "Skips the confirmation shown before --dangerously-skip-permissions",
                 concern=bool(settings.get("skipDangerousModePermissionPrompt")),
             ),
@@ -392,7 +414,7 @@ def _settings(
         (
             Setting(
                 "permissions.disableBypassPermissionsMode",
-                _value(perms, "disableBypassPermissionsMode"),
+                value_or_unset(perms, "disableBypassPermissionsMode"),
                 "'disable' blocks bypass mode",
             ),
             "disableBypassPermissionsMode",
@@ -408,7 +430,7 @@ def _settings(
         (
             Setting(
                 "enableAllProjectMcpServers",
-                _value(settings, "enableAllProjectMcpServers"),
+                value_or_unset(settings, "enableAllProjectMcpServers"),
                 "true starts MCP servers from any repo's .mcp.json without asking",
                 concern=bool(settings.get("enableAllProjectMcpServers")),
             ),
@@ -417,7 +439,7 @@ def _settings(
         (
             Setting(
                 "cleanupPeriodDays",
-                _value(settings, "cleanupPeriodDays"),
+                value_or_unset(settings, "cleanupPeriodDays"),
                 "Days transcripts are kept",
                 concern=isinstance(cleanup, int) and cleanup > 30,
             ),
@@ -427,12 +449,8 @@ def _settings(
     rows += _settings_env(settings)
     rows += _settings_account(config)
     rows += [(setting, "") for setting in _bypass_evidence(ctx, report)]
-    binary = report.binaries[0].resolved if report.binaries else ""
+    binary = binary_path(report)
     return confirmed_settings(ctx, binary, rows)
-
-
-def _value(mapping: dict[str, Any], key: str) -> str:
-    return str(mapping[key]) if key in mapping else "not set"
 
 
 def _settings_env(settings: dict[str, Any]) -> list[tuple[Setting, str]]:
@@ -443,7 +461,12 @@ def _settings_env(settings: dict[str, Any]) -> list[tuple[Setting, str]]:
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
     )
     return [
-        (Setting(f"env.{flag}", _value(env, flag), "Turns off a class of outbound traffic"), flag)
+        (
+            Setting(
+                f"env.{flag}", value_or_unset(env, flag), "Turns off a class of outbound traffic"
+            ),
+            flag,
+        )
         for flag in flags
     ]
 
@@ -474,7 +497,7 @@ def _settings_account(config: dict[str, Any]) -> list[tuple[Setting, str]]:
         (
             Setting(
                 "claudeInChromeDefaultEnabled",
-                _value(config, "claudeInChromeDefaultEnabled"),
+                value_or_unset(config, "claudeInChromeDefaultEnabled"),
                 "Claude in Chrome enabled by default",
                 concern=bool(config.get("claudeInChromeDefaultEnabled")),
             ),
@@ -495,21 +518,7 @@ def _bypass_evidence(ctx: Context, report: ToolReport) -> list[Setting]:
                 concern=True,
             )
         )
-    for rc in (".zshrc", ".bashrc", ".bash_profile", ".zprofile", ".config/fish/config.fish"):
-        path = ctx.home / rc
-        if not path.is_file():
-            continue
-        for number, line in enumerate(path.read_text(errors="replace").splitlines(), start=1):
-            if "dangerously-skip-permissions" in line and not line.lstrip().startswith("#"):
-                out.append(
-                    Setting(
-                        f"~/{rc}:{number}",
-                        line.strip()[:120],
-                        "Shell shortcut that launches bypass mode",
-                        concern=True,
-                    )
-                )
-    return out
+    return out + shell_shortcuts(ctx, "--dangerously-skip-permissions")
 
 
 def _instruction_candidates(home: Path, config: dict[str, Any]) -> list[instructions.Candidate]:
@@ -620,7 +629,9 @@ def _plugin_extensions(ctx: Context, settings: dict[str, Any]) -> list[Extension
         origin = source.get("repo") or source.get("path") or market
         entries = installed.get(plugin_id) or [{}]
         install = Path(entries[-1].get("installPath", "")) if entries[-1] else None
-        description, components = extensions.plugin_manifest(install) if install else ("", "")
+        description, components = (
+            extensions.plugin_manifest(install) if install else (extensions.NO_MANIFEST, "")
+        )
         out.append(
             Extension(
                 NAME,
@@ -631,7 +642,7 @@ def _plugin_extensions(ctx: Context, settings: dict[str, Any]) -> list[Extension
                 notes="Directory marketplace (local path)"
                 if source.get("source") == "directory"
                 else "",
-                description=description or extensions.NO_MANIFEST,
+                description=description,
                 access=components,
                 identity=str(install) if install else plugin_id,
             )
@@ -653,7 +664,7 @@ def _chrome_extensions(ctx: Context, config: dict[str, Any]) -> list[Extension]:
         ctx.home / ".config/google-chrome/NativeMessagingHosts",
     )
     for hosts in hosts_dirs:
-        for manifest in sorted(hosts.glob("com.anthropic.*.json")) if hosts.is_dir() else []:
+        for manifest in sorted(hosts.glob(f"{NATIVE_HOST}*.json")) if hosts.is_dir() else []:
             data = load_json(manifest) or {}
             out.append(
                 Extension(
@@ -663,8 +674,8 @@ def _chrome_extensions(ctx: Context, config: dict[str, Any]) -> list[Extension]:
                     ctx.display(str(hosts)),
                     f"{data.get('path', '?')} · origins "
                     f"{', '.join(data.get('allowed_origins', []))}",
-                    autostart=True,
-                    notes="Chrome launches this program"
+                    autostart=False,
+                    notes="Chrome launches this program when the extension connects"
                     + (
                         "; claudeInChromeDefaultEnabled is true"
                         if config.get("claudeInChromeDefaultEnabled")
@@ -677,24 +688,8 @@ def _chrome_extensions(ctx: Context, config: dict[str, Any]) -> list[Extension]:
 
 
 def _endpoints(ctx: Context, report: ToolReport) -> list[Endpoint]:
-    binary = report.binaries[0].resolved if report.binaries else ""
-    markers = {host: ENDPOINT_MARKERS.get(host, host) for host in ENDPOINTS}
-    in_binary = ctx.binary_has(binary, list(markers.values())) if binary else {}
-    out = [
-        Endpoint(NAME, host, purpose, "binary")
-        for host, purpose in ENDPOINTS.items()
-        if in_binary.get(markers[host])
-    ]
-    counts = mine_hosts(
-        [ctx.home / ".claude" / "debug", ctx.home / "Library/Caches/claude-cli-nodejs"]
-    )
-    out += mined_endpoints(NAME, counts, ENDPOINTS)
-    for sock in sockets(ctx.system, [p.pid for p in report.processes]):
-        if sock.remote:
-            out.append(
-                Endpoint(NAME, sock.remote, f"open socket from pid {sock.pid}", "live-socket", 1)
-            )
-    return out
+    logs = [ctx.home / ".claude" / "debug", ctx.home / "Library/Caches/claude-cli-nodejs"]
+    return endpoints(ctx, report, ENDPOINTS, logs, markers=ENDPOINT_MARKERS)
 
 
 def _stats(ctx: Context, config: dict[str, Any]) -> dict[str, str]:
@@ -734,15 +729,14 @@ def _cvp_status(report: ToolReport) -> ProgramStatus:
     if hit is None:
         return ProgramStatus(
             "Anthropic Cyber Verification Program",
-            "no cyber-safeguard refusals in transcripts",
+            "no refusal marker in Claude Code data",
             ["Enrollment is not recorded locally"],
         )
     return ProgramStatus(
         "Anthropic Cyber Verification Program",
-        "cyber-safeguard refusals in transcripts",
+        "refusal marker found in Claude Code data",
         [
-            f'{hit.count} API responses carried apiRefusalCategory "cyber" across '
-            f"{hit.file_count} transcript(s)",
-            "Enrollment is not recorded locally",
+            f'The marker apiRefusalCategory "cyber" appears {plural(hit.count, "time")} in '
+            f"{plural(hit.file_count, 'file')}; enrollment is not recorded locally",
         ],
     )

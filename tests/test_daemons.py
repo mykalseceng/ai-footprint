@@ -91,7 +91,7 @@ def test_daemons_are_detached_or_listening_processes_with_observed_notes(tmp_pat
         "runs /Users/me/.codex/packages/app-server-daemon/releases/0.162.0-aarch64-apple-darwin/"
         "bin/codex, not the binary on PATH"
     ]
-    assert "version 0.161.0 (installed is 0.162.0)" in updater.notes
+    assert "version 0.161.0 (installed: 0.162.0)" in updater.notes
     assert "self-update loop" in updater.notes
 
 
@@ -108,6 +108,7 @@ def test_rule_names_each_daemon_and_offers_validated_codex_fixes(tmp_path: Path)
             days=3,
             listeners=[Listener("unix", "/tmp/codex-daemon-501/abcdefghijklmnopqrstuvwxyz", "600")],
             notes=["runs /x/bin/codex, not the binary on PATH"],
+            off_path=True,
         ),
         Daemon(
             pid=7,
@@ -122,7 +123,8 @@ def test_rule_names_each_daemon_and_offers_validated_codex_fixes(tmp_path: Path)
     ctx = rules.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
     [found] = rules.rule_daemons(report, ctx)
     assert found.statement == (
-        "Codex CLI keeps 1 background process running outside any session: pid 47165 "
+        "Codex CLI keeps 1 background process running outside any session (started by "
+        "launchd): pid 47165 "
         "`app-server --listen unix:// --managed-daemon` (3 days, launchd; unix "
         "/tmp/codex-daemon-501/abcdefghijkl… mode 600; binary /x/bin/codex, not the one on PATH)."
     )
@@ -131,6 +133,35 @@ def test_rule_names_each_daemon_and_offers_validated_codex_fixes(tmp_path: Path)
         "codex app-server daemon stop",
         "pkill -f 'app-server daemon pid-update-loop'",
         "codex features disable daemon_auto_start",
+    ]
+
+
+def test_a_session_child_that_listens_is_named_with_its_session_and_never_killed(
+    tmp_path: Path,
+):
+    report = ToolReport(name="opencode", display_name="OpenCode", installed=True)
+    report.daemons = [
+        Daemon(
+            pid=50615,
+            ppid=50614,
+            started="Fri Oct 16 14:37:00 2026",
+            command="/x/opencode.exe serve --service",
+            binary="/x/opencode.exe",
+            detached=False,
+            days=0,
+            listeners=[Listener("tcp", "127.0.0.1:49374")],
+        )
+    ]
+    ctx = rules.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
+    [found] = rules.rule_daemons(report, ctx)
+    assert found.statement == (
+        "OpenCode sessions accept connections: pid 50615 `serve --service`, started by "
+        "session pid 50614, on tcp 127.0.0.1:49374."
+    )
+    assert "outside any session" not in found.statement
+    assert found.fix is not None
+    assert [c.text for c in found.fix.commands] == [
+        "Stop pid 50615 (started by session pid 50614) when you no longer need it"
     ]
 
 

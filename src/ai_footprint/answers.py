@@ -9,8 +9,9 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from ai_footprint import daemons
-from ai_footprint.fsinfo import human_size
-from ai_footprint.model import Artifact, Category, TokenInfo, ToolReport
+from ai_footprint.collectors.common import AD_HOC
+from ai_footprint.fsinfo import human_size, tilde
+from ai_footprint.model import Artifact, Category, HostReport, TokenInfo, ToolReport
 from ai_footprint.surface import plural, sentences, when
 
 EVIDENCE = {
@@ -33,34 +34,36 @@ class Answer:
     links: list[tuple[str, str]] = field(default_factory=list)
 
 
-def _tilde(path: str, home: str) -> str:
-    return path.replace(home, "~", 1)
-
-
 def _file_rows(artifacts: list[Artifact], home: str) -> list[list[str]]:
     ranked = sorted(artifacts, key=lambda a: a.size_bytes, reverse=True)
     return [
         [
-            f"`{_tilde(a.path, home)}`",
+            f"`{tilde(a.path, home)}`",
             human_size(a.size_bytes),
             f"{a.file_count:,}" if a.is_dir else "",
-            a.oldest,
+            _modified(a),
         ]
         for a in ranked
     ]
 
 
+def _modified(artifact: Artifact) -> str:
+    if artifact.oldest == artifact.newest:
+        return artifact.newest
+    return f"{artifact.oldest} to {artifact.newest}"
+
+
 def _files_answer(question: str, artifacts: list[Artifact], home: str) -> Answer:
     if not artifacts:
         return Answer(question, "None found.")
-    return Answer(question, "", ("Path", "Size", "Files", "Since"), _file_rows(artifacts, home))
+    return Answer(question, "", ("Path", "Size", "Files", "Modified"), _file_rows(artifacts, home))
 
 
 def _store_answer(tool: ToolReport, home: str) -> Answer:
     question = "Where is my auth token stored?"
     if not tool.credentials:
         return Answer(question, "No stored credentials were found.")
-    silent = any("without a prompt" in c.protection for c in tool.credentials)
+    silent = any(c.silent_read_seconds is not None for c in tool.credentials)
     return Answer(
         question,
         "This audit read the Keychain item without a prompt." if silent else "",
@@ -69,7 +72,7 @@ def _store_answer(tool: ToolReport, home: str) -> Answer:
             [
                 c.provider,
                 c.store,
-                f"`{_tilde(c.location, home)}`",
+                f"`{tilde(c.location, home)}`",
                 "yes" if c.readable_by_others else "no",
             ]
             for c in tool.credentials
@@ -110,31 +113,62 @@ def _expiry_answer(tool: ToolReport) -> Answer:
     )
 
 
-def _readers_answer(tool: ToolReport, home: str) -> Answer:
+def _readers(artifact: Artifact) -> str:
+    if artifact.other_readable:
+        who, files = "any account", artifact.other_readable_files
+    elif artifact.group_readable:
+        who, files = f"group `{artifact.group_readable}`", artifact.group_readable_files
+    else:
+        return ""
+    if not artifact.is_dir:
+        return who
+    if not files:
+        return f"{who}: file names only"
+    return f"{who}: {files:,} of {artifact.file_count:,} files"
+
+
+def _readers_answer(tool: ToolReport, host: HostReport) -> Answer:
     question = "Who can read these files?"
-    exposed = [a for a in tool.artifacts if a.other_readable]
+    accounts = (
+        f"the other local accounts are {', '.join(host.other_users)}"
+        if host.other_users
+        else "no other local account exists today"
+    )
+    exposed = [a for a in tool.artifacts if _readers(a)]
     creds = [c for c in tool.credentials if c.readable_by_others]
     if not exposed and not creds:
-        return Answer(question, "Only your account; nothing it writes is readable by others.")
-    text = f"{plural(len(exposed), 'location')} are readable by other local accounts"
-    text += f", including {plural(len(creds), 'credential store')}." if creds else "."
+        return Answer(
+            question,
+            f"No location it writes grants read access beyond your account, and {accounts}.",
+        )
+    stores = f", including {plural(len(creds), 'credential store')}," if creds else ""
     return Answer(
         question,
-        text,
-        ("Path", "Mode"),
-        [[f"`{_tilde(a.path, home)}`", a.mode] for a in exposed],
+        f"{plural(len(exposed), 'location')}{stores} grant read access beyond your account, "
+        f"and {accounts}.",
+        ("Path", "Mode", "Readable by"),
+        [[f"`{tilde(a.path, host.home)}`", a.mode, _readers(a)] for a in exposed],
     )
 
 
 def _connections_answer(tool: ToolReport) -> Answer:
-    question = "Where has it connected?"
+    question = "Which hosts does it name or connect to?"
     if not tool.endpoints:
         return Answer(question, "No endpoints recorded.")
+    counts: Counter[tuple[str, str]] = Counter()
+    for x in tool.endpoints:
+        counts[(x.host, x.source)] += x.count
     rows = [
-        [x.host, EVIDENCE.get(x.source, x.source), f"{x.count:,}" if x.count else ""]
-        for x in tool.endpoints
+        [host, EVIDENCE.get(source, source), f"{count:,}" if count else ""]
+        for (host, source), count in counts.items()
     ]
-    return Answer(question, "", ("Host", "Evidence", "Mentions"), rows)
+    return Answer(
+        question,
+        "Only rows marked open now are connections; the rest are names found in the binary, "
+        "the config or local logs (counted over at most the first 256 MB of logs).",
+        ("Host", "Evidence", "Count"),
+        rows,
+    )
 
 
 def _signature_answer(tool: ToolReport) -> Answer:
@@ -143,8 +177,12 @@ def _signature_answer(tool: ToolReport) -> Answer:
         return Answer(question, "No signature traits were found in the installed binary.")
     binary = tool.binaries[0] if tool.binaries else None
     text = "Each trait was found in the installed binary"
+    if binary and len(tool.versions()) > 1:
+        text = f"Each trait was found in the binary first on PATH ({binary.version})"
     if binary and binary.signer.startswith("unsigned"):
         text += ", which is not code-signed."
+    elif binary and binary.signer == AD_HOC:
+        text += ", which is ad-hoc signed, with no signing identity."
     elif binary and binary.signer:
         text += f", which is signed by {binary.signer}."
     else:
@@ -160,7 +198,7 @@ def _instructions_answer(tool: ToolReport, home: str) -> Answer:
         return Answer(question, "None found in the global location or in known project folders.")
     rows = [
         [
-            f"`{_tilde(i.path, home)}`",
+            f"`{tilde(i.path, home)}`",
             i.scope,
             ", ".join(i.loaded_by),
             "; ".join(i.markers) or "nothing flagged",
@@ -186,7 +224,7 @@ def _extensions_answer(tool: ToolReport) -> Answer:
 
 
 def _daemons_answer(tool: ToolReport, home: str) -> Answer:
-    question = "What does it keep running in the background?"
+    question = "Which of its processes run detached or accept connections?"
     if not tool.daemons:
         return Answer(question, "No process of this tool is detached from a session or listening.")
     rows = []
@@ -212,7 +250,7 @@ def _program_answer(tool: ToolReport) -> Answer:
         question,
         "",
         ("Program", "Status", "Evidence"),
-        [[p.name, p.status, p.evidence[0]] for p in tool.programs],
+        [[p.name, p.status, "; ".join(p.evidence)] for p in tool.programs],
     )
 
 
@@ -232,7 +270,7 @@ def _trust_answer(tool: ToolReport, home: str) -> Answer:
         question,
         f"{plural(count, 'folder')} {'is' if count == 1 else 'are'} trusted.",
         ("Trusted folder",),
-        [[f"`{_tilde(f, home)}`"] for f in tool.trusted_folders],
+        [[f"`{tilde(f, home)}`"] for f in tool.trusted_folders],
     )
 
 
@@ -242,22 +280,21 @@ def _dated(answer: Answer) -> Answer:
     return answer
 
 
-def for_tool(tool: ToolReport, home: str) -> list[Answer]:
+def for_tool(tool: ToolReport, host: HostReport) -> list[Answer]:
     """Answers for one tool, in the order a defender asks the questions."""
+    return [_dated(answer) for answer in _answers(tool, host)]
+
+
+def _answers(tool: ToolReport, host: HostReport) -> list[Answer]:
+    home = host.home
     logs = [a for a in tool.artifacts if a.category is Category.LOG]
     sessions = [a for a in tool.artifacts if a.category is Category.SESSION]
-    return [_dated(answer) for answer in _answers(tool, home, logs, sessions)]
-
-
-def _answers(
-    tool: ToolReport, home: str, logs: list[Artifact], sessions: list[Artifact]
-) -> list[Answer]:
     return [
         _files_answer("Where are the log files?", logs, home),
         _files_answer("Where are my sessions stored?", sessions, home),
         _store_answer(tool, home),
         _expiry_answer(tool),
-        _readers_answer(tool, home),
+        _readers_answer(tool, host),
         _connections_answer(tool),
         _signature_answer(tool),
         _instructions_answer(tool, home),
@@ -305,7 +342,12 @@ HOST_QUESTIONS = (
         "host:backups",
         "Time Machine is not available, so no backup copies were checked.",
     ),
-    ("unattended", "What runs when I'm not there?", "host:unattended", "Nothing found."),
+    (
+        "unattended",
+        "What runs when I'm not there?",
+        "host:unattended",
+        "No orphaned MCP servers, AI-tool processes running a day or more, or AI login items.",
+    ),
     (
         "other-tools",
         "What about AI tools this audit doesn't cover?",

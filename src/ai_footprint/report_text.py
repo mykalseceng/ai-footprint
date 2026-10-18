@@ -7,7 +7,7 @@ from collections import Counter
 from collections.abc import Iterable
 
 from ai_footprint import reportcheck, surface
-from ai_footprint.fsinfo import human_size
+from ai_footprint.fsinfo import disk_bytes, human_size, outermost, tilde
 from ai_footprint.model import AuditReport, CommandValidation, Fix, ToolPresence
 from ai_footprint.rules import Check
 
@@ -146,7 +146,7 @@ def _validation_summary(audit: AuditReport, style: Style) -> list[str]:
         "(syntax, programs, targets, subcommands, config keys)",
         f"Tool claims:    {sum(c.passed for c in claims)}/{len(claims)} found in the installed "
         "binaries (endpoints, signature traits, config keys, log and behaviour markers)",
-        f"Commands run by this audit: {len(audit.executed)} (all read-only)",
+        f"Commands run by this audit: {len(audit.executed)} (probes and --version/--help runs)",
     ]
     for v in bad_probes + bad_cmds + bad_claims:
         failed = "; ".join(f"{c.name}: {c.detail}" for c in v.checks if not c.passed)
@@ -165,7 +165,7 @@ def render_summary(audit: AuditReport, style: Style, outputs: list[tuple[str, st
         if not tool.installed:
             out.append(f"  {tool.display_name:<12} not installed")
             continue
-        version = tool.binaries[0].version if tool.binaries else "?"
+        version = surface.join(tool.versions()) or "?"
         scan = tool.secret_scan
         scanned = (
             f"scanned {scan.files_scanned:,} files / {human_size(scan.bytes_scanned)} in "
@@ -173,8 +173,12 @@ def render_summary(audit: AuditReport, style: Style, outputs: list[tuple[str, st
             if scan
             else "not scanned"
         )
-        size = human_size(sum(a.size_bytes for a in tool.artifacts))
-        out.append(f"  {tool.display_name:<12} v{version:<10} {size:>9} on disk · {scanned}")
+        listed = sum(1 for a in outermost(tool.artifacts) if a.exists)
+        size = human_size(disk_bytes(tool.artifacts))
+        out.append(
+            f"  {tool.display_name:<12} v{version:<10} {size:>9} in "
+            f"{surface.plural(listed, 'listed location')} · {scanned}"
+        )
     out.append("")
     out.extend(render_narrative(audit, style))
     out.extend([*_validation_summary(audit, style), ""])
@@ -263,14 +267,12 @@ def render_list(presences: list[ToolPresence], style: Style, *, home: str) -> st
             shadow = "" if binary is tool.binaries[0] else style("  (shadowed on PATH)", "dim")
             out.append(
                 style(
-                    f"      binary  {binary.path.replace(home, '~', 1)} v{binary.version or '?'}",
+                    f"      binary  {tilde(binary.path, home)} v{binary.version or '?'}",
                     "dim",
                 )
                 + shadow
             )
-        out.extend(
-            style(f"      data    {path.replace(home, '~', 1)}", "dim") for path in tool.data_paths
-        )
+        out.extend(style(f"      data    {tilde(path, home)}", "dim") for path in tool.data_paths)
     installed = [t.name for t in presences if t.installed]
     out.append("")
     if installed:

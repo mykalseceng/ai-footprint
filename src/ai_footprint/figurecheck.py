@@ -19,7 +19,7 @@ from ai_footprint.model import CheckResult, CommandValidation
 Doc = dict[str, Any]
 SESSION, BINARY = "session", "binary"
 TOOL_RUNS = {"Confirm tool version", "Confirm subcommand exists"}
-_HELD = re.compile(r"holding ([\d,]+) (?:distinct secrets|secret values)")
+_HELD = re.compile(r"holding ([\d,]+) (?:distinct )?secret-shaped values")
 
 
 def _installed(doc: Doc) -> list[Doc]:
@@ -60,10 +60,17 @@ def _secret_total(tools: list[Doc]) -> int | None:
 def _approval(tool: Doc) -> str:
     if any(x["id"] == f"{tool['name']}:no-approval" for x in tool["exposures"]):
         return "found"
-    keys = set(rules.NO_APPROVAL) | {rules.RUNNING_BYPASS}
-    if any(s["key"] in keys for s in tool["settings"]):
+    if any(s["key"] in rules.APPROVAL_KEYS for s in tool["settings"]):
         return "not found"
     return "not checked"
+
+
+def _network_hosts(doc: Doc, tool: Doc) -> int | str:
+    capture = doc.get("network") or {}
+    found = [t for t in capture.get("tools", []) if t["tool"] == tool["name"]]
+    if not found:
+        return "not captured"
+    return len({c["host"] for c in found[0]["connections"]})
 
 
 def _compare(figure: Doc | None, expected: object, show: Callable[[Any], str]) -> CheckResult:
@@ -114,6 +121,7 @@ def _tool(doc: Doc, tool: Doc) -> CommandValidation:
         _compare(shown.get("signals"), len(tool["exposures"]), str),
         _compare(shown.get("secrets"), _secret_total([tool]), lambda n: f"{n:,}"),
         _compare(shown.get("approval"), _approval(tool), str),
+        _compare(shown.get("network"), _network_hosts(doc, tool), str),
     ]
     return CommandValidation(f"figures on tool-{tool['name']}", checks)
 
@@ -277,7 +285,7 @@ def _headlines(doc: Doc) -> CommandValidation:
 
 
 def _key_type(tokens: list[Doc]) -> str:
-    """Classify a credential entry with separate rules from keys.kind_of."""
+    """Classify a credential entry with separate rules from tokens.kind_of."""
     names = [t["field"].lower() for t in tokens]
     kinds = [t["kind"] for t in tokens]
     api_kind = any(

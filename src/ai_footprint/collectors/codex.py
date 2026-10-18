@@ -1,9 +1,11 @@
 """OpenAI Codex CLI (``codex``) footprint collector."""
 
+import json
 import re
 import sqlite3
+from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from ai_footprint import extensions, instructions, live
 from ai_footprint.collectors.common import (
@@ -11,31 +13,36 @@ from ai_footprint.collectors.common import (
     Claim,
     Context,
     binary_info,
+    binary_path,
     confirmed_settings,
     describe_all,
+    endpoints,
     fingerprint_items,
     load_json,
     load_toml,
-    mine_hosts,
-    mined_endpoints,
     presence,
+    shell_shortcuts,
+    value_or_unset,
 )
 from ai_footprint.fsinfo import mode_string, readable_by_others
-from ai_footprint.host import processes, sockets
+from ai_footprint.host import processes
 from ai_footprint.model import (
     BinaryInfo,
     Category,
     Credential,
     Endpoint,
     Extension,
+    ProcessInfo,
     ProgramStatus,
     Setting,
+    StoreKind,
     ToolPresence,
     ToolReport,
 )
+from ai_footprint.rules import THREADS_WITHOUT_APPROVAL
 from ai_footprint.secrets import scan_paths
-from ai_footprint.surface import when
-from ai_footprint.tokens import inspect_token, verify_rs256
+from ai_footprint.surface import plural, when
+from ai_footprint.tokens import inspect_token, iso_time, verify_rs256
 
 NAME = "codex"
 DISPLAY = "Codex CLI"
@@ -125,6 +132,12 @@ SETTING_KEYS = (
 DAEMON_MARKERS = ("managed-daemon", "pid-update-loop", "daemon stop")
 REVOKE_MARKERS = ("auth/revoke.rs", "failed to revoke auth tokens during logout")
 REMOTE_REVOKE_MARKER = "remoteControl/client/revoke"
+LOG_MARKERS = {
+    "Your access token could not be refreshed": "token refresh failed",
+    "invalid_grant": "refresh rejected (invalid_grant)",
+}
+NEVER = "never"
+BYPASS_FLAG = "--dangerously-bypass-approvals-and-sandbox"
 CLAIMS: tuple[Claim, ...] = (
     *(Claim(f"endpoint {host}", host) for host in ENDPOINTS),
     *(Claim(f"signature: {label}", marker) for label, _value, marker in FINGERPRINT),
@@ -132,14 +145,31 @@ CLAIMS: tuple[Claim, ...] = (
     *(Claim("logout revokes tokens", marker) for marker in REVOKE_MARKERS),
     Claim("remote-control device revocation", REMOTE_REVOKE_MARKER),
     *(Claim("app-server daemon", marker) for marker in DAEMON_MARKERS),
-    Claim("approval_policy value", "never"),
+    *(Claim(f"log marker {marker}", marker) for marker in LOG_MARKERS),
+    Claim("approval_policy value", NEVER),
     Claim("sandbox_mode value", "danger-full-access"),
+    Claim("flag that turns off approval and sandbox", BYPASS_FLAG.removeprefix("--")),
     Claim("command rule format", 'decision="allow"'),
 )
+OTHER_APP_BUNDLE = ".app/Contents/"
+"""Path fragment of a codex binary shipped inside another app (the ChatGPT desktop app)."""
 
 
-def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
+class RemoteEnrollment(NamedTuple):
+    """One remote-control enrollment row from the state DB."""
+
+    client: str
+    server: str
+    enabled: bool
+    updated: str
+
+
+def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport, dict[str, Any]]:
     """Collect Codex CLI's footprint.
+
+    Args:
+        ctx: Collection context.
+        found: This tool's presence when already detected, so binaries are probed once.
 
     Returns:
         The report and private facts for the rule engine.
@@ -147,22 +177,27 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
     report = ToolReport(name=NAME, display_name=DISPLAY)
     root = home_dir(ctx)
     config = load_toml(root / "config.toml") or {}
-    report.binaries = _binaries(ctx)
-    report.installed = bool(report.binaries) or root.is_dir()
+    found = found or detect(ctx, sized=False)
+    report.binaries = found.binaries
+    report.installed = found.installed
     facts: dict[str, Any] = {"config": config, "root": root}
     if not report.installed:
         return report, facts
     report.artifacts = describe_all(root, ARTIFACTS)
     report.credentials, facts["fingerprints"] = _credentials(ctx, root, config)
-    report.processes = processes(ctx.system, r"(^|/)codex(\s|$)|codex-darwin|CodexCLI")
-    report.settings = _settings(ctx, config, root, _vendor_binary(report.binaries))
+    report.processes = _cli_processes(processes(ctx.system, r"(^|/)codex(\s|$)|codex-darwin"))
+    report.settings = _settings(ctx, config, root, binary_path(report))
+    report.settings += shell_shortcuts(ctx, BYPASS_FLAG)
+    threads = thread_approval(root)
+    if threads is not None:
+        report.settings.append(threads)
     report.trusted_folders = [
         p for p, v in config.get("projects", {}).items() if v.get("trust_level") == "trusted"
     ]
     report.instructions = instructions.collect(_instruction_candidates(root, config))
     report.extensions = _extensions(ctx, root, config)
     report.endpoints = _endpoints(ctx, root, report)
-    binary = _vendor_binary(report.binaries)
+    binary = binary_path(report)
     version = report.binaries[0].version if report.binaries else "?"
     rows = [(label, value.format(version=version), marker) for label, value, marker in FINGERPRINT]
     report.fingerprint = fingerprint_items(ctx, binary, rows)
@@ -174,6 +209,7 @@ def collect(ctx: Context) -> tuple[ToolReport, dict[str, Any]]:
             display=ctx.display,
             known=facts["fingerprints"],
             stores=[root / "auth.json"],
+            exclude=[root / "packages", root / "plugins"],
         )
     report.programs = [_tac_status(report)]
     return report, facts
@@ -184,9 +220,9 @@ def home_dir(ctx: Context) -> Path:
     return Path(ctx.system.env.get("CODEX_HOME") or ctx.home / ".codex")
 
 
-def detect(ctx: Context) -> ToolPresence:
+def detect(ctx: Context, *, sized: bool = True) -> ToolPresence:
     """Is Codex CLI installed, and where?"""
-    return presence(NAME, DISPLAY, _binaries(ctx), [home_dir(ctx)])
+    return presence(NAME, DISPLAY, _binaries(ctx), [home_dir(ctx)], sized=sized)
 
 
 def _binaries(ctx: Context) -> list[BinaryInfo]:
@@ -215,8 +251,9 @@ def _find_vendor(script: Path) -> Path | None:
     return None
 
 
-def _vendor_binary(binaries: list[BinaryInfo]) -> str:
-    return binaries[0].resolved if binaries else ""
+def _cli_processes(found: list[ProcessInfo]) -> list[ProcessInfo]:
+    """Drop codex processes run from inside another app's bundle; they are not Codex CLI."""
+    return [p for p in found if OTHER_APP_BUNDLE not in p.command]
 
 
 def _credentials(
@@ -237,7 +274,7 @@ def _credentials(
                 Credential(
                     NAME,
                     "OpenAI",
-                    "environment variable",
+                    StoreKind.ENV,
                     f"${var}",
                     "inherited by every child process",
                     tokens=[info],
@@ -254,7 +291,7 @@ def _auth_file_credential(
     cred = Credential(
         NAME,
         "OpenAI",
-        "plaintext file",
+        StoreKind.FILE,
         str(path),
         f"file mode {mode_string(path.stat().st_mode)}; credential store setting: {store}; "
         f"auth mode {data.get('auth_mode', '?')}; "
@@ -303,22 +340,22 @@ def _settings(ctx: Context, config: dict[str, Any], root: Path, binary: str) -> 
         (
             Setting(
                 "approval_policy",
-                _value(config, "approval_policy"),
+                value_or_unset(config, "approval_policy"),
                 "'never' runs every command without asking",
-                concern=config.get("approval_policy") == "never",
+                concern=config.get("approval_policy") == NEVER,
             ),
             "approval_policy",
         ),
         (
             Setting(
                 "sandbox_mode",
-                _value(config, "sandbox_mode"),
+                value_or_unset(config, "sandbox_mode"),
                 "'danger-full-access' removes the filesystem and network sandbox",
                 concern=config.get("sandbox_mode") == "danger-full-access",
             ),
             "sandbox_mode",
         ),
-        (Setting("model", _value(config, "model"), "Model in use"), ""),
+        (Setting("model", value_or_unset(config, "model"), "Model in use"), ""),
         (
             Setting(
                 "trusted projects",
@@ -347,7 +384,7 @@ def _settings(ctx: Context, config: dict[str, Any], root: Path, binary: str) -> 
         (
             Setting(
                 "cli_auth_credentials_store",
-                _value(config, "cli_auth_credentials_store"),
+                value_or_unset(config, "cli_auth_credentials_store"),
                 "'keyring' moves tokens out of plaintext auth.json",
             ),
             "cli_auth_credentials_store",
@@ -355,7 +392,7 @@ def _settings(ctx: Context, config: dict[str, Any], root: Path, binary: str) -> 
         (
             Setting(
                 "history.persistence",
-                _value(history, "persistence"),
+                value_or_unset(history, "persistence"),
                 "Whether prompts are written to history.jsonl",
             ),
             "persistence",
@@ -363,17 +400,13 @@ def _settings(ctx: Context, config: dict[str, Any], root: Path, binary: str) -> 
         (
             Setting(
                 "features.daemon_auto_start",
-                _value(features, "daemon_auto_start"),
+                value_or_unset(features, "daemon_auto_start"),
                 "Starts the managed app-server daemon automatically",
             ),
             "daemon_auto_start",
         ),
     ]
     return confirmed_settings(ctx, binary, rows)
-
-
-def _value(mapping: dict[str, Any], key: str) -> str:
-    return str(mapping[key]) if key in mapping else "not set"
 
 
 def _rule_count(directory: Path) -> int:
@@ -449,7 +482,9 @@ def _plugin_rows(ctx: Context, root: Path, config: dict[str, Any]) -> list[Exten
             key=lambda p: p.stat().st_mtime,
         )
         install = versions[-1] if versions else None
-        description, components = extensions.plugin_manifest(install) if install else ("", "")
+        description, components = (
+            extensions.plugin_manifest(install) if install else (extensions.NO_MANIFEST, "")
+        )
         out.append(
             Extension(
                 NAME,
@@ -457,7 +492,7 @@ def _plugin_rows(ctx: Context, root: Path, config: dict[str, Any]) -> list[Exten
                 plugin,
                 "config.toml",
                 ctx.display(str(install)) if install else "",
-                description=description or extensions.NO_MANIFEST,
+                description=description,
                 access=components,
                 identity=str(install) if install else plugin,
             )
@@ -477,23 +512,12 @@ def _mcp(name: str, spec: dict[str, Any], root: Path) -> Extension:
 
 
 def _endpoints(ctx: Context, root: Path, report: ToolReport) -> list[Endpoint]:
-    binary = _vendor_binary(report.binaries)
-    present = ctx.binary_has(binary, list(ENDPOINTS)) if binary else {}
-    out = [
-        Endpoint(NAME, host, purpose, "binary")
-        for host, purpose in ENDPOINTS.items()
-        if present.get(host)
+    remote = [
+        Endpoint(NAME, host, f"remote MCP server '{server}'", "config")
+        for host, server in report_mcp_urls(report)
     ]
-    for host, server in report_mcp_urls(report):
-        out.append(Endpoint(NAME, host, f"remote MCP server '{server}'", "config"))
-    counts = mine_hosts([root / "log", root / "logs_2.sqlite"])
-    out += mined_endpoints(NAME, counts, ENDPOINTS)
-    for sock in sockets(ctx.system, [p.pid for p in report.processes]):
-        if sock.remote:
-            out.append(
-                Endpoint(NAME, sock.remote, f"open socket from pid {sock.pid}", "live-socket", 1)
-            )
-    return out
+    logs = [root / "log", root / "logs_2.sqlite"]
+    return endpoints(ctx, report, ENDPOINTS, logs, extra=remote)
 
 
 def report_mcp_urls(report: ToolReport) -> list[tuple[str, str]]:
@@ -508,30 +532,120 @@ def report_mcp_urls(report: ToolReport) -> list[tuple[str, str]]:
 
 def _stats(root: Path) -> dict[str, str]:
     stats: dict[str, str] = {}
-    sessions = root / "sessions"
-    if sessions.is_dir():
-        stats["session rollouts"] = str(sum(1 for _ in sessions.rglob("rollout-*.jsonl")))
+    folders = [root / "sessions", root / "archived_sessions"]
+    if any(folder.is_dir() for folder in folders):
+        stats["session rollouts"] = str(sum(_rollout_count(folder) for folder in folders))
     history = root / "history.jsonl"
     if history.is_file():
         stats["typed prompts"] = str(sum(1 for _ in history.open("rb")))
-    threads = _sqlite_count(root / "state_5.sqlite", "threads")
-    if threads is not None:
-        stats["threads (state DB)"] = str(threads)
+    threads = _sqlite_rows(root / "state_5.sqlite", "SELECT count(*) FROM threads")
+    if threads:
+        stats["threads (state DB)"] = str(threads[0][0])
     install = root / "installation_id"
     if install.is_file():
         stats["installation id"] = install.read_text().strip()[:8] + "…"
     return stats
 
 
-def _sqlite_count(path: Path, table: str) -> int | None:
-    if not path.is_file() or not re.fullmatch(r"\w+", table):
+def _rollout_count(folder: Path) -> int:
+    """Rollout files, plain or zstd-compressed, under one sessions folder."""
+    if not folder.is_dir():
+        return 0
+    return sum(
+        1
+        for path in folder.rglob("rollout-*")
+        if path.name.endswith((".jsonl", ".jsonl.zst")) and path.is_file()
+    )
+
+
+def _sqlite_rows(path: Path, query: str) -> list[tuple[Any, ...]] | None:
+    """Rows from a read-only query, or None when the file or the queried table is missing."""
+    if not path.is_file():
         return None
     try:
         with sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2) as conn:
-            row = conn.execute(f"SELECT count(*) FROM {table}").fetchone()  # noqa: S608
+            return conn.execute(query).fetchall()
     except sqlite3.Error:
         return None
-    return int(row[0]) if row else None
+
+
+def _sandbox_type(policy: str) -> str:
+    """The sandbox type from a thread's ``sandbox_policy`` (JSON object or bare string)."""
+    try:
+        data = json.loads(policy)
+    except ValueError:
+        return policy
+    return str(data.get("type", "")) if isinstance(data, dict) else str(data)
+
+
+def _thread_origin(originator: str, source: str) -> str:
+    """``desktop`` for the desktop app, ``guardian`` for its review subagents, else ``cli``."""
+    if "guardian" in source:
+        return "guardian"
+    return "desktop" if originator == "Codex Desktop" else "cli"
+
+
+def thread_approval(root: Path) -> Setting | None:
+    """How many recorded CLI threads ran with approval off, from the state DB's per-thread modes.
+
+    Threads written by the Codex desktop app and guardian review subagents share the database;
+    they are counted apart and named, not added to the CLI count.
+
+    Returns:
+        A setting whose value counts those threads and their sandbox types, or None when the
+        state DB or its threads table is not there to read.
+    """
+    db = root / "state_5.sqlite"
+    rows = _sqlite_rows(
+        db,
+        "SELECT approval_mode, sandbox_policy, coalesce(originator, ''), coalesce(source, ''), "
+        "updated_at FROM threads",
+    ) or _sqlite_rows(db, "SELECT approval_mode, sandbox_policy, '', '', updated_at FROM threads")
+    if rows is None:
+        return None
+    origins: Counter[str] = Counter()
+    sandboxes: Counter[str] = Counter()
+    latest = 0
+    for mode, policy, originator, source, updated in rows:
+        origin = _thread_origin(str(originator), str(source))
+        if origin != "cli":
+            origins[origin] += mode == NEVER
+            continue
+        origins["cli"] += 1
+        if mode == NEVER:
+            sandboxes[_sandbox_type(str(policy))] += 1
+            latest = max(latest, int(updated))
+    never = sum(sandboxes.values())
+    value = f"{never} of {origins['cli']} CLI threads"
+    if never:
+        kinds = ", ".join(f"{n} {kind}" for kind, n in sandboxes.most_common())
+        value += f" (sandbox {kinds}; latest {iso_time(latest)[:10]})"
+    others = [
+        plural(origins[k], label)
+        for k, label in (("desktop", "desktop-app thread"), ("guardian", "guardian review"))
+        if origins[k]
+    ]
+    if others:
+        value += f"; not counted: {', '.join(others)}"
+    return Setting(
+        THREADS_WITHOUT_APPROVAL,
+        value,
+        "Approval mode each thread ran with, as recorded in ~/.codex/state_5.sqlite",
+        concern=bool(never),
+    )
+
+
+def remote_control_enrollments(root: Path) -> list[RemoteEnrollment]:
+    """Remote-control enrollments recorded in the state DB, newest first."""
+    rows = _sqlite_rows(
+        root / "state_5.sqlite",
+        "SELECT app_server_client_name, server_name, remote_control_enabled, updated_at "
+        "FROM remote_control_enrollments ORDER BY updated_at DESC",
+    )
+    return [
+        RemoteEnrollment(str(client), str(server), bool(enabled), iso_time(int(updated))[:10])
+        for client, server, enabled, updated in rows or []
+    ]
 
 
 def _tac_status(report: ToolReport) -> ProgramStatus:

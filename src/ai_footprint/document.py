@@ -9,11 +9,11 @@ the data is written here, in Python; the dashboard only lays it out.
 """
 
 import dataclasses
-import re
 from typing import Any
 
-from ai_footprint import answers, figures, keys, surface
+from ai_footprint import answers, figures, keys, netview, surface
 from ai_footprint.model import (
+    EXTENSION_PAGES,
     AuditReport,
     Category,
     CommandValidation,
@@ -64,7 +64,10 @@ def _views(audit: AuditReport, checklist: Checklist) -> dict[str, Any]:
                 )
             ],
             "tools": {
-                t.name: [dataclasses.asdict(f) for f in figures.for_tool(t, checklist)]
+                t.name: [
+                    dataclasses.asdict(f)
+                    for f in figures.for_tool(t, checklist, netview.captured(audit, t.name))
+                ]
                 for t in tools
             },
         },
@@ -72,6 +75,7 @@ def _views(audit: AuditReport, checklist: Checklist) -> dict[str, Any]:
         "keys": [dataclasses.asdict(row) for row in keys.rows(audit)],
         "disk": figures.disk_by_category(audit),
         "method": figures.method_summary(audit),
+        "network": netview.view(audit),
         "lenses": [
             {"id": lens.value, "title": lens.title, "question": lens.question} for lens in Lens
         ],
@@ -89,7 +93,7 @@ def _views(audit: AuditReport, checklist: Checklist) -> dict[str, Any]:
             for tool, group in surface.merged_credentials(tools)
         ],
         "extensions": [
-            {**dataclasses.asdict(x), "used_by": used_by, "group": _skill_group(x)}
+            {**dataclasses.asdict(x), "used_by": used_by, "group": skill_group(x)}
             for x, used_by in grouped
         ],
         "pages": page_summaries(grouped, audit),
@@ -114,14 +118,13 @@ def proof(audit: AuditReport) -> str:
     """The callout: how fast this audit read a Keychain token without a prompt, if it did."""
     for tool in audit.tools:
         for cred in tool.credentials:
-            match = re.search(r"read it via /usr/bin/security in ([\d.]+)s", cred.protection)
-            if match:
+            if cred.silent_read_seconds is not None:
                 return (
                     f"This audit read your {cred.provider} token from the Keychain through "
-                    f"`/usr/bin/security` in {match.group(1)} seconds, with no prompt. "
+                    f"`/usr/bin/security` in {cred.silent_read_seconds} seconds, with no prompt. "
                     "Any program running as you can do the same."
                 )
-    return "This audit is read-only and never writes a secret value to this report."
+    return "This audit never writes a secret value to this report."
 
 
 def _fix_label(validation: CommandValidation) -> dict[str, str]:
@@ -136,7 +139,7 @@ def _fix_label(validation: CommandValidation) -> dict[str, str]:
 def _tool_view(audit: AuditReport, tool: ToolReport) -> dict[str, Any]:
     return {
         **_narrative(surface.for_tool(audit, tool)),
-        "answers": [dataclasses.asdict(a) for a in answers.for_tool(tool, audit.host.home)],
+        "answers": [dataclasses.asdict(a) for a in answers.for_tool(tool, audit.host)],
     }
 
 
@@ -148,14 +151,27 @@ def grouped_extensions(audit: AuditReport) -> Grouped:
             continue
         for x in tool.extensions:
             key = (x.kind, x.identity or f"{x.name} {x.detail}")
-            entry = groups.setdefault(key, (x, []))
-            if tool.display_name not in entry[1]:
-                entry[1].append(tool.display_name)
+            first, users = groups.setdefault(key, (dataclasses.replace(x), []))
+            if tool.display_name not in users:
+                users.append(tool.display_name)
+            if x is not first:
+                _merge_names(first, x)
     return list(groups.values())
 
 
-def _skill_group(x: Extension) -> str:
-    return x.source if x.source.startswith("plugin ") else USER_SKILLS
+def _merge_names(into: Extension, row: Extension) -> None:
+    """Keep every name and source an extension is listed under, across tools."""
+    if row.name not in into.name.split(" / "):
+        into.name = f"{into.name} / {row.name}"
+    if row.source not in into.source.split("; "):
+        into.source = f"{into.source}; {row.source}"
+
+
+def skill_group(x: Extension) -> str:
+    """The fold a row is listed under: its plugin, user skill folders, or none."""
+    if x.source.startswith("plugin "):
+        return x.source
+    return USER_SKILLS if x.kind == "skill" else ""
 
 
 def _verb(count: int, singular: str, plural: str) -> str:
@@ -164,10 +180,14 @@ def _verb(count: int, singular: str, plural: str) -> str:
 
 def page_summaries(grouped: Grouped, audit: AuditReport) -> dict[str, str]:
     """The summary sentence for the MCP servers, Skills and Plugins pages."""
+    pages = {
+        page: [(x, t) for x, t in grouped if x.kind in kinds]
+        for page, kinds in EXTENSION_PAGES.items()
+    }
     return {
-        "mcp": _mcp_tldr([(x, t) for x, t in grouped if x.kind in {"mcp", "connector"}]),
-        "skills": _skills_tldr([(x, t) for x, t in grouped if x.kind == "skill"]),
-        "plugins": _plugins_tldr([(x, t) for x, t in grouped if x.kind == "plugin"], audit),
+        "mcp": _mcp_tldr(pages["mcp"]),
+        "skills": _skills_tldr(pages["skills"]),
+        "plugins": _plugins_tldr(pages["plugins"], audit),
     }
 
 
@@ -191,7 +211,10 @@ def _mcp_tldr(rows: Grouped) -> str:
     shared = sum(1 for _x, t in rows if len(t) > 1)
     facts = []
     if auto:
-        facts.append(f"{auto} {_verb(auto, 'starts', 'start')} whenever a tool starts")
+        facts.append(
+            f"{auto} {_verb(auto, 'starts', 'start')} automatically, project-scoped ones only in "
+            "their project folder"
+        )
     if dangling:
         facts.append(
             f"{dangling} {_verb(dangling, 'points', 'point')} at a missing file, so whoever "
@@ -206,11 +229,15 @@ def _mcp_tldr(rows: Grouped) -> str:
     return first + (f" {surface.join(facts)}." if facts else "")
 
 
+def _links_outside_home(x: Extension) -> bool:
+    return x.source.startswith("symlink → ") and not x.source.startswith("symlink → ~")
+
+
 def _skills_tldr(rows: Grouped) -> str:
     if not rows:
         return "No skills are installed."
     from_plugins = sum(1 for x, _t in rows if x.source.startswith("plugin "))
-    linked = sum(1 for x, _t in rows if "symlink" in x.source)
+    linked = sum(1 for x, _t in rows if _links_outside_home(x))
     shared = sum(1 for _x, t in rows if len(t) > 1)
     restricted = sum(1 for x, _t in rows if x.access)
     where = [f"{from_plugins} live in plugin caches"] if from_plugins else []

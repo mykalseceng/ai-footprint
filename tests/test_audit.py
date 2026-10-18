@@ -10,10 +10,28 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import answers, cli, dashboard, document, report_html, reportcheck, surface
-from ai_footprint.audit import run_audit
-from ai_footprint.model import AuditReport, CommandValidation
-from ai_footprint.report_text import Style, render_doctor
+from ai_footprint import (
+    answers,
+    cli,
+    dashboard,
+    document,
+    figures,
+    fsinfo,
+    report_html,
+    reportcheck,
+    surface,
+)
+from ai_footprint.audit import detect_tools, run_audit
+from ai_footprint.model import (
+    Artifact,
+    AuditReport,
+    BinaryInfo,
+    Category,
+    CommandValidation,
+    HostReport,
+    ToolReport,
+)
+from ai_footprint.report_text import Style, render_doctor, render_summary
 from tests.conftest import (
     FAKE_ANTHROPIC_ACCESS,
     FAKE_ANTHROPIC_REFRESH,
@@ -103,7 +121,7 @@ def test_narrative_names_what_each_position_gets(audited):
     story = surface.for_machine(audit)
     headline = " ".join(story.headline)
     assert "Anything that runs as you can take" in headline
-    assert "run commands without asking" in headline
+    assert "skip approval prompts in some sessions" in headline
     assert "guest" in headline
     remote = next(v for v in story.lenses if v.lens.value == "remote")
     assert any("API keys for DeepSeek" in p.text for p in remote.points)
@@ -120,14 +138,14 @@ def test_duplicate_dangling_entries_become_one_statement(audited):
 def test_faq_answers_every_original_question(audited):
     audit, _c, _a = audited
     claude = next(t for t in audit.tools if t.name == "claude")
-    answered = answers.for_tool(claude, audit.host.home)
+    answered = answers.for_tool(claude, audit.host)
     questions = [a.question for a in answered]
     assert len(questions) == 15
     assert questions[0] == "Where are the log files?"
     assert "How do I revoke this token, and how would I prove it?" in questions
     assert questions[-1] == "Would I notice if someone else used it?"
     sessions = answered[1]
-    assert sessions.headers == ("Path", "Size", "Files", "Since")
+    assert sessions.headers == ("Path", "Size", "Files", "Modified")
     assert sessions.rows and all(row[0].startswith("`~/") for row in sessions.rows)
     revoke = next(a for a in answered if a.question.startswith("How do I revoke"))
     assert revoke.headers == ("Fact", "Source") and revoke.rows and not revoke.text
@@ -137,8 +155,12 @@ def test_faq_answers_every_original_question(audited):
 def test_cvp_evidence_comes_from_refusal_markers(audited):
     audit, _c, _a = audited
     claude = next(t for t in audit.tools if t.name == "claude")
-    assert claude.programs[0].status == "cyber-safeguard refusals in transcripts"
-    assert "1 API responses" in claude.programs[0].evidence[0]
+    assert claude.programs[0].status == "refusal marker found in Claude Code data"
+    assert (
+        claude.programs[0]
+        .evidence[0]
+        .startswith('The marker apiRefusalCategory "cyber" appears 1 time in 1 file')
+    )
 
 
 def test_jwt_claims_and_connector_scopes_are_reported(audited):
@@ -161,7 +183,7 @@ def test_no_secret_value_reaches_any_output(audited):
     audit, checklist, access = audited
     data = document.build(audit, checklist)
     page = dashboard.render(data)
-    report = report_html.render(audit, checklist)
+    report = report_html.render(audit, checklist, data["views"])
     dump = json.dumps(data)
     doctor, _code = render_doctor(audit, checklist, Style(enabled=False))
     for secret in (
@@ -197,7 +219,7 @@ def test_collected_markup_stays_data_and_only_pinned_code_runs(audited):
 
 def test_static_report_escapes_collected_strings_and_has_no_scripts(audited):
     audit, checklist, _a = audited
-    page = report_html.render(audit, checklist)
+    page = report_html.render(audit, checklist, document.build(audit, checklist)["views"])
     assert "<script>alert(1)</script>" not in page
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in page
     assert "default-src 'none'" in page
@@ -209,7 +231,8 @@ def test_static_report_escapes_collected_strings_and_has_no_scripts(audited):
 
 def test_static_report_passes_its_layout_checks(audited):
     audit, checklist, _a = audited
-    validations = reportcheck.check_report(report_html.render(audit, checklist))
+    views = document.build(audit, checklist)["views"]
+    validations = reportcheck.check_report(report_html.render(audit, checklist, views))
     assert {v.command for v in validations} >= {"page summary", "page skills", "page host"}
     assert all(v.ok for v in validations), [
         (v.command, c.name, c.detail) for v in validations for c in v.checks if not c.passed
@@ -310,3 +333,92 @@ def test_dashboard_views_pass_the_consistency_checks(audited):
     assert all(v.ok for v in validations), [
         (v.command, c.name, c.detail) for v in validations for c in v.checks if not c.passed
     ]
+
+
+def test_summary_line_sizes_only_outermost_locations_and_says_how_many(audited):
+    audit, _checklist, _access = audited
+    text = render_summary(audit, Style(enabled=False), [])
+    codex = next(t for t in audit.tools if t.name == "codex")
+    listed = sum(1 for a in figures.outermost(codex.artifacts) if a.exists)
+    size = fsinfo.human_size(figures.disk_bytes(codex.artifacts))
+    line = next(line for line in text.splitlines() if line.strip().startswith("Codex CLI"))
+    assert f"{size} in {surface.plural(listed, 'listed location')} · " in line
+
+
+def test_headline_names_every_installed_version():
+    tool = ToolReport(name="opencode", display_name="OpenCode", installed=True)
+    tool.binaries = [
+        BinaryInfo(path="/a/opencode", resolved="/a/opencode", version="1.4.6"),
+        BinaryInfo(path="/b/opencode", resolved="/b/opencode", version="2.0.26"),
+    ]
+    assert surface._named(tool) == "OpenCode (1.4.6 and 2.0.26)"
+    tool.binaries = tool.binaries[:1]
+    assert surface._named(tool) == "OpenCode 1.4.6"
+    tool.binaries = []
+    assert surface._named(tool) == "OpenCode"
+
+
+def test_plural_handles_words_ending_in_y():
+    assert surface.plural(2, "entry") == "2 entries"
+    assert surface.plural(1, "entry") == "1 entry"
+    assert surface.plural(2, "key") == "2 keys"
+
+
+def test_readers_answer_says_how_many_files_the_group_can_read(tmp_path: Path):
+    tool = ToolReport(name="claude", display_name="Claude Code", installed=True)
+    tool.artifacts = [
+        Artifact(
+            "Projects",
+            f"{tmp_path}/p",
+            Category.SESSION,
+            "",
+            exists=True,
+            is_dir=True,
+            file_count=10,
+            mode="755",
+            group_readable="staff",
+            group_readable_files=0,
+        ),
+        Artifact(
+            "Logs",
+            f"{tmp_path}/l",
+            Category.LOG,
+            "",
+            exists=True,
+            is_dir=True,
+            file_count=4,
+            mode="755",
+            group_readable="staff",
+            group_readable_files=3,
+        ),
+    ]
+    host = HostReport("macOS", "", "arm64", "mac", "me", 501, str(tmp_path), "750")
+    answer = answers._readers_answer(tool, host)
+    assert answer.text.endswith("and no other local account exists today.")
+    assert [row[2] for row in answer.rows] == [
+        "group `staff`: file names only",
+        "group `staff`: 3 of 4 files",
+    ]
+
+
+def test_detected_binaries_are_probed_once_per_audit(tmp_path: Path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    binary = bin_dir / "claude"
+    binary.write_text("#!/bin/sh\n")
+    binary.chmod(0o755)
+    system = QuietFakeSystem(path=str(bin_dir))
+    presences = detect_tools(system=system, home=tmp_path)
+    run_audit(system=system, home=tmp_path, tools=["claude"], scan=False, presences=presences)
+    resolved = str(binary.resolve())
+    signature_checks = [r for r in system.executed if r.argv[-1:] == [resolved]]
+    version_runs = [r for r in system.executed if r.argv == [resolved, "--version"]]
+    assert len(signature_checks) == 1
+    assert len(version_runs) == 1
+
+
+def test_collect_detects_by_itself_when_no_presence_is_given(tmp_path: Path):
+    (tmp_path / ".claude").mkdir()
+    audit, _checklist = run_audit(system=QuietFakeSystem(), home=tmp_path, scan=False)
+    installed = {t.name: t.installed for t in audit.tools}
+    assert installed == {"claude": True, "codex": False, "opencode": False, "pi": False}

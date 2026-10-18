@@ -12,9 +12,9 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-from ai_footprint import keys, rules, surface
-from ai_footprint.fsinfo import human_size
-from ai_footprint.model import Artifact, AuditReport, Category, Lens, ToolReport
+from ai_footprint import keys, rules, surface, tokens
+from ai_footprint.fsinfo import disk_bytes, human_size, outermost
+from ai_footprint.model import Artifact, AuditReport, Category, Lens, ToolCapture, ToolReport
 from ai_footprint.rules import Checklist
 
 TOOL_RUN_PURPOSES = ("Confirm tool version", "Confirm subcommand exists")
@@ -48,27 +48,6 @@ class Figure:
     detail: str
 
 
-def outermost(artifacts: list[Artifact]) -> list[Artifact]:
-    """Listed locations not inside another listed location, so their sizes can be added."""
-    paths = sorted({a.path.rstrip("/") for a in artifacts})
-    outer = {p for p in paths if not any(p.startswith(q + "/") for q in paths if q != p)}
-    seen: set[str] = set()
-    kept = []
-    for artifact in artifacts:
-        path = artifact.path.rstrip("/")
-        if path in outer and path not in seen:
-            seen.add(path)
-            kept.append(artifact)
-    return kept
-
-
-def disk_bytes(artifacts: list[Artifact], category: Category | None = None) -> int:
-    """Bytes on disk for the outermost locations, optionally of one category."""
-    return sum(
-        a.size_bytes for a in outermost(artifacts) if category is None or a.category is category
-    )
-
-
 def _installed(audit: AuditReport) -> list[ToolReport]:
     return [t for t in audit.tools if t.installed]
 
@@ -91,8 +70,8 @@ def _secret_figure(tools: list[ToolReport]) -> Figure:
 
 def _keys_figure(audit: AuditReport) -> Figure:
     rows = keys.rows(audit)
-    api = [r for r in rows if r.kind == keys.API_KEY]
-    logins = sum(1 for r in rows if r.kind == keys.LOGIN)
+    api = [r for r in rows if r.kind == tokens.API_KEY]
+    logins = sum(1 for r in rows if r.kind == tokens.LOGIN)
     providers = sorted({r.provider for r in api}, key=str.lower)
     detail = f"distinct keys for {', '.join(providers)}" if api else "no API keys stored"
     return Figure(
@@ -181,9 +160,10 @@ def machine(
         ),
         Figure(
             "credentials",
-            "Credential locations",
+            "Stored credentials",
             len(creds),
             str(len(creds)),
+            f"provider entries in {surface.plural(len({c.location for c in creds}), 'location')}; "
             f"{readable} marked readable by other local accounts",
         ),
         _keys_figure(audit),
@@ -203,7 +183,7 @@ def approval(tool: ToolReport) -> Figure:
     label = "Approval turned off"
     if found:
         return Figure("approval", label, "found", "found", "; ".join(found.evidence))
-    read = [s for s in tool.settings if s.key in rules.NO_APPROVAL or s.key == rules.RUNNING_BYPASS]
+    read = [s for s in tool.settings if s.key in rules.APPROVAL_KEYS]
     if read:
         checked = "; ".join(f"{s.key} = {s.value}" for s in read)
         return Figure(
@@ -222,7 +202,33 @@ def approval(tool: ToolReport) -> Figure:
     )
 
 
-def for_tool(tool: ToolReport, checklist: Checklist) -> list[Figure]:
+NOT_CAPTURED = "not captured"
+
+
+def network(captured: ToolCapture | None) -> Figure:
+    """Distinct hosts a tool's processes reached when started idle under ``--capture``."""
+    if captured is None:
+        return Figure(
+            "network",
+            "Hosts reached when started",
+            NOT_CAPTURED,
+            NOT_CAPTURED,
+            "run ai-footprint --capture to record them",
+        )
+    hosts = len({c.host for c in captured.connections})
+    return Figure(
+        "network",
+        "Hosts reached when started",
+        hosts,
+        str(hosts),
+        f"distinct hosts its processes exchanged packets with in {captured.seconds:g}s idle, "
+        "with no prompt",
+    )
+
+
+def for_tool(
+    tool: ToolReport, checklist: Checklist, captured: ToolCapture | None = None
+) -> list[Figure]:
     """Figures for one tool's page."""
     checks = [c for c in checklist if c.scope == tool.display_name]
     readable = sum(1 for c in tool.credentials if c.readable_by_others)
@@ -241,9 +247,11 @@ def for_tool(tool: ToolReport, checklist: Checklist) -> list[Figure]:
         ),
         Figure(
             "credentials",
-            "Credential locations",
+            "Stored credentials",
             len(tool.credentials),
             str(len(tool.credentials)),
+            "provider entries in "
+            f"{surface.plural(len({c.location for c in tool.credentials}), 'location')}; "
             f"{readable} marked readable by other local accounts",
         ),
         Figure(
@@ -263,6 +271,7 @@ def for_tool(tool: ToolReport, checklist: Checklist) -> list[Figure]:
         ),
         _secret_figure([tool]),
         approval(tool),
+        network(captured),
     ]
 
 
@@ -302,7 +311,9 @@ def method_summary(audit: AuditReport) -> str:
         else ""
     )
     return (
-        f"The audit is read-only. It ran {surface.plural(len(audit.executed), 'command')}, each "
+        "The audit writes nothing but its own reports; a tool run with --version or --help may "
+        "append to that tool's own log. "
+        f"It ran {surface.plural(len(audit.executed), 'command')}, each "
         f"by absolute path with a fixed PATH: {probe_runs} from its probe registry and "
         f"{tool_runs} of installed AI-tool binaries, limited to --version and --help."
         f"{signature} Secrets were read into memory only to derive metadata. {network}"

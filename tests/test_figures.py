@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import document, figurecheck, figures, rules
+from ai_footprint import document, figurecheck, figures, fsinfo, rules
 from ai_footprint.audit import run_audit
 from ai_footprint.model import (
     Artifact,
@@ -78,8 +78,8 @@ def test_nested_and_repeated_locations_are_added_once():
         artifact("/h/.tool/", 100),
         artifact("/h/.tool-other", 7),
     ]
-    assert [a.path for a in figures.outermost(listed)] == ["/h/.tool", "/h/.tool-other"]
-    assert figures.disk_bytes(listed) == 107
+    assert [a.path for a in fsinfo.outermost(listed)] == ["/h/.tool", "/h/.tool-other"]
+    assert fsinfo.disk_bytes(listed) == 107
 
 
 def test_secret_count_across_tools_never_calls_itself_distinct():

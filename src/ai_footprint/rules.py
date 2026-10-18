@@ -7,6 +7,7 @@ Fix commands carry the hints the validator needs: ``--help`` probes that prove a
 exists, and binary markers that prove a recommended config key is real.
 """
 
+import re
 import shlex
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -14,21 +15,27 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from ai_footprint import daemons
+from ai_footprint.fsinfo import tilde
 from ai_footprint.host import first_system_index
 from ai_footprint.model import (
+    BARE_SECURITY,
+    Artifact,
     AuditReport,
+    BinaryInfo,
     Category,
     Daemon,
     Exposure,
     Extension,
+    FactKind,
     Fix,
     FixCommand,
     HostFact,
     HostReport,
     Lens,
+    StoreKind,
     ToolReport,
 )
-from ai_footprint.surface import plural
+from ai_footprint.surface import join, plural
 
 
 @dataclass
@@ -42,8 +49,7 @@ class RuleContext:
 
     def display(self, path: str) -> str:
         """Path with home shown as ~."""
-        home = str(self.home)
-        return "~" + path[len(home) :] if path.startswith(home) else path
+        return tilde(path, str(self.home))
 
 
 ToolRuleFn = Callable[[ToolReport, RuleContext], list[Exposure]]
@@ -91,17 +97,17 @@ class Check(NamedTuple):
 Checklist = list[Check]
 
 LABELS = {
-    "no-approval": "Runs commands without asking",
+    "no-approval": "Approval prompts skipped",
     "instructions": "Instruction file steers the model",
     "token-reach": "Token carries connector scopes",
     "shared": "Sessions on public share links",
     "keychain-silent": "Keychain token readable without a prompt",
     "creds-plaintext": "Credentials in plaintext",
     "live-token-on-disk": "Live credentials copied into data files",
-    "secrets-at-rest": "Secrets in history and logs",
-    "secrets": "Secrets in history and logs",
+    "secrets-at-rest": "Secret-shaped values in history and logs",
+    "secrets": "Secret-shaped values in history and logs",
     "autostart": "Code that runs automatically",
-    "daemons": "Background processes outlive sessions",
+    "daemons": "Background processes and listening sessions",
     "dangling": "Autostart command points at a missing file",
     "duplicate-installs": "Stale second install",
     "creds-readable": "Credentials readable by other accounts",
@@ -111,14 +117,14 @@ LABELS = {
     "binary-dirs": "Tool launchers in writable folders",
     "other-accounts": "Other local accounts",
     "shared-surfaces": "One folder steers several tools",
-    "duplicate-creds": "Same credentials stored twice",
-    "trust": "Trusted folders apply their own instructions",
-    "account-data": "Provider keeps copies of your work",
-    "account-signals": "Signs of use elsewhere",
+    "duplicate-creds": "One provider's credentials in several places",
+    "trust": "Trusted folders",
+    "account-data": "Work shared with provider services",
+    "account-signals": "Paired devices and unused logins",
     "inherited-creds": "Other credentials an agent inherits",
     "computer-control": "Software that can drive the computer",
     "backups": "History copied into backups",
-    "unattended": "Processes running without a session",
+    "unattended": "Long-running or orphaned AI processes",
     "other-tools": "Other AI tools on this machine",
 }
 
@@ -162,14 +168,19 @@ NO_APPROVAL = {
     "sandbox_mode": "danger-full-access",
 }
 RUNNING_BYPASS = "running with --dangerously-skip-permissions"
-"""Setting values that turn approval off, and the setting that lists sessions started that way."""
+THREADS_WITHOUT_APPROVAL = "threads with approval_mode=never"
+"""Setting values that turn approval off, the setting that lists sessions started that way, and
+the setting that counts recorded threads that ran with approval off."""
+APPROVAL_KEYS = frozenset({*NO_APPROVAL, RUNNING_BYPASS, THREADS_WITHOUT_APPROVAL})
+"""Every setting the no-approval check reads."""
 
 
 def rule_no_approval(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     """Commands run without approval or sandbox: a config value, or sessions started that way."""
     configured = [s for s in report.settings if NO_APPROVAL.get(s.key) == s.value]
     running = [s for s in report.settings if s.key == RUNNING_BYPASS]
-    if not configured and not running:
+    threads = [s for s in report.settings if s.key == THREADS_WITHOUT_APPROVAL and s.concern]
+    if not configured and not running and not threads:
         return []
     observed = [f"{s.key} = {s.value}" for s in configured]
     observed += [
@@ -177,15 +188,17 @@ def rule_no_approval(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
         "--dangerously-skip-permissions"
         for s in running
     ]
+    observed += [f"{s.key}: {s.value}" for s in threads]
     return [
         _exposure(
             report,
             "no-approval",
             Lens.MODEL,
-            f"{report.display_name} runs commands without asking ({_join_words(observed)}). "
-            "Text that reaches the model (a web page, a repo file, an MCP result, an "
-            "instruction file) becomes code running as you.",
-            evidence=[f"{s.key} = {s.value}" for s in configured + running],
+            f"{report.display_name} skips approval prompts in some sessions "
+            f"({join(observed)}). In those sessions, text that reaches the model (a web page, a "
+            "repo file, an MCP result, an instruction file) can become commands running as you, "
+            "limited only by the sandbox, deny rules and hooks that still apply.",
+            evidence=[f"{s.key} = {s.value}" for s in configured + running + threads],
             fix=_no_approval_fix(report, ctx),
         )
     ]
@@ -223,7 +236,11 @@ def _no_approval_fix(report: ToolReport, ctx: RuleContext) -> Fix:
                     manual=True,
                     markers=("on-request", "workspace-write"),
                     marker_tool="codex",
-                )
+                ),
+                FixCommand(
+                    "Remove shell aliases that add --dangerously-bypass-approvals-and-sandbox",
+                    manual=True,
+                ),
             ],
         )
     return Fix(
@@ -296,7 +313,7 @@ def rule_token_reach(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
         return []
     connectors = [e.name for e in report.extensions if e.kind == "connector"]
     used = (
-        f" This CLI has connected to {_join_words(connectors)} (recorded in ~/.claude.json)."
+        f" This CLI has connected to {join(connectors)} (recorded in ~/.claude.json)."
         if connectors
         else ""
     )
@@ -309,7 +326,7 @@ def rule_token_reach(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             f"{', '.join(scopes)}.{used}",
             evidence=scopes + connectors,
             fix=Fix(
-                "Disconnect connectors you do not need from this client",
+                "Disconnect connectors you do not use (the token keeps its scopes)",
                 [
                     FixCommand(
                         "Remove unused connectors in the provider's web settings", manual=True
@@ -358,7 +375,7 @@ def rule_keychain_silent(report: ToolReport, ctx: RuleContext) -> list[Exposure]
     silent = [
         c
         for c in report.credentials
-        if c.store == "macOS Keychain" and "without a prompt" in c.protection
+        if c.store is StoreKind.KEYCHAIN and c.silent_read_seconds is not None
     ]
     if not silent:
         return []
@@ -391,7 +408,7 @@ def rule_keychain_silent(report: ToolReport, ctx: RuleContext) -> list[Exposure]
 
 def rule_plaintext_credentials(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     """Credentials stored without OS protection."""
-    plain = [c for c in report.credentials if "plaintext" in c.store or "SQLite" in c.store]
+    plain = [c for c in report.credentials if c.store in {StoreKind.FILE, StoreKind.SQLITE}]
     if not plain:
         return []
     providers = sorted({c.provider for c in plain})
@@ -458,18 +475,26 @@ def rule_secrets(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     if scan is None or not scan.kinds:
         return []
     out = []
-    if scan.current_credential_hits:
+    current = scan.current_credential_values
+    if current:
         out.append(
             _exposure(
                 report,
                 "live-token-on-disk",
                 Lens.CODE,
-                f"Current {report.display_name} credentials are copied into data files outside "
-                "their credential store.",
+                f"{plural(current, f'current {report.display_name} credential')} "
+                f"{'is' if current == 1 else 'are'} copied into data files outside "
+                f"{'its' if current == 1 else 'their'} credential store.",
                 evidence=scan.current_credential_hits[:10],
                 fix=Fix(
                     "Rotate the credential and delete the copies",
-                    [FixCommand("Log out and back in, then delete the listed files", manual=True)],
+                    [
+                        FixCommand(
+                            "Rotate API keys in the provider's console and log out and back in "
+                            "for logins, then delete the listed files",
+                            manual=True,
+                        )
+                    ],
                 ),
             )
         )
@@ -478,13 +503,14 @@ def rule_secrets(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     kinds = ", ".join(f"{k.unique} {k.label}" for k in ranked[:4])
     if len(ranked) > 4:
         kinds += f" and {len(ranked) - 4} more types"
+    others = "" if total > current else " Each is a current credential of this tool."
     out.append(
         _exposure(
             report,
             "secrets-at-rest",
             Lens.CODE,
-            f"{report.display_name} history and logs hold {total} distinct secrets: {kinds}. "
-            "Some may be test data from targets you worked on.",
+            f"{report.display_name} data files hold {total} distinct secret-shaped values: "
+            f"{kinds}.{others}",
             evidence=[
                 f"{k.label}: e.g. {k.locations[0] if k.locations else '?'}" for k in scan.kinds
             ],
@@ -513,9 +539,9 @@ def rule_autostart(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             report,
             "autostart",
             Lens.CODE,
-            f"{report.display_name} runs code automatically from {plural(len(auto), 'place')} "
-            f"({_join_words(_kind_counts(auto))}). Each is a file you can write, so anything "
-            "running as you can hide a persistent payload there.",
+            f"{report.display_name} is set up to run local code automatically from "
+            f"{plural(len(auto), 'place')} ({join(_kind_counts(auto))}). Whoever can change "
+            "those commands, or the files they run, controls code that runs as you.",
             evidence=[f"{e.kind}: {e.name} → {e.detail[:120]}" for e in auto[:12]],
             fix=Fix(
                 "Monitor these files for changes",
@@ -578,26 +604,55 @@ def _open_to_others(mode: str) -> bool:
 
 
 def rule_daemons(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
-    """Processes launchd started for the tool, or that listen beyond a session's own socket."""
-    found = [
+    """Processes launchd started for the tool, and session processes that accept connections."""
+    detached = [d for d in report.daemons if d.detached]
+    servers = [
         d
         for d in report.daemons
-        if d.detached or any(ln.kind == "tcp" or _open_to_others(ln.mode) for ln in d.listeners)
+        if not d.detached
+        and any(ln.kind == "tcp" or _open_to_others(ln.mode) for ln in d.listeners)
     ]
-    if not found:
+    if not detached and not servers:
         return []
-    count = f"{len(found)} background process{'es' if len(found) != 1 else ''}"
+    parts = []
+    if detached:
+        count = f"{len(detached)} background process{'es' if len(detached) != 1 else ''}"
+        parts.append(
+            f"{report.display_name} keeps {count} running outside any session (started by "
+            f"launchd): {join([_daemon_line(d, ctx.home) for d in detached])}."
+        )
+    if servers:
+        parts.append(
+            f"{report.display_name} sessions accept connections: "
+            f"{join([_server_line(d, ctx.home) for d in servers])}."
+        )
+    fix = _daemon_fix(report, detached) if detached else Fix("Stop servers you no longer use")
+    fix.commands += [
+        FixCommand(
+            f"Stop pid {d.pid} (started by session pid {d.ppid}) when you no longer need it",
+            manual=True,
+        )
+        for d in servers
+    ]
     return [
         _exposure(
             report,
             "daemons",
             Lens.CODE,
-            f"{report.display_name} keeps {count} running outside any session: "
-            f"{_join_words([_daemon_line(d, ctx.home) for d in found])}.",
-            evidence=[f"pid {d.pid} started {d.started}: {d.command}" for d in found],
-            fix=_daemon_fix(report, found),
+            " ".join(parts),
+            evidence=[
+                f"pid {d.pid} (parent {d.ppid}) started {d.started}: {d.command}"
+                for d in detached + servers
+            ],
+            fix=fix,
         )
     ]
+
+
+def _server_line(daemon: Daemon, home: Path) -> str:
+    what, listens, _notes = daemons.describe(daemon, str(home))
+    where = "; ".join(listens)
+    return f"pid {daemon.pid} `{what}`, started by session pid {daemon.ppid}, on {where}"
 
 
 def rule_dangling(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
@@ -608,7 +663,7 @@ def rule_dangling(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             by_target.setdefault(ext.detail, []).append((ext.name, ext.source))
     out = []
     for index, (target, entries) in enumerate(by_target.items()):
-        scopes = _join_words([source for _name, source in entries])
+        scopes = join([source for _name, source in entries])
         commands = [
             c
             for name, source in entries
@@ -628,46 +683,55 @@ def rule_dangling(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     return out
 
 
-def _join_words(items: list[str]) -> str:
-    if len(items) <= 2:
-        return " and ".join(items)
-    return ", ".join(items[:-1]) + f" and {items[-1]}"
-
-
-def _dangling_fix(report: ToolReport, name: str, source: str, home: Path) -> Fix:
-    if report.name == "claude":
-        if source == "user":
-            return Fix(
-                "Remove the server entry",
-                [
-                    FixCommand(
-                        f"claude mcp remove {_q(name)} -s user",
-                        help_probe=("claude", "mcp", "remove"),
-                    )
-                ],
-            )
-        project = source.removeprefix("project ")
-        project = str(home) + project[1:] if project.startswith("~") else project
-        if not Path(project).is_dir():
-            return Fix(
-                "Remove the server entry",
-                [
-                    FixCommand(
-                        f'Delete projects["{project}"].mcpServers.{name} from ~/.claude.json '
-                        "(the project folder is gone, so `claude mcp remove` cannot target it)",
-                        manual=True,
-                    )
-                ],
-            )
+def _claude_dangling_fix(name: str, source: str, home: Path) -> Fix:
+    if source.startswith("plugin "):
+        plugin = source.removeprefix("plugin ")
+        return Fix(
+            "Disable the plugin that ships the server",
+            [
+                FixCommand(
+                    f"claude plugin disable {_q(plugin)}",
+                    help_probe=("claude", "plugin", "disable"),
+                )
+            ],
+        )
+    if source == "user":
         return Fix(
             "Remove the server entry",
             [
                 FixCommand(
-                    f"cd {_q(project)} && claude mcp remove {_q(name)} -s local",
+                    f"claude mcp remove {_q(name)} -s user",
                     help_probe=("claude", "mcp", "remove"),
                 )
             ],
         )
+    project = source.removeprefix("project ")
+    project = str(home) + project[1:] if project.startswith("~") else project
+    if not Path(project).is_dir():
+        return Fix(
+            "Remove the server entry",
+            [
+                FixCommand(
+                    f'Delete projects["{project}"].mcpServers.{name} from ~/.claude.json '
+                    "(the project folder is gone, so `claude mcp remove` cannot target it)",
+                    manual=True,
+                )
+            ],
+        )
+    return Fix(
+        "Remove the server entry",
+        [
+            FixCommand(
+                f"cd {_q(project)} && claude mcp remove {_q(name)} -s local",
+                help_probe=("claude", "mcp", "remove"),
+            )
+        ],
+    )
+
+
+def _dangling_fix(report: ToolReport, name: str, source: str, home: Path) -> Fix:
+    if report.name == "claude":
+        return _claude_dangling_fix(name, source, home)
     if report.name == "codex":
         return Fix(
             "Remove the server entry",
@@ -686,32 +750,55 @@ def _dangling_fix(report: ToolReport, name: str, source: str, home: Path) -> Fix
 
 def rule_duplicate_installs(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     """Several installs of one tool, where PATH order decides which runs."""
-    del ctx
     if len(report.binaries) < 2 or len({b.version for b in report.binaries}) < 2:
         return []
-    active, *shadowed = report.binaries
-    commands = []
-    for binary in shadowed:
-        package = _npm_package(binary.resolved)
-        if package:
-            commands.append(FixCommand(f"npm uninstall -g {_q(package)}"))
-        else:
-            commands.append(FixCommand(f"Remove {binary.path} ({binary.resolved})", manual=True))
+    first = report.binaries[0]
+    newest = max(report.binaries, key=lambda b: _version_key(b.version))
+    older = [b for b in report.binaries if _version_key(b.version) < _version_key(newest.version)]
+    running = {p.command.split()[0] for p in report.processes if p.command}
+    commands = [_remove_install(b) for b in older]
+    if first in older:
+        commands.append(
+            FixCommand(
+                f"Or put {Path(newest.path).parent} ahead of {Path(first.path).parent} on PATH",
+                manual=True,
+            )
+        )
+    copies = join(
+        [f"{b.version or 'unknown version'} at `{ctx.display(b.path)}`" for b in report.binaries]
+    )
+    statement = (
+        f"{len(report.binaries)} copies of {report.display_name} are installed: {copies}. "
+        f"A shell runs the first on PATH, {first.version or 'of unknown version'}"
+    )
+    statement += f", which is older than {newest.version}." if first in older else ", the newest."
     return [
         _exposure(
             report,
             "duplicate-installs",
             Lens.CODE,
-            f"{len(report.binaries)} copies of {report.display_name} are installed with different "
-            "versions. PATH order decides which runs; the stale copy gets no updates.",
+            statement,
             evidence=[
-                f"{'active' if b is active else 'shadowed'}: {b.path} → {b.resolved} "
+                f"{'first on PATH' if b is first else 'later on PATH'}: {b.path} → {b.resolved} "
                 f"v{b.version or '?'}"
+                + ("; a running process uses it" if b.resolved in running else "")
                 for b in report.binaries
             ],
-            fix=Fix("Remove the stale install", commands),
+            fix=Fix("Remove the older install", commands),
         )
     ]
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    """Numeric parts of a version for ordering; an unknown version sorts first."""
+    return tuple(int(part) for part in re.findall(r"\d+", version))
+
+
+def _remove_install(binary: BinaryInfo) -> FixCommand:
+    package = _npm_package(binary.resolved)
+    if package:
+        return FixCommand(f"npm uninstall -g {_q(package)}")
+    return FixCommand(f"Remove {binary.path} ({binary.resolved}) v{binary.version}", manual=True)
 
 
 def _npm_package(resolved: str) -> str:
@@ -754,12 +841,22 @@ def rule_credentials_exposed(report: ToolReport, ctx: RuleContext) -> list[Expos
     ]
 
 
+def _contents_readable(artifact: Artifact, shared_groups: set[str]) -> bool:
+    """Another account can read the file, or at least one file inside the folder."""
+    if artifact.other_readable:
+        return not artifact.is_dir or artifact.other_readable_files > 0
+    if artifact.group_readable in shared_groups:
+        return not artifact.is_dir or artifact.group_readable_files > 0
+    return False
+
+
 def rule_exposed_data(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
-    """Session, config and log data readable by other accounts."""
+    """Session, config and log data readable by other accounts, directly or through a group."""
+    shared_groups = {g for groups in ctx.host.other_user_groups.values() for g in groups}
     exposed = [
         a
         for a in report.artifacts
-        if a.other_readable
+        if _contents_readable(a, shared_groups)
         and a.category in {Category.SESSION, Category.CONFIG, Category.LOG, Category.INSTRUCTIONS}
     ]
     if not exposed or not ctx.host.other_users:
@@ -792,8 +889,9 @@ def rule_open_server(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             report,
             "open-server",
             Lens.ACCOUNT,
-            f"The local {report.display_name} server accepts requests without a password, so "
-            "any local process or account can run prompts and tools as you.",
+            f"The local {report.display_name} server's own registration records no password, "
+            "so any local process or account that reaches its port can run prompts and tools "
+            "as you.",
             evidence=[f"{s.key}: {s.value}" for s in open_servers],
             fix=Fix("Stop the server", [FixCommand(f"kill {' '.join(pids) or '<pid>'}")]),
         )
@@ -802,44 +900,57 @@ def rule_open_server(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
 
 # --- trust, account data, account signals -------------------------------------------------------
 
-RISKY_TRUST = ("Downloads", "Desktop", "tmp", "Library/Application Support", "node_modules")
-FOLDER_CARRIERS = (
-    "CLAUDE.md",
-    "AGENTS.md",
-    ".mcp.json",
-    ".claude/settings.json",
-    ".claude/settings.local.json",
-    ".codex/config.toml",
-    ".pi/settings.json",
-    ".pi/mcp.json",
+BROAD_TRUST = (
+    "Documents",
+    "Downloads",
+    "Desktop",
+    "tmp",
+    "Library/Application Support",
+    "node_modules",
 )
+"""Folder names whose contents come from many sources, not one project."""
+
+
+def _broad(folder: Path, home: Path) -> bool:
+    path = f"{folder}/"
+    return folder == home or any(f"/{name}/" in path for name in BROAD_TRUST)
+
+
+def _carried_instructions(report: ToolReport, folder: Path) -> list[str]:
+    """Project instruction files this tool loads from inside a trusted folder."""
+    return [
+        i.path
+        for i in report.instructions
+        if i.scope == "project" and Path(i.path).parent in {folder, folder / ".claude"}
+    ]
 
 
 def rule_trust(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
-    """Trusted folders, especially risky ones and those carrying their own instructions."""
+    """Trusted folders: broad ones, writable ones, and those holding instruction files."""
     folders = [Path(f) for f in report.trusted_folders]
     if not folders:
         return []
-    home = ctx.home
-    risky = [f for f in folders if f == home or any(part in str(f) for part in RISKY_TRUST)]
-    carriers = [f for f in folders if any((f / name).is_file() for name in FOLDER_CARRIERS)]
-    if not risky and not carriers:
+    broad = [f for f in folders if _broad(f, ctx.home)]
+    carried = {f: _carried_instructions(report, f) for f in folders}
+    carriers = [f for f in folders if carried[f]]
+    if not broad and not carriers:
         return []
-    named = ", ".join(ctx.display(str(f)) for f in risky[:5])
-    statement = (
-        f"{report.display_name} trusts {len(folders)} folders, so a repo in any of them applies "
-        f"its own instructions and settings without asking. {len(carriers)} of them carry their "
-        "own instruction, settings or MCP files."
-    )
-    if risky:
-        statement += f" Trusted folders that anyone can drop files into: {named}."
+    statement = f"{report.display_name} trusts {plural(len(folders), 'folder')}."
+    if carriers:
+        statement += (
+            f" {len(carriers)} of them {'holds' if len(carriers) == 1 else 'hold'} "
+            f"instruction files {report.display_name} loads."
+        )
+    if broad:
+        named = join([ctx.display(str(f)) for f in broad[:5]])
+        statement += f" Broad folders on the list: {named}."
     return [
         _exposure(
             report,
             "trust",
             Lens.MODEL,
             statement,
-            evidence=[ctx.display(str(f)) for f in carriers[:10]],
+            evidence=[ctx.display(p) for f in carriers for p in carried[f]][:10],
             fix=Fix(
                 "Withdraw trust from folders you do not own or no longer use",
                 [_trust_fix(report)],
@@ -941,8 +1052,7 @@ SIGNAL_SOURCES = frozenset({"codex", "opencode", "pi"})
 
 def _needs_approval_setting(report: ToolReport, ctx: RuleContext) -> str:
     del ctx
-    keys = set(NO_APPROVAL) | {RUNNING_BYPASS}
-    if any(s.key in keys for s in report.settings):
+    if any(s.key in APPROVAL_KEYS for s in report.settings):
         return ""
     return f"this audit records no approval setting for {report.display_name}"
 
@@ -963,7 +1073,7 @@ def _needs_share_setting(report: ToolReport, ctx: RuleContext) -> str:
 
 def _needs_keychain(report: ToolReport, ctx: RuleContext) -> str:
     del ctx
-    if any(c.store == "macOS Keychain" for c in report.credentials):
+    if any(c.store is StoreKind.KEYCHAIN for c in report.credentials):
         return ""
     return "no credential is stored in the Keychain"
 
@@ -994,6 +1104,8 @@ def _needs_local_server(report: ToolReport, ctx: RuleContext) -> str:
     del ctx
     if any(s.key.startswith("local server") for s in report.settings):
         return ""
+    if any(s.key.startswith("listening server") for s in report.settings):
+        return "no registration on disk records the listening server's password"
     return f"this audit records no local server for {report.display_name}"
 
 
@@ -1026,7 +1138,7 @@ TOOL_RULES: tuple[Rule, ...] = (
     Rule(
         "instructions", "Instruction files contain nothing that steers the model", rule_instructions
     ),
-    Rule("token-reach", "Token cannot reach connected accounts", rule_token_reach, _needs_scopes),
+    Rule("token-reach", "Token carries no connector scopes", rule_token_reach, _needs_scopes),
     Rule(
         "shared", "No sessions published to share links", rule_shared_sessions, _needs_share_setting
     ),
@@ -1047,7 +1159,11 @@ TOOL_RULES: tuple[Rule, ...] = (
         _needs_local_mcp,
     ),
     Rule("autostart", "No automatic code execution points", rule_autostart),
-    Rule("daemons", "No background process outlives its session", rule_daemons),
+    Rule(
+        "daemons",
+        "No process outlives its session or accepts connections from other accounts or the network",
+        rule_daemons,
+    ),
     Rule("duplicate-installs", "One install per tool", rule_duplicate_installs),
     Rule(
         "creds-readable",
@@ -1067,7 +1183,12 @@ TOOL_RULES: tuple[Rule, ...] = (
         rule_open_server,
         _needs_local_server,
     ),
-    Rule("trust", "Trusted folders are few and owned by you", rule_trust, _needs_trusted_folders),
+    Rule(
+        "trust",
+        "No broad trusted folders and none holding instruction files",
+        rule_trust,
+        _needs_trusted_folders,
+    ),
     Rule(
         "account-data",
         "Provider keeps no extra copies (training, cloud tasks)",
@@ -1076,7 +1197,7 @@ TOOL_RULES: tuple[Rule, ...] = (
     ),
     Rule(
         "account-signals",
-        "No local signs of use elsewhere",
+        "No paired devices or unused stored logins",
         rule_account_signals,
         _needs_signal_source,
     ),
@@ -1123,7 +1244,7 @@ def rule_path_hijack(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
         f"{t.display_name}: {f.value}"
         for t in audit.tools
         for f in t.fingerprint
-        if "bare name" in f.value
+        if f.value == BARE_SECURITY
     ]
     folders = ", ".join(e.path for e in risky)
     consequence = (
@@ -1226,28 +1347,45 @@ def rule_shared_surfaces(audit: AuditReport, ctx: RuleContext) -> list[Exposure]
     ]
 
 
-def rule_duplicate_providers(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
-    """The same provider account stored by several tools."""
-    del ctx
-    stores: dict[str, set[str]] = {}
-    names: dict[str, str] = {}
+def _provider_copies(
+    audit: AuditReport, ctx: RuleContext
+) -> dict[str, dict[frozenset[str], list[str]]]:
+    """``{provider: {token fingerprints: [where each copy is stored]}}``."""
+    found: dict[str, dict[frozenset[str], list[str]]] = {}
     for tool in audit.tools:
         for cred in tool.credentials:
-            names.setdefault(cred.provider.lower(), cred.provider)
-            stores.setdefault(cred.provider.lower(), set()).add(
-                f"{tool.display_name} ({cred.store})"
-            )
-    dupes = {p: s for p, s in stores.items() if len(s) > 1}
-    if not dupes:
+            prints = frozenset(t.fingerprint for t in cred.tokens if t.fingerprint)
+            where = f"{tool.display_name} ({cred.store}, {ctx.display(cred.location)})"
+            found.setdefault(cred.provider, {}).setdefault(prints, []).append(where)
+    return found
+
+
+def rule_duplicate_providers(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
+    """One provider's credentials held in several places: copies and separate logins."""
+    copies = _provider_copies(audit, ctx)
+    lines = []
+    for provider, creds in sorted(copies.items()):
+        places = sum(len(stores) for stores in creds.values())
+        if places < 2:
+            continue
+        copied = [stores for stores in creds.values() if len(stores) > 1]
+        text = f"{provider}: {plural(len(creds), 'separate credential')} in {places} places"
+        if copied:
+            text += f", including the same credential in {join(copied[0])}"
+        lines.append(text)
+    if not lines:
         return []
     return [
         _host(
             "duplicate-creds",
             Lens.CODE,
-            f"Credentials for {_join_words(sorted(names[p] for p in dupes))} are stored in more "
-            "than one place; each "
-            "copy is another place to take them from, often with weaker protection.",
-            evidence=[f"{names[p]}: {', '.join(sorted(s))}" for p, s in sorted(dupes.items())],
+            f"Credentials for one provider are held in several places ({'; '.join(lines)}). "
+            "Each place is another copy to take.",
+            evidence=[
+                f"{provider}: {', '.join(stores)}"
+                for provider, creds in sorted(copies.items())
+                for stores in creds.values()
+            ],
         )
     ]
 
@@ -1266,18 +1404,18 @@ def rule_inherited(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
         for t in audit.tools
         if any(x.id == f"{t.name}:no-approval" for x in t.exposures)
     ]
-    verb = "runs" if len(unattended) == 1 else "run"
+    verb = "skips" if len(unattended) == 1 else "skip"
     tail = (
-        f" {_join_words(unattended)} {verb} commands without asking, so a prompt injection can "
-        "use all of them."
+        f" {join(unattended)} {verb} approval prompts in some sessions, so text that steers "
+        "the model in those sessions can use them too."
         if unattended
         else ""
     )
-    items = _join_words([f"{f.name} ({f.detail})" for f in facts[:8]])
+    items = join([f"{f.name} ({f.detail})" for f in facts[:8]])
     commands = [
         FixCommand(f"ssh-keygen -p -f {_q(f.path)}")
         for f in facts
-        if f.name.startswith("SSH key") and "no passphrase" in f.detail
+        if f.kind is FactKind.SSH_KEY_OPEN
     ]
     commands.append(
         FixCommand(
@@ -1303,9 +1441,10 @@ def _brief(fact: HostFact) -> str:
 
 
 def _unattended_statement(facts: list[HostFact]) -> str:
-    procs = [f for f in facts if f.name.startswith("pid ")]
-    orphans = [f for f in facts if "orphaned" in f.detail]
-    logins = [f for f in facts if f.detail.startswith("starts at login")]
+    procs = [f for f in facts if f.kind is FactKind.LONG_RUNNING]
+    browsers = [f for f in facts if f.kind is FactKind.DEBUG_BROWSER]
+    orphans = [f for f in facts if f.kind is FactKind.ORPHAN]
+    logins = [f for f in facts if f.kind is FactKind.LOGIN_ITEM]
     parts = []
     if procs:
         parts.append(
@@ -1314,9 +1453,13 @@ def _unattended_statement(facts: list[HostFact]) -> str:
         )
     if orphans:
         parts.append(f"{plural(len(orphans), 'MCP server')} left running after the session ended")
+    if browsers:
+        parts.append(
+            f"{plural(len(browsers), 'browser')} with a remote debugging port and no parent session"
+        )
     if logins:
         parts.append(plural(len(logins), "login item"))
-    statement = f"These keep running as you when you are not there: {_join_words(parts)}."
+    statement = f"These keep running as you when you are not there: {join(parts)}."
     unguarded = [f for f in procs if "--dangerously" in f.detail]
     if unguarded:
         verb = "was" if len(unguarded) == 1 else "were"
@@ -1333,7 +1476,7 @@ def rule_control(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
     browsers: dict[str, list[str]] = {}
     others = []
     for fact in facts:
-        if " extension bridge to " in fact.detail:
+        if fact.kind is FactKind.BRIDGE:
             browsers.setdefault(fact.name, []).append(fact.detail.split(" extension bridge", 1)[0])
         else:
             others.append(_brief(fact))
@@ -1341,14 +1484,15 @@ def rule_control(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
     parts = []
     if bridges:
         parts.append(
-            f"browser bridges that let an extension run a local program: {_join_words(bridges)}"
+            f"browser bridges that let an allowed extension start a local program: {join(bridges)}"
         )
     parts.extend(others)
     return [
         _host(
             "computer-control",
             Lens.MODEL,
-            f"Beyond the terminal, these can act on your computer: {'; '.join(parts)}.",
+            "Beyond the terminal, these are set up to run local programs or hold privacy "
+            f"grants: {'; '.join(parts)}.",
             evidence=sorted({ctx.display(f.path) for f in facts if f.path}),
             fix=Fix(
                 "Remove bridges and permissions you do not use",
@@ -1370,12 +1514,14 @@ def rule_backups(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
     included = [f for f in _facts(ctx, "backup") if f.concern]
     if not included:
         return []
-    where = next((f.detail for f in _facts(ctx, "backup") if f.name.endswith("destinations")), "")
+    where = next(
+        (f.detail for f in _facts(ctx, "backup") if f.kind is FactKind.BACKUP_DESTINATIONS), ""
+    )
     return [
         _host(
             "backups",
             Lens.COPIES,
-            f"Time Machine copies {_join_words([ctx.display(f.path) for f in included])} "
+            f"Time Machine copies {join([ctx.display(f.path) for f in included])} "
             f"to {where}. Deleting a transcript locally leaves it, and any secret in it, in "
             "every backup.",
             evidence=[f.detail for f in included],
@@ -1396,10 +1542,15 @@ def rule_unattended(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
     commands = [
         FixCommand(f"pkill -P 1 -f {_q(f.path)}")
         for f in facts
-        if "orphaned" in f.detail and f.path
+        if f.kind is FactKind.ORPHAN and f.path
     ]
     if not commands:
-        commands = [FixCommand("Quit the listed processes and remove the login items", manual=True)]
+        commands = [
+            FixCommand(
+                "Quit listed processes you no longer use; remove login items you do not want",
+                manual=True,
+            )
+        ]
     return [
         _host(
             "unattended",
@@ -1422,7 +1573,7 @@ def rule_other_tools(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
             "other-tools",
             Lens.COPIES,
             "Other AI tools also keep data here and were only inventoried: "
-            + _join_words([f.name for f in facts])
+            + join([f.name for f in facts])
             + ".",
             evidence=[ctx.display(f.path) for f in facts],
         )
@@ -1444,7 +1595,7 @@ HOST_RULES: tuple[HostRule, ...] = (
     HostRule("inherited-creds", "Agents inherit no other credentials", rule_inherited),
     HostRule("computer-control", "Nothing else can drive the computer", rule_control),
     HostRule("backups", "AI-tool history is not copied into backups", rule_backups),
-    HostRule("unattended", "Nothing runs without a session", rule_unattended),
+    HostRule("unattended", "No long-running or orphaned AI processes", rule_unattended),
     HostRule("other-tools", "No other AI tools keep data here", rule_other_tools),
 )
 

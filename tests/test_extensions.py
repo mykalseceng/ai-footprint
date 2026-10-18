@@ -68,6 +68,7 @@ def test_skill_rows_describe_each_skill_from_its_own_file(tmp_path: Path):
     (skills / "grill").mkdir(parents=True)
     (skills / "grill" / "SKILL.md").write_text(SKILL)
     (skills / "bare").mkdir()
+    (skills / "bare" / "SKILL.md").write_text("")
     [bare, grill] = extensions.skill_rows(skills, "claude", context(tmp_path))
     assert grill.name == "grill"
     assert grill.description == "Interview the user about a plan until every branch is settled."
@@ -76,14 +77,31 @@ def test_skill_rows_describe_each_skill_from_its_own_file(tmp_path: Path):
     assert bare.description == extensions.NO_SKILL_TEXT and bare.access == ""
 
 
+def test_only_skill_folders_and_described_markdown_files_are_skills(tmp_path: Path):
+    skills = tmp_path / "skills"
+    (skills / "empty").mkdir(parents=True)
+    (skills / "README.md").write_text("# Skills in this repo\n")
+    (skills / "python-encoding.test.mjs").write_text("export {}")
+    (skills / "standalone.md").write_text("---\ndescription: Does one thing.\n---\n")
+    (skills / ".system" / "imagegen").mkdir(parents=True)
+    (skills / ".system" / "imagegen" / "SKILL.md").write_text(SKILL)
+    (skills / ".git").mkdir()
+    rows = extensions.skill_rows(skills, "codex", context(tmp_path))
+    assert sorted(r.name for r in rows) == ["imagegen", "standalone"]
+    assert extensions.count_skills(skills) == 2
+    assert extensions.count_skills(tmp_path / "missing") == 0
+
+
 def test_plugin_manifest_reports_description_and_components(tmp_path: Path):
     install = tmp_path / "plugin"
     (install / ".claude-plugin").mkdir(parents=True)
     (install / ".claude-plugin" / "plugin.json").write_text(
         json.dumps({"description": "Audit things. Carefully. Very."})
     )
-    (install / "skills" / "a").mkdir(parents=True)
-    (install / "skills" / "b").mkdir()
+    for name in ("a", "b"):
+        (install / "skills" / name).mkdir(parents=True)
+        (install / "skills" / name / "SKILL.md").write_text(SKILL)
+    (install / "skills" / "README.md").write_text("# Skills\n")
     (install / "commands").mkdir()
     (install / "commands" / "x.md").write_text("")
     (install / ".mcp.json").write_text(json.dumps({"mcpServers": {"s": {"url": "https://x/"}}}))
@@ -175,3 +193,61 @@ def test_mcp_row_summarises_long_env_lists():
     assert row.notes == "env: 5 variables (VAR_0, VAR_1, VAR_2, …)"
     short = extensions.mcp_row("codex", "s", {"command": "/usr/bin/true", "env": {"A": 1}}, "c")
     assert short.notes == "env: A"
+
+
+def test_plugin_root_variable_resolves_to_the_plugin_folder(tmp_path: Path):
+    install = tmp_path / "semgrep" / "2.7.0"
+    (install / "scripts").mkdir(parents=True)
+    (install / "scripts" / "hook").write_text("#!/bin/sh\n")
+    (install / ".mcp.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "present": {"command": "${CLAUDE_PLUGIN_ROOT}/scripts/hook", "args": ["mcp"]},
+                    "gone": {"command": "${CLAUDE_PLUGIN_ROOT}/scripts/missing"},
+                    "unknown": {"command": "${OTHER_ROOT}/scripts/hook"},
+                }
+            }
+        )
+    )
+    rows = {r.name: r for r in extensions.plugin_mcp_rows(install, "claude", "semgrep@m")}
+    assert not rows["present"].dangling
+    assert rows["gone"].dangling
+    assert not rows["unknown"].dangling
+
+
+def test_remote_mcp_servers_run_no_local_code_at_start():
+    row = extensions.mcp_row("codex", "gmail", {"type": "http", "url": "https://x/mcp"}, "user")
+    assert not row.autostart
+
+
+def test_only_claude_codes_own_native_host_is_attributed_to_it(tmp_path: Path):
+    hosts = tmp_path / "Library/Application Support/Google/Chrome/NativeMessagingHosts"
+    hosts.mkdir(parents=True)
+    for name, path in (
+        ("com.anthropic.claude_browser_extension", "/Applications/Claude.app/host"),
+        (claude.NATIVE_HOST, str(tmp_path / "claude-host")),
+    ):
+        (hosts / f"{name}.json").write_text(json.dumps({"name": name, "path": path}))
+    [row] = claude._chrome_extensions(context(tmp_path), {})
+    assert row.name == claude.NATIVE_HOST
+    assert not row.autostart
+
+
+def test_merged_rows_keep_every_name_and_source():
+    rows = [
+        Extension(
+            "claude", "mcp", "hopper", "project ~/a", "/Apps/Hopper", identity="/Apps/Hopper"
+        ),
+        Extension(
+            "claude",
+            "mcp",
+            "HopperMCPServer",
+            "project ~/b",
+            "/Apps/Hopper",
+            identity="/Apps/Hopper",
+        ),
+    ]
+    [merged] = extensions.dedupe(rows)
+    assert merged.name == "hopper / HopperMCPServer"
+    assert merged.source == "project ~/a; project ~/b"

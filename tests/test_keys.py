@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import document, figurecheck, keys
+from ai_footprint import document, figurecheck, keys, tokens
 from ai_footprint.audit import run_audit
 from ai_footprint.model import AuditReport, CommandValidation
 from ai_footprint.tokens import inspect_token
@@ -52,7 +52,7 @@ def test_last_four_characters_are_kept_only_for_long_non_jwt_values():
 def test_the_same_key_in_several_tools_and_stores_is_one_row(audited):
     audit, _doc = audited
     [deepseek] = [r for r in keys.rows(audit) if r.provider == "DeepSeek"]
-    assert deepseek.kind == keys.API_KEY
+    assert deepseek.kind == tokens.API_KEY
     assert deepseek.shown == FAKE_DEEPSEEK[:6] + "…" + FAKE_DEEPSEEK[-4:]
     assert deepseek.used_by == ["OpenCode", "pi"]
     assert {(loc.tool, loc.store) for loc in deepseek.locations} == {
@@ -71,7 +71,7 @@ def test_owner_comes_only_from_recorded_data(audited):
         "~/.claude.json oauthAccount.emailAddress",
     )
     for row in rows:
-        if row.kind == keys.API_KEY:
+        if row.kind == tokens.API_KEY:
             assert (row.owner, row.owner_source) == ("", "")
 
 

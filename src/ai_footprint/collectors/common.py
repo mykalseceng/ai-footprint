@@ -6,27 +6,40 @@ import shlex
 import stat
 import tomllib
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ai_footprint.fsinfo import describe, mode_string, owner_name, tree_stats
+from ai_footprint.fsinfo import (
+    describe,
+    mode_string,
+    owner_name,
+    readable_by_others,
+    tilde,
+    tree_stats,
+)
+from ai_footprint.host import Socket, sockets
 from ai_footprint.model import (
     Artifact,
     BinaryInfo,
     Category,
+    Credential,
     Endpoint,
     FingerprintItem,
     Setting,
+    StoreKind,
     ToolPresence,
+    ToolReport,
 )
 from ai_footprint.system import System
+from ai_footprint.tokens import inspect_token
 
+AD_HOC = "ad-hoc signed (no signing identity)"
 HOST_RE = re.compile(rb"https?://([a-z0-9][a-z0-9.-]*\.[a-z]{2,})(?=[/:\"'\s?)\\]|$)")
 INTERPRETERS = frozenset({"node", "python", "python3", "bun", "deno", "uv", "npx", "uvx"})
 SHELLS = frozenset({"bash", "sh", "zsh", "/bin/bash", "/bin/sh", "/bin/zsh"})
-MAX_HOST_BYTES = 256 * 1024 * 1024
+MAX_HOST_BYTES = 256_000_000
 SEARCH_CHUNK_BYTES = 8 * 1024 * 1024
 
 
@@ -44,8 +57,7 @@ class Context:
 
     def display(self, path: str) -> str:
         """Path with the home directory shown as ``~``."""
-        home = str(self.home)
-        return "~" + path[len(home) :] if path.startswith(home) else path
+        return tilde(path, str(self.home))
 
     def binary_has(self, binary: str, markers: Iterable[str]) -> dict[str, bool]:
         """Which marker strings appear in a binary or script."""
@@ -195,11 +207,65 @@ def binary_info(system: System, path: str, *, version: str = "") -> BinaryInfo:
             info.writable_dirs.append(str(directory))
     if system.has_probe("codesign"):
         result = system.run("codesign", ["-dv", "--verbose=2", str(resolved)])
-        authorities = re.findall(r"^Authority=(.+)$", result.stderr, re.MULTILINE)
+        info.signer = signer(result.stderr)
         team = re.search(r"^TeamIdentifier=(.+)$", result.stderr, re.MULTILINE)
-        info.signer = authorities[0] if authorities else "unsigned or not a Mach-O binary"
-        info.team_id = team.group(1) if team else ""
+        info.team_id = team.group(1) if team and team.group(1) != "not set" else ""
     return info
+
+
+def signer(codesign_output: str) -> str:
+    """Who signed a binary, from ``codesign -dv`` output: an authority, ad-hoc, or unsigned."""
+    authorities = re.findall(r"^Authority=(.+)$", codesign_output, re.MULTILINE)
+    if authorities:
+        return authorities[0]
+    if re.search(r"^Signature=adhoc$", codesign_output, re.MULTILINE):
+        return AD_HOC
+    return "unsigned or not a Mach-O binary"
+
+
+def provider_credential(
+    ctx: Context,
+    entry: dict[str, Any],
+    *,
+    tool: str,
+    provider: str,
+    store: StoreKind,
+    path: Path,
+    fingerprints: dict[str, str],
+    label: str,
+) -> Credential:
+    """A provider login or key stored as ``{type, access, refresh, key, expires}``.
+
+    Args:
+        ctx: Collector inputs.
+        entry: The stored entry.
+        tool: Tool id.
+        provider: Provider name as shown in the report.
+        store: How the entry is stored, e.g. ``plaintext file``.
+        path: File holding the entry.
+        fingerprints: Known credential fingerprints, extended with this entry's values.
+        label: How a copy of a value found elsewhere is named, e.g. ``pi openai``.
+    """
+    cred = Credential(
+        tool,
+        provider,
+        store,
+        str(path),
+        f"{entry.get('type', '?')} credential; file mode {mode_string(path.stat().st_mode)}",
+        readable_by_others=readable_by_others(path),
+    )
+    for name in ("access", "refresh", "key"):
+        value = entry.get(name)
+        if isinstance(value, str) and value:
+            info = inspect_token(
+                name,
+                value,
+                now=ctx.now,
+                expires_at=entry.get("expires") if name == "access" else None,
+            )
+            cred.tokens.append(info)
+            fingerprints.setdefault(info.fingerprint, f"{label} {name}")
+    return cred
 
 
 def _dir_writable(mode: int) -> bool:
@@ -252,6 +318,73 @@ def mined_endpoints(
     ]
 
 
+def socket_endpoints(tool: str, socks: Iterable[Socket]) -> list[Endpoint]:
+    """One row per remote host the tool's processes have open, with a count and their pids.
+
+    Connections into a port the tool itself listens on are inbound, so they are left out.
+    """
+    socks = list(socks)
+    listening = {s.local for s in socks if s.state == "LISTEN"}
+    pids: dict[str, set[int]] = {}
+    opened: Counter[str] = Counter()
+    for sock in socks:
+        if sock.remote and sock.local not in listening:
+            pids.setdefault(sock.remote, set()).add(sock.pid)
+            opened[sock.remote] += 1
+    out = []
+    for remote, count in opened.items():
+        owners = ", ".join(str(pid) for pid in sorted(pids[remote]))
+        noun = "socket" if count == 1 else "sockets"
+        out.append(Endpoint(tool, remote, f"open {noun} from pid {owners}", "live-socket", count))
+    return out
+
+
+def endpoints(
+    ctx: Context,
+    report: ToolReport,
+    known: Mapping[str, str],
+    log_paths: Iterable[Path],
+    *,
+    markers: Mapping[str, str] | None = None,
+    extra: Iterable[Endpoint] = (),
+    socks: Iterable[Socket] | None = None,
+) -> list[Endpoint]:
+    """Hosts the tool names or connects to, in report order.
+
+    Args:
+        ctx: Collection context.
+        report: The tool's report; its binary and processes are read.
+        known: ``{host: purpose}`` the collector knows about.
+        log_paths: Local logs to mine for host names.
+        markers: ``{host: string}`` to look for in the binary when it differs from the host.
+        extra: Tool-specific rows (config or credential hosts), listed after the binary's.
+        socks: The tool's sockets when the collector already listed them.
+    """
+    binary = binary_path(report)
+    wanted = {host: (markers or {}).get(host, host) for host in known}
+    present = ctx.binary_has(binary, list(wanted.values())) if binary else {}
+    out = [
+        Endpoint(report.name, host, purpose, "binary")
+        for host, purpose in known.items()
+        if present.get(wanted[host])
+    ]
+    out += list(extra)
+    out += mined_endpoints(report.name, mine_hosts(log_paths), dict(known))
+    if socks is None:
+        socks = sockets(ctx.system, [p.pid for p in report.processes])
+    return out + socket_endpoints(report.name, socks)
+
+
+def binary_path(report: ToolReport) -> str:
+    """The resolved path of the tool's first binary on PATH, or empty when none is installed."""
+    return report.binaries[0].resolved if report.binaries else ""
+
+
+def value_or_unset(mapping: Mapping[str, Any], key: str) -> str:
+    """A config value as text, or ``not set`` when the key is absent."""
+    return str(mapping[key]) if key in mapping else "not set"
+
+
 def command_target(command: str, args: list[str]) -> str | None:
     """The file an MCP/hook command ultimately runs, when it can be determined."""
     name = Path(command).name
@@ -270,10 +403,41 @@ def command_target(command: str, args: list[str]) -> str | None:
     return command
 
 
+SHELL_FILES = (".zshrc", ".bashrc", ".bash_profile", ".zprofile", ".config/fish/config.fish")
+
+
+def shell_shortcuts(ctx: Context, flag: str) -> list[Setting]:
+    """Uncommented lines in your shell startup files that pass ``flag``, one setting each."""
+    out = []
+    for rc in SHELL_FILES:
+        path = ctx.home / rc
+        if not path.is_file():
+            continue
+        for number, line in enumerate(path.read_text(errors="replace").splitlines(), start=1):
+            if flag in line and not line.lstrip().startswith("#"):
+                out.append(
+                    Setting(
+                        f"~/{rc}:{number}",
+                        line.strip()[:120],
+                        f"Shell shortcut that passes {flag}",
+                        concern=True,
+                    )
+                )
+    return out
+
+
 def is_dangling(command: str, args: list[str], *, cwd: Path | None = None) -> bool:
-    """True when the program or script a command launches does not exist."""
+    """True when the program or script a command launches does not exist.
+
+    ``${CLAUDE_PLUGIN_ROOT}`` is the plugin folder ``cwd``; a command that names any other
+    variable cannot be resolved here, so it is not called missing.
+    """
     target = command_target(command, args)
     if target is None or "/" not in target:
+        return False
+    if cwd is not None:
+        target = target.replace("${CLAUDE_PLUGIN_ROOT}", str(cwd))
+    if "$" in target:
         return False
     path = Path(target).expanduser()
     if not path.is_absolute() and cwd is not None:
@@ -291,9 +455,18 @@ def fingerprint_items(
 
 
 def presence(
-    name: str, display_name: str, binaries: list[BinaryInfo], paths: list[Path]
+    name: str,
+    display_name: str,
+    binaries: list[BinaryInfo],
+    paths: list[Path],
+    *,
+    sized: bool = True,
 ) -> ToolPresence:
-    """Presence record: installed when a binary is on PATH or a data folder exists."""
+    """Presence record: installed when a binary is on PATH or a data folder exists.
+
+    ``sized`` totals the data folders for ``--list``; a full audit measures each location
+    itself, so it skips that walk.
+    """
     existing = [p for p in paths if p.exists()]
     return ToolPresence(
         name=name,
@@ -301,5 +474,5 @@ def presence(
         installed=bool(binaries or existing),
         binaries=binaries,
         data_paths=[str(p) for p in existing],
-        size_bytes=sum(tree_stats(p).size_bytes for p in existing),
+        size_bytes=sum(tree_stats(p).size_bytes for p in existing) if sized else 0,
     )

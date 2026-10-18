@@ -10,22 +10,24 @@ they contain markup. Everything is escaped as well.
 import html
 import re
 from collections.abc import Iterable, Sequence
+from typing import Any
 
-from ai_footprint import answers, document, figures, keys, surface
-from ai_footprint.fsinfo import human_size
+from ai_footprint import document, surface, tokens
+from ai_footprint.fsinfo import human_size, tilde
 from ai_footprint.model import (
+    EXTENSION_PAGES,
     AuditReport,
-    Category,
     Credential,
     Exposure,
-    Extension,
     Fix,
     HostFact,
     ToolReport,
 )
-from ai_footprint.report_text import validation_label
 from ai_footprint.rules import Check, Checklist
 
+Views = dict[str, Any]
+"""The derived views of one run, ``document.build(...)["views"]``, exactly as the dashboard reads
+them, so the two outputs show the same sentences, answers and labels."""
 LONG_RUN = re.compile(r"\S{24,}")
 SEPARATOR = re.compile(r"([/._:=|,@])")
 
@@ -100,31 +102,32 @@ def _header(eyebrow: str, title: str, tldr_html: str) -> str:
 </header>"""
 
 
-def _lens_folds(story: surface.Narrative, *, show_tool: bool) -> str:
+def _lens_folds(narrative: Views, views: Views, *, show_tool: bool) -> str:
+    """One fold per attacker position, from a narrative view (the machine's or one tool's)."""
+    lenses = {lens["id"]: lens for lens in views["lenses"]}
     out = []
-    for view in story.lenses:
-        if not view.points:
+    for view in narrative["lenses"]:
+        points = view["points"]
+        if not points:
             continue
+        lens = lenses[view["lens"]]
         items = "".join(
             "<li>"
-            + (f'<span class="who">{e(p.tool)}</span>' if show_tool else "")
-            + f"<span>{rich(p.text)}</span></li>"
-            for p in view.points
+            + (f'<span class="who">{e(p["tool"])}</span>' if show_tool else "")
+            + f"<span>{rich(p['text'])}</span></li>"
+            for p in points
         )
-        body = f'<p class="question">{e(view.lens.question)}</p><ul class="points">{items}</ul>'
+        body = f'<p class="question">{e(lens["question"])}</p><ul class="points">{items}</ul>'
         out.append(
-            fold(
-                view.lens.title, body, where=surface.plural(len(view.points), "path"), is_open=True
-            )
+            fold(lens["title"], body, where=surface.plural(len(points), "path"), is_open=True)
         )
     return "".join(out) or '<p class="muted">Nothing found from any position.</p>'
 
 
-def _fix_steps(fix: Fix) -> str:
+def _fix_steps(fix: Fix, labels: list[Views]) -> str:
+    """Fix commands, each with the badge its validation earned as labelled in the views."""
     items = []
-    for cmd, validation in zip(fix.commands, fix.validations, strict=False):
-        label, tone = validation_label(validation)
-        tone_class = {"PASS": "ok", "FAIL": "concern"}.get(tone, "neutral")
+    for cmd, validation, label in zip(fix.commands, fix.validations, labels, strict=False):
         checks = "".join(
             f"<li class='{'ok' if c.passed else 'bad'}'>{'✓' if c.passed else '✗'} "
             f"{e(c.name)}: {e(c.detail)}</li>"
@@ -133,13 +136,13 @@ def _fix_steps(fix: Fix) -> str:
         text = f"<p>{e(cmd.text)}</p>" if cmd.manual else f"<pre>{e(cmd.text)}</pre>"
         items.append(
             f'<div class="step">{text}<details class="checks"><summary>'
-            f"{pill(label.lstrip('✓✗ ').split(':')[0], tone_class)}</summary>"
+            f"{pill(label['badge'], label['tone'])}</summary>"
             f"<ul>{checks}</ul></details></div>"
         )
     return f'<div class="fix"><p class="fix-title">{e(fix.summary)}</p>{"".join(items)}</div>'
 
 
-def _close_folds(exposures: list[Exposure]) -> str:
+def _close_folds(exposures: list[Exposure], views: Views) -> str:
     out = []
     for exposure in exposures:
         if not exposure.fix:
@@ -148,7 +151,7 @@ def _close_folds(exposures: list[Exposure]) -> str:
         body = (
             f"<p>{rich(exposure.statement)}</p>"
             + (f'<ul class="ev">{evidence}</ul>' if evidence else "")
-            + _fix_steps(exposure.fix)
+            + _fix_steps(exposure.fix, views["fix_labels"].get(exposure.id, []))
         )
         out.append(
             f'<div id="{e(exposure.id)}" class="anchor">'
@@ -164,20 +167,19 @@ def _close_folds(exposures: list[Exposure]) -> str:
     )
 
 
-def _faq(tool: ToolReport, home: str) -> str:
+def _faq(answers: list[Views]) -> str:
     items = []
-    for answer in answers.for_tool(tool, home):
-        body = f"<p>{rich(answer.text)}</p>" if answer.text else ""
-        if answer.rows:
-            rows = [[rich_breakable(cell) for cell in row] for row in answer.rows]
-            body += table(list(answer.headers), rows, raw=True)
-        if answer.links:
-            body += (
-                "<p>"
-                + " · ".join(f'<a href="#{e(page)}">{e(label)}</a>' for page, label in answer.links)
-                + "</p>"
+    for answer in answers:
+        body = f"<p>{rich(answer['text'])}</p>" if answer["text"] else ""
+        if answer["rows"]:
+            rows = [[rich_breakable(cell) for cell in row] for row in answer["rows"]]
+            body += table(list(answer["headers"]), rows, raw=True)
+        if answer["links"]:
+            links = " · ".join(
+                f'<a href="#{e(page)}">{e(label)}</a>' for page, label in answer["links"]
             )
-        items.append(f"<dt>{e(answer.question)}</dt><dd>{body}</dd>")
+            body += f"<p>{links}</p>"
+        items.append(f"<dt>{e(answer['question'])}</dt><dd>{body}</dd>")
     return f'<h2>Your questions</h2><dl class="faq">{"".join(items)}</dl>'
 
 
@@ -264,7 +266,7 @@ def _files_table(tool: ToolReport, home: str) -> str:
     rows = [
         [
             e(a.label),
-            f"<code>{breakable(a.path.replace(home, '~', 1))}</code>",
+            f"<code>{breakable(tilde(a.path, home))}</code>",
             e(human_size(a.size_bytes)),
             e(f"{a.file_count:,}"),
             e(a.mode),
@@ -385,40 +387,49 @@ def _inventory(tool: ToolReport, home: str) -> str:
 # --- pages -------------------------------------------------------------------------------------
 
 
-def _tool_rows(tools: list[ToolReport]) -> list[list[str]]:
+def _figure(views: Views, tool: str, figure_id: str) -> Views:
+    return next(f for f in views["figures"]["tools"][tool] if f["id"] == figure_id)
+
+
+def _tool_link(tool: ToolReport) -> str:
+    return f"<a href='#tool-{e(tool.name)}'>{e(tool.display_name)}</a>"
+
+
+def _tool_rows(tools: list[ToolReport], views: Views) -> list[list[str]]:
     rows = []
     for t in tools:
-        approval = figures.approval(t)
-        tone = {"found": "concern", "not checked": "neutral"}.get(str(approval.value), "ok")
+        approval = _figure(views, t.name, "approval")
+        tone = {"found": "concern", "not checked": "neutral"}.get(str(approval["value"]), "ok")
         rows.append(
             [
-                f"<a href='#tool-{e(t.name)}'>{e(t.display_name)}</a>",
-                e(t.binaries[0].version if t.binaries else "?"),
-                e(human_size(figures.disk_bytes(t.artifacts, Category.SESSION))),
-                e(str(len(t.credentials))),
-                pill(approval.display, tone)
-                + f" <span class='small'>{breakable(approval.detail)}</span>",
+                _tool_link(t),
+                e(surface.join(t.versions()) or "?"),
+                e(_figure(views, t.name, "sessions")["display"]),
+                e(_figure(views, t.name, "credentials")["display"]),
+                pill(approval["display"], tone)
+                + f" <span class='small'>{breakable(approval['detail'])}</span>",
             ]
         )
     return rows
 
 
-def _credential_rows(tools: list[ToolReport]) -> list[list[str]]:
+def _credential_rows(tools: list[ToolReport], views: Views) -> list[list[str]]:
+    by_name = {t.name: t for t in tools}
     return [
         [
-            f"<a href='#tool-{e(t.name)}'>{e(t.display_name)}</a>",
-            e(group[0].provider),
-            e(", ".join(sorted({c.store for c in group}))),
-            pill("yes", "concern") if any(c.readable_by_others for c in group) else "no",
-            e(surface.lifetime(group)),
+            _tool_link(by_name[row["tool"]]),
+            e(row["provider"]),
+            e(", ".join(row["stores"])),
+            pill("yes", "concern") if row["readable_by_others"] else "no",
+            e(row["lifetime"]),
         ]
-        for t, group in surface.merged_credentials(tools)
+        for row in views["credentials"]
     ]
 
 
-def _summary(audit: AuditReport) -> str:
+def _summary(audit: AuditReport, views: Views) -> str:
     host = audit.host
-    story = surface.for_machine(audit)
+    machine = views["machine"]
     tools = [t for t in audit.tools if t.installed]
     mode = ("full scan" if audit.scanned else "no secret scan") + (
         " · live checks" if audit.live else " · offline"
@@ -432,24 +443,24 @@ def _summary(audit: AuditReport) -> str:
             "Tool",
             "Version",
             "Conversations and history",
-            "Credential locations",
+            "Stored credentials",
             "Approval turned off",
         ],
-        _tool_rows(tools),
+        _tool_rows(tools, views),
         raw=True,
     )
     cred_table = table(
         ["Tool", "Provider", "Stored in", "Other accounts can read", "Keeps working"],
-        _credential_rows(tools),
+        _credential_rows(tools, views),
         raw=True,
     )
     return f"""<section class="view" id="summary">
-{_header(eyebrow, "Attack surface of your AI coding tools", e(" ".join(story.headline)))}
-<div class="callout"><span class="ico">★</span><div>{rich(document.proof(audit))}</div></div>
+{_header(eyebrow, "Attack surface of your AI coding tools", e(" ".join(machine["headline"])))}
+<div class="callout"><span class="ico">★</span><div>{rich(machine["proof"])}</div></div>
 <h2>Ways in, by attacker position</h2>
 <p>What an attacker gets from each position. Every line is something this audit observed on
 this machine; nothing is rated.</p>
-{_lens_folds(story, show_tool=True)}
+{_lens_folds(machine, views, show_tool=True)}
 <h2>Tools</h2>{tool_table}
 <h2>Credentials</h2>{cred_table}
 </section>"""
@@ -469,23 +480,22 @@ OWN_WORDS = (
 )
 
 
-def _skill_folds(skills: list[tuple[Extension, list[str]]]) -> str:
+def _skill_folds(skills: list[Views]) -> str:
     """Skills grouped by where they come from: one fold per plugin, one for user folders."""
-    groups: dict[str, list[tuple[Extension, list[str]]]] = {}
-    for x, t in skills:
-        key = x.source if x.source.startswith("plugin ") else "User skill folders"
-        groups.setdefault(key, []).append((x, t))
+    groups: dict[str, list[Views]] = {}
+    for x in skills:
+        groups.setdefault(x["group"], []).append(x)
     out = []
-    for key in sorted(groups, key=lambda k: (k != "User skill folders", k)):
+    for key in sorted(groups, key=lambda k: (k != document.USER_SKILLS, k)):
         rows = [
             [
-                breakable(x.name),
-                _used_by(t),
-                breakable(x.source),
-                breakable(x.access or "none declared"),
-                breakable(x.description),
+                breakable(x["name"]),
+                _used_by(x["used_by"]),
+                breakable(x["source"]),
+                breakable(x["access"] or "none declared"),
+                breakable(x["description"]),
             ]
-            for x, t in groups[key]
+            for x in groups[key]
         ]
         body = table(
             ["Name", "Used by", "Where", "Tools it declares", "Says it does"], rows, raw=True
@@ -495,38 +505,43 @@ def _skill_folds(skills: list[tuple[Extension, list[str]]]) -> str:
                 key,
                 body,
                 where=surface.plural(len(rows), "skill"),
-                is_open=key == "User skill folders",
+                is_open=key == document.USER_SKILLS,
             )
         )
     return "".join(out) or "<p class='muted'>None.</p>"
 
 
-def _extension_pages(audit: AuditReport) -> str:
-    grouped = document.grouped_extensions(audit)
-    summaries = document.page_summaries(grouped, audit)
-    mcp = [(x, t) for x, t in grouped if x.kind in {"mcp", "connector"}]
-    skills = [(x, t) for x, t in grouped if x.kind == "skill"]
-    plugins = [(x, t) for x, t in grouped if x.kind == "plugin"]
+def _extension_pages(views: Views) -> str:
+    summaries = views["pages"]
+    listed = {
+        page: [x for x in views["extensions"] if x["kind"] in kinds]
+        for page, kinds in EXTENSION_PAGES.items()
+    }
     mcp_table = table(
         ["Name", "Used by", "Runs", "Says it does", "Notes"],
         [
             [
-                breakable(x.name),
-                _used_by(t),
-                f"<code>{breakable(x.detail[:160])}</code>",
-                breakable(x.description),
-                breakable("; ".join(p for p in (x.source, x.notes) if p)),
+                breakable(x["name"]),
+                _used_by(x["used_by"]),
+                f"<code>{breakable(x['detail'][:160])}</code>",
+                breakable(x["description"]),
+                breakable("; ".join(p for p in (x["source"], x["notes"]) if p)),
             ]
-            for x, t in mcp
+            for x in listed["mcp"]
         ],
         raw=True,
     )
-    skill_table = _skill_folds(skills)
+    skill_table = _skill_folds(listed["skills"])
     plugin_table = table(
         ["Name", "Used by", "Contains", "Says it does"],
         [
-            [breakable(x.name), _used_by(t), breakable(x.access), breakable(x.description)]
-            for x, t in plugins
+            [
+                breakable(x["name"]),
+                _used_by(x["used_by"]),
+                breakable(x["access"]),
+                breakable(x["description"]),
+            ]
+            for x in listed["plugins"]
         ],
         raw=True,
     )
@@ -539,27 +554,27 @@ def _extension_pages(audit: AuditReport) -> str:
     )
 
 
-def _tool_view(audit: AuditReport, tool: ToolReport) -> str:
-    story = surface.for_tool(audit, tool)
-    version = tool.binaries[0].version if tool.binaries else "?"
+def _tool_view(audit: AuditReport, tool: ToolReport, views: Views) -> str:
+    story = views["tools"][tool.name]
+    version = surface.join(tool.versions()) or "?"
     roots = ", ".join((tool.secret_scan.roots if tool.secret_scan else [])[:2])
     eyebrow = f"Tool · v{version}" + (f" · {roots}" if roots else "")
     home = audit.host.home
     return f"""<section class="view" id="tool-{e(tool.name)}">
-{_header(eyebrow, tool.display_name, e(" ".join(story.headline)))}
+{_header(eyebrow, tool.display_name, e(" ".join(story["headline"])))}
 <h2>Ways in</h2>
-{_lens_folds(story, show_tool=False)}
-{_close_folds(tool.exposures)}
-{_faq(tool, home)}
+{_lens_folds(story, views, show_tool=False)}
+{_close_folds(tool.exposures, views)}
+{_faq(story["answers"])}
 {_inventory(tool, home)}
 </section>"""
 
 
-def _host_tldr(findings: list[Exposure]) -> str:
+def _host_tldr(scope: str, findings: list[Exposure]) -> str:
     if not findings:
-        return f"{e(document.HOST_SCOPE)} Nothing found."
+        return f"{e(scope)} Nothing found."
     links = "".join(f'<li><a href="#{e(x.id)}">{e(x.label)}</a></li>' for x in findings)
-    return f"{e(document.HOST_SCOPE)} {e(surface.plural(len(findings), 'signal'))} to review:<ul>{links}</ul>"
+    return f"{e(scope)} {e(surface.plural(len(findings), 'signal'))} to review:<ul>{links}</ul>"
 
 
 def _facts_table(facts: list[HostFact], home: str) -> str:
@@ -572,29 +587,33 @@ def _facts_table(facts: list[HostFact], home: str) -> str:
         row = [
             pill("review", "concern") if fact.concern else pill("info", "neutral"),
             breakable(fact.name),
-            breakable(fact.detail.replace(home, "~")),
+            breakable(tilde(fact.detail, home)),
         ]
         if with_files:
-            path = fact.path.replace(home, "~", 1)
+            path = tilde(fact.path, home)
             row.append(f"<code>{breakable(path)}</code>" if path else "")
         rows.append(row)
     return table(["", "Item", "Found", *(["File"] if with_files else [])], rows, raw=True)
 
 
+def _host_fix(finding: Exposure | None, views: Views) -> str:
+    if finding is None or finding.fix is None:
+        return ""
+    return _fix_steps(finding.fix, views["fix_labels"].get(finding.id, []))
+
+
 def _host_question(
-    question: str, facts: list[HostFact], finding: Exposure | None, fallback: str, home: str
+    asked: Views, facts: list[HostFact], finding: Exposure | None, home: str, views: Views
 ) -> str:
-    status = pill("review", "concern") if finding else pill("clear", "ok")
-    answer = finding.statement if finding else (fallback if not facts else "Nothing to review.")
-    fix = _fix_steps(finding.fix) if finding and finding.fix else ""
-    return _host_block(question, status, answer, _facts_table(facts, home) + fix)
+    """One question as the host view answers it, with the facts read and any fix."""
+    tone = "concern" if asked["status"] == "review" else "ok"
+    body = _facts_table(facts, home) + _host_fix(finding, views)
+    return _host_block(asked["question"], pill(asked["status"], tone), asked["answer"], body)
 
 
-def _host_finding(finding: Exposure) -> str:
+def _host_finding(finding: Exposure, views: Views) -> str:
     evidence = "".join(f"<li>{rich(x)}</li>" for x in finding.evidence[:8])
-    body = (f'<ul class="ev">{evidence}</ul>' if evidence else "") + (
-        _fix_steps(finding.fix) if finding.fix else ""
-    )
+    body = (f'<ul class="ev">{evidence}</ul>' if evidence else "") + _host_fix(finding, views)
     return _host_block(finding.label, pill("review", "concern"), finding.statement, body)
 
 
@@ -602,31 +621,30 @@ def _host_block(title: str, status: str, answer: str, body: str) -> str:
     return f'<div class="hq"><h3>{e(title)} {status}</h3><p>{rich(answer)}</p>{body}</div>'
 
 
-def _host_view(audit: AuditReport) -> str:
+def _host_view(audit: AuditReport, views: Views) -> str:
     host = audit.host
+    view = views["host"]
     findings = {x.id: x for x in audit.host_exposures}
-    asked = {finding_id for _topic, _question, finding_id, _fallback in answers.HOST_QUESTIONS}
     across = "".join(
-        f'<div class="anchor" id="{e(x.id)}">{_host_finding(x)}</div>'
-        for x in audit.host_exposures
-        if x.id not in asked
+        f'<div class="anchor" id="{e(finding_id)}">{_host_finding(findings[finding_id], views)}</div>'
+        for finding_id in view["across"]
     )
     questions = "".join(
-        f'<div class="anchor" id="{e(finding_id)}">'
+        f'<div class="anchor" id="{e(asked["finding_id"])}">'
         + _host_question(
-            question,
-            [f for f in host.facts if f.topic == topic],
-            findings.get(finding_id),
-            fallback,
+            asked,
+            [f for f in host.facts if f.topic == asked["topic"]],
+            findings.get(asked["finding_id"]),
             host.home,
+            views,
         )
         + "</div>"
-        for topic, question, finding_id, fallback in answers.HOST_QUESTIONS
+        for asked in view["questions"]
     )
     path_rows = [
         [
             str(p.index),
-            p.path.replace(host.home, "~", 1),
+            tilde(p.path, host.home),
             f"{p.owner}:{p.group}",
             p.mode,
             "yes" if p.group_writable or p.other_writable else "no",
@@ -636,7 +654,7 @@ def _host_view(audit: AuditReport) -> str:
     accounts = [[name, " ".join(groups)] for name, groups in host.other_user_groups.items()]
     path_table = table(["#", "Folder", "Owner", "Mode", "Group/other writable"], path_rows)
     return f"""<section class="view" id="host">
-{_header(f"Host · {host.os} · {host.arch}", "This machine", _host_tldr(audit.host_exposures))}
+{_header(f"Host · {host.os} · {host.arch}", "This machine", _host_tldr(view["scope"], audit.host_exposures))}
 {f"<h2>Across tools</h2>{across}" if across else ""}
 <h2>Your questions</h2>{questions}
 <h2>Other local accounts</h2>{table(["Account", "Groups"], accounts)}
@@ -650,30 +668,34 @@ def _check_status(check: Check) -> str:
     return pill("not checked", "neutral") if check.unchecked else pill("clear", "ok")
 
 
-def _key_locations(row: keys.KeyRow, home: str) -> str:
+def _key_locations(row: Views, home: str) -> str:
     return "<br>".join(
-        f"{e(loc.tool)} · {e(loc.store)}"
-        + (" " + pill("readable by other accounts", "concern") if loc.readable_by_others else "")
-        + f"<br><code>{breakable(loc.location.replace(home, '~', 1))}</code>"
-        for loc in row.locations
+        f"{e(loc['tool'])} · {e(loc['store'])}"
+        + (" " + pill("readable by other accounts", "concern") if loc["readable_by_others"] else "")
+        + f"<br><code>{breakable(tilde(loc['location'], home))}</code>"
+        for loc in row["locations"]
     )
 
 
-def _keys_view(audit: AuditReport) -> str:
-    rows = keys.rows(audit)
-    api = sum(1 for r in rows if r.kind == keys.API_KEY)
+def _key_owner(row: Views) -> str:
+    if not row["owner"]:
+        return "<span class='muted'>not recorded on disk</span>"
+    return f"{breakable(row['owner'])}<br><span class='small muted'>from {e(row['owner_source'])}</span>"
+
+
+def _keys_view(audit: AuditReport, views: Views) -> str:
+    rows = views["keys"]
+    api = sum(1 for r in rows if r["kind"] == tokens.API_KEY)
     table_rows = [
         [
-            e(r.provider),
-            e(r.kind),
-            f"<code>{breakable(r.shown)}</code>"
-            + (f"<br>{r.length} characters" if r.length else "")
-            + f"<br><span class='small muted'>fingerprint {e(', '.join(r.fingerprints))}</span>",
-            (f"{breakable(r.owner)}<br><span class='small muted'>from {e(r.owner_source)}</span>")
-            if r.owner
-            else "<span class='muted'>not recorded on disk</span>",
+            e(r["provider"]),
+            e(r["kind"]),
+            f"<code>{breakable(r['shown'])}</code>"
+            + (f"<br>{r['length']} characters" if r["length"] else "")
+            + f"<br><span class='small muted'>fingerprint {e(', '.join(r['fingerprints']))}</span>",
+            _key_owner(r),
             _key_locations(r, audit.host.home),
-            e(r.lifetime),
+            e(r["lifetime"]),
         ]
         for r in rows
     ]
@@ -707,7 +729,71 @@ def _checklist_view(checklist: Checklist) -> str:
 </section>"""
 
 
-def _method_view(audit: AuditReport) -> str:
+def _connection_rows(rows: list[Views]) -> list[list[str]]:
+    return [
+        [
+            f"<code>{breakable(c['host'])}</code>",
+            f"<code>{e(c['address'])} {e(c['transport'])}/{c['port']}</code>",
+            e(c["named_by"]),
+            breakable(", ".join(c["processes"])),
+            f"{c['first_second']:.1f} s",
+            str(c["packets"]),
+            e(human_size(c["bytes"])),
+        ]
+        for c in rows
+    ]
+
+
+CONNECTION_HEADERS = ["Host", "Address", "Named by", "Process", "First packet", "Packets", "Bytes"]
+
+
+def _network_tool(name: str, display: str, view: Views) -> str:
+    parts = [f"<h2>{e(display)}</h2><p>{e(view['summary'])}</p>"]
+    if view["captured"]:
+        facts = [
+            ("Launched", " ".join(view["command"])),
+            ("Environment", ", ".join(view["switches"]) or "no off-switch or proxy variables set"),
+            ("Stopped afterwards", ", ".join(view["stopped"]) or "nothing left running"),
+            ("Local packets", f"{view['local_packets']} (loopback, link-local and multicast)"),
+        ]
+        parts.append(table(["Fact", "Value"], [[k, breakable(v)] for k, v in facts], raw=True))
+        parts.append("<h3>Connections observed</h3>")
+        parts.append(
+            table(CONNECTION_HEADERS, _connection_rows(view["observed"]), raw=True)
+            if view["observed"]
+            else "<p class='muted'>No packets to any host off this machine.</p>"
+        )
+        lookups = ", ".join(view["lookups"]) or "none attributed to its processes"
+        parts.append(f"<h3>Names looked up</h3><p>{breakable(lookups)}</p>")
+    heading = (
+        "Named in the binary, not observed in this capture"
+        if view["captured"]
+        else ("Named in the binary")
+    )
+    rows = [[f"<code>{e(u['host'])}</code>", e(u["purpose"])] for u in view["unobserved"]]
+    parts.append(f"<h3>{heading}</h3>")
+    parts.append(
+        table(["Host", "Purpose"], rows, raw=True) if rows else "<p class='muted'>None.</p>"
+    )
+    return f'<div id="network-{e(name)}">{"".join(parts)}</div>'
+
+
+def _network_view(audit: AuditReport, views: Views) -> str:
+    net = views["network"]
+    intro = f"{net['method']}; file {net['capture_file']}." if net["method"] else net["how"]
+    body = "".join(
+        _network_tool(t.name, t.display_name, net["tools"][t.name])
+        for t in audit.tools
+        if t.installed
+    )
+    if net["unattributed"]:
+        body += f"<h2>Not attributed</h2><p>{e(net['unattributed_note'])}</p>" + table(
+            CONNECTION_HEADERS, _connection_rows(net["unattributed"]), raw=True
+        )
+    return _page("network", "Network", intro, body)
+
+
+def _method_view(audit: AuditReport, views: Views) -> str:
     probes = table(
         ["Probe", "Checks"],
         [
@@ -731,7 +817,7 @@ def _method_view(audit: AuditReport) -> str:
     )
     return f"""<section class="view" id="method">
 <header><div class="eyebrow">Provenance</div><h1>How this was measured</h1>
-<div class="tldr"><b>TL;DR</b> — {e(figures.method_summary(audit))}</div></header>
+<div class="tldr"><b>TL;DR</b> — {e(views["method"])}</div></header>
 <h2>Probe registry</h2>{probes}
 {fold("Every command executed", executed, where=f"{len(audit.executed)} commands")}
 </section>"""
@@ -745,6 +831,7 @@ def _nav(audit: AuditReport) -> tuple[str, list[str]]:
         ("skills", "Skills"),
         ("plugins", "Plugins"),
         ("keys", "Keys"),
+        ("network", "Network"),
         ("host", "This machine"),
         ("checklist", "Checklist"),
         ("method", "How this was measured"),
@@ -770,10 +857,17 @@ def _active_css(pages: list[str]) -> str:
     )
 
 
-def render(audit: AuditReport, checklist: Checklist) -> str:
-    """The full HTML document."""
+def render(audit: AuditReport, checklist: Checklist, views: Views) -> str:
+    """The full HTML document.
+
+    Args:
+        audit: The run, for raw inventory the dashboard also shows as recorded.
+        checklist: The run's checks.
+        views: ``document.build(audit, checklist)["views"]``; every sentence, answer, figure,
+            label and grouping is taken from here, so this report and the dashboard agree.
+    """
     nav, pages = _nav(audit)
-    tools = "".join(_tool_view(audit, t) for t in audit.tools if t.installed)
+    tools = "".join(_tool_view(audit, t, views) for t in audit.tools if t.installed)
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -786,13 +880,14 @@ def render(audit: AuditReport, checklist: Checklist) -> str:
 <div class="page">
 {nav}
 <main class="pages">
-{_summary(audit)}
+{_summary(audit, views)}
 {tools}
-{_extension_pages(audit)}
-{_host_view(audit)}
-{_keys_view(audit)}
+{_extension_pages(views)}
+{_host_view(audit, views)}
+{_keys_view(audit, views)}
+{_network_view(audit, views)}
 {_checklist_view(checklist)}
-{_method_view(audit)}
+{_method_view(audit, views)}
 <footer>ai-footprint {e(audit.auditor_version)} · {e(audit.generated_at)} · Private: this file maps
 your attack surface.</footer>
 </main>
@@ -871,9 +966,6 @@ details .body p { font-size: 14px; }
   border-left: 2px solid var(--oat); }
 .points .who { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em;
   text-transform: uppercase; color: var(--clay); }
-.tag { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--gray-500); border: 1px solid var(--gray-300); border-radius: 4px; padding: 0 5px;
-  margin-left: 4px; }
 .callout { display: flex; gap: 12px; border: 1.5px solid var(--oat);
   background: rgba(227, 218, 204, .35); border-radius: 10px; padding: 14px 16px; margin: 18px 0;
   font-size: 14px; }
@@ -920,7 +1012,6 @@ tr:last-child td { border-bottom: 0; }
 .cred-title { color: var(--slate); margin-bottom: 2px; }
 .sub { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em;
   text-transform: uppercase; color: var(--gray-500); margin: 14px 0 6px; }
-.plain { padding-left: 18px; font-size: 14px; }
 footer { margin-top: 64px; font-size: 12px; color: var(--gray-500); }
 @media (prefers-reduced-motion: reduce) { summary::before { transition: none; } }
 """

@@ -1,4 +1,5 @@
 import base64
+import datetime
 import shlex
 from pathlib import Path
 
@@ -6,7 +7,14 @@ from ai_footprint import accounts, hostscan
 from ai_footprint.collectors import claude as claude_cli
 from ai_footprint.collectors.common import Context
 from ai_footprint.host import all_processes
-from ai_footprint.model import Credential, Extension, ProcessInfo, TokenInfo, ToolReport
+from ai_footprint.model import (
+    Credential,
+    Extension,
+    ProcessInfo,
+    StoreKind,
+    TokenInfo,
+    ToolReport,
+)
 from ai_footprint.system import ProbeResult
 from tests.conftest import FakeSystem
 
@@ -29,7 +37,7 @@ def test_ssh_cipher_distinguishes_open_and_protected_keys(tmp_path: Path):
 
 
 def test_reach_reports_presence_never_values(tmp_path: Path):
-    secret = "AKIAABCDEFGHIJKLMNOP"
+    secret = "AKIA" + "Q7XK2M9PLW4RT8VN"
     (tmp_path / ".ssh").mkdir()
     (tmp_path / ".ssh" / "id_ed25519").write_text(openssh_key(b"none"))
     (tmp_path / ".aws").mkdir()
@@ -43,8 +51,14 @@ def test_reach_reports_presence_never_values(tmp_path: Path):
     facts = {f.name: f for f in hostscan.reach(tmp_path, system)}
     assert facts["SSH key id_ed25519"].detail == "no passphrase"
     assert facts["AWS credentials"].detail == "1 access key(s) in plaintext"
-    assert "keychain" in facts["GitHub CLI"].detail
-    assert "GITHUB_TOKEN" in facts["Secret-looking environment variables"].detail
+    assert (
+        facts["GitHub CLI"].detail
+        == "logged in; hosts.yml holds no token, so it is stored elsewhere"
+    )
+    assert (
+        "GITHUB_TOKEN"
+        in facts["Secret-looking environment variables in the audit's environment"].detail
+    )
     assert secret not in repr(facts)
     assert "ghp_value" not in repr(facts)
 
@@ -85,10 +99,25 @@ def test_orphaned_mcp_servers_are_found():
     system.responders.append(
         lambda argv: ProbeResult(0, rows, "") if argv[0].endswith("ps") else None
     )
-    facts = hostscan.unattended(system, [tool], Path("/none"))
+    facts = hostscan.unattended(system, [tool], Path("/none"), datetime.datetime(2026, 10, 12))
     orphan = next(f for f in facts if "orphaned" in f.detail)
     assert orphan.detail.startswith("1 orphaned process")
     assert "2026-10-04" in orphan.detail
+
+
+def test_tool_processes_running_a_day_or_more_are_reported():
+    tool = ToolReport(name="claude", display_name="Claude Code", installed=True)
+    tool.processes = [
+        ProcessInfo(1, "Sun Oct  4 10:00:00 2026", "claude --dangerously-skip-permissions"),
+        ProcessInfo(2, "Sun Oct 11 23:00:00 2026", "claude"),
+        ProcessInfo(3, "not a date", "claude"),
+    ]
+    facts = hostscan.unattended(
+        FakeSystem(), [tool], Path("/none"), datetime.datetime(2026, 10, 12)
+    )
+    [old] = [f for f in facts if f.name.startswith("pid ")]
+    assert old.name == "pid 1"
+    assert old.detail.startswith("Claude Code running since 2026-10-04: claude --dangerously")
 
 
 def test_other_tools_are_inventoried_with_mcp_servers(tmp_path: Path):
@@ -99,22 +128,21 @@ def test_other_tools_are_inventoried_with_mcp_servers(tmp_path: Path):
     assert "MCP servers: github" in facts["Cursor"].detail
 
 
-def test_claude_training_setting_wording_needs_the_binary(tmp_path: Path):
+def test_claude_grove_cache_is_reported_as_the_notice_config_not_the_choice(tmp_path: Path):
     ctx = Context(home=tmp_path, system=FakeSystem(), now=0.0)
     config = {
         "oauthAccount": {"accountUuid": "u1"},
         "groveConfigCache": {"u1": {"grove_enabled": True, "timestamp": 1791742272447}},
     }
-    without = accounts._claude_data(ctx, config, "")
-    assert without[0].concern
-    assert without[0].text.startswith("The cached account setting grove_enabled is ON")
-    assert "5 years" not in without[0].text
+    assert accounts._claude_data(ctx, config, "") == []
     binary = tmp_path / "claude"
-    binary.write_bytes(b"".join(m.encode() + b"\0" for m in claude_cli.TRAINING_MARKERS))
-    with_binary = accounts._claude_data(ctx, config, str(binary))
-    assert "extends data retention from 30 days to 5 years" in with_binary[0].text
-    config["groveConfigCache"]["u1"]["grove_enabled"] = False
-    assert not accounts._claude_data(ctx, config, str(binary))[0].concern
+    markers = [*claude_cli.TRAINING_MARKERS, claude_cli.GROVE_NOTICE_MARKER]
+    binary.write_bytes(b"".join(m.encode() + b"\0" for m in markers))
+    [wording, grove] = accounts._claude_data(ctx, config, str(binary))
+    assert "extends data retention from 30 days to 5 years" in wording.text
+    assert grove.text.startswith("The cached Grove notice config has grove_enabled true")
+    assert "not cached on disk" in grove.text
+    assert not wording.concern and not grove.concern
 
 
 def test_log_markers_count_only_the_markers_asked_for(tmp_path: Path):
@@ -125,7 +153,7 @@ def test_log_markers_count_only_the_markers_asked_for(tmp_path: Path):
     assert "refresh_token_reused" not in claude_cli.LOG_MARKERS
 
 
-def test_codex_data_sharing_group_is_surfaced(tmp_path: Path):
+def test_codex_group_claim_is_stated_as_recorded_not_as_a_concern(tmp_path: Path):
     token = TokenInfo(
         field="id_token",
         kind="jwt",
@@ -140,12 +168,13 @@ def test_codex_data_sharing_group_is_surfaced(tmp_path: Path):
         display_name="Codex CLI",
         installed=True,
         credentials=[
-            Credential("codex", "OpenAI", "plaintext file", "auth.json", "", tokens=[token])
+            Credential("codex", "OpenAI", StoreKind.FILE, "auth.json", "", tokens=[token])
         ],
     )
     notes = accounts._codex_data(report, tmp_path, {})
-    assert notes[0].concern
-    assert "data-sharing" in notes[0].text
+    assert "api-data-sharing-incentives-program" in notes[0].text
+    assert "training" not in notes[0].text
+    assert not notes[0].concern
 
 
 def test_account_collect_skips_uninstalled_tools(tmp_path: Path):
@@ -194,3 +223,35 @@ def test_long_desktop_mcp_commands_are_cut_with_an_ellipsis(tmp_path: Path):
     assert fact.detail.startswith("/opt/server x")
     assert fact.detail.endswith("…")
     assert len(fact.detail) == 240
+
+
+def test_bridges_for_browsers_that_are_not_installed_are_not_concerns(tmp_path: Path):
+    hosts = tmp_path / "Library/Application Support/Microsoft Edge/NativeMessagingHosts"
+    hosts.mkdir(parents=True)
+    (hosts / "com.anthropic.claude_browser_extension.json").write_text(
+        '{"name": "com.anthropic.claude_browser_extension", "path": "/bin/sh"}'
+    )
+    installed = (Path("/Applications") / "Microsoft Edge.app").exists()
+    [fact] = hostscan._native_hosts(tmp_path)
+    assert fact.concern is installed
+    assert ("Edge is not installed" in fact.detail) is not installed
+
+
+def test_other_tools_note_private_keys_without_a_passphrase(tmp_path: Path):
+    ollama = tmp_path / ".ollama"
+    ollama.mkdir()
+    (ollama / "id_ed25519").write_text(openssh_key(b"none"))
+    (ollama / "id_ed25519.pub").write_text("ssh-ed25519 AAAA")
+    facts = {f.name: f for f in hostscan.other_tools(tmp_path)}
+    assert facts["Ollama"].detail.endswith("; private key without a passphrase: id_ed25519")
+
+
+def test_detached_browsers_with_a_debugging_port_are_reported():
+    procs = [
+        ProcessInfo(7, "Sun Oct  4 10:00:00 2026", "Chrome --remote-debugging-port=9222", ppid=1),
+        ProcessInfo(8, "Sun Oct  4 10:00:00 2026", "Chrome --remote-debugging-port=9333", ppid=7),
+        ProcessInfo(9, "Sun Oct  4 10:00:00 2026", "Chrome", ppid=1),
+    ]
+    [fact] = hostscan._debug_browsers(procs)
+    assert fact.name == "browser pid 7"
+    assert fact.detail.startswith("remote debugging port 9222, no parent session")

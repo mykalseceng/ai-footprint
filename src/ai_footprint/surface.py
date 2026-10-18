@@ -8,8 +8,17 @@ attacker in each position gets and decides what matters.
 import re
 from dataclasses import dataclass, field
 
-from ai_footprint.fsinfo import human_size
-from ai_footprint.model import AuditReport, Category, Credential, Exposure, Lens, ToolReport
+from ai_footprint.fsinfo import disk_bytes, human_size, tilde
+from ai_footprint.model import (
+    AuditReport,
+    Category,
+    Credential,
+    Exposure,
+    FactKind,
+    Lens,
+    ToolReport,
+)
+from ai_footprint.tokens import API_KEY, kind_of
 
 
 @dataclass
@@ -60,14 +69,18 @@ def sentences(text: str) -> list[str]:
 
 def short_path(path: str, home: str) -> str:
     """Path with ``~`` for home and a long last segment (a hash) cut to 12 characters."""
-    shown = "~" + path[len(home) :] if home and path.startswith(home) else path
+    shown = tilde(path, home)
     head, _, name = shown.rpartition("/")
     return f"{head}/{name[:12]}…" if len(name) > 16 else shown
 
 
 def plural(count: int, word: str) -> str:
     """``3 credentials`` / ``1 credential``."""
-    return f"{count} {word}{'' if count == 1 else 's'}"
+    if count == 1:
+        return f"{count} {word}"
+    if word.endswith("y") and word[-2:-1] not in "aeiou":
+        return f"{count} {word[:-1]}ies"
+    return f"{count} {word}s"
 
 
 def _sentence(text: str) -> str:
@@ -76,7 +89,7 @@ def _sentence(text: str) -> str:
 
 def is_local_secret(cred: Credential) -> bool:
     """A password for a local service rather than a provider account."""
-    return "local server" in cred.provider
+    return cred.local_service
 
 
 def merged_credentials(tools: list[ToolReport]) -> list[tuple[ToolReport, list[Credential]]]:
@@ -92,11 +105,7 @@ def merged_credentials(tools: list[ToolReport]) -> list[tuple[ToolReport, list[C
 
 
 def _is_api_key(creds: list[Credential]) -> bool:
-    return all(
-        t.field in {"key", "OPENAI_API_KEY"} or t.kind.endswith("api_key")
-        for c in creds
-        for t in c.tokens
-    )
+    return all(kind_of(c.tokens) == API_KEY for c in creds)
 
 
 def lifetime(creds: list[Credential]) -> str:
@@ -148,11 +157,7 @@ def _remote_points(tools: list[ToolReport]) -> list[Point]:
         for creds in groups:
             if creds in keys:
                 continue
-            if is_local_secret(creds[0]):
-                points.append(
-                    Point(f"{creds[0].provider} password ({_stores(creds)}).", tool.display_name)
-                )
-            else:
+            if not is_local_secret(creds[0]):
                 points.append(_oauth_point(tool, creds))
         if keys:
             names = join(sorted(g[0].provider for g in keys))
@@ -180,25 +185,28 @@ def _lenses(tools: list[ToolReport], exposures: list[Exposure]) -> list[LensView
 
 
 def _takeable(creds: list[Credential]) -> bool:
-    return any(
-        "plaintext" in c.store or "SQLite" in c.store or "without a prompt" in c.protection
-        for c in creds
-    )
+    return any(c.readable_without_prompt for c in creds)
+
+
+def _named(tool: ToolReport) -> str:
+    """``pi 1.2.0``, or ``OpenCode (1.4.6 and 2.0.26)`` when several versions are installed."""
+    versions = tool.versions()
+    if len(versions) > 1:
+        return f"{tool.display_name} ({join(versions)})"
+    return f"{tool.display_name} {join(versions)}".strip()
 
 
 def _inventory(tools: list[ToolReport], accounts: list[list[Credential]]) -> str:
-    named = join(
-        [f"{t.display_name} {t.binaries[0].version if t.binaries else ''}".strip() for t in tools]
-    )
+    named = join([_named(t) for t in tools])
     providers = sorted({g[0].provider for g in accounts})
-    size = sum(a.size_bytes for t in tools for a in t.artifacts if a.category is Category.SESSION)
+    size = sum(disk_bytes(t.artifacts, Category.SESSION) for t in tools)
     holding = (
         f"{plural(len(accounts), 'credential')} for {join(providers)}"
         if accounts
         else "no credentials"
     )
     verb = "holds" if len(tools) == 1 else "hold"
-    return f"{named} {verb} {holding} and {human_size(size)} of conversations, prompts and logs."
+    return f"{named} {verb} {holding} and {human_size(size)} of conversations and prompt history."
 
 
 def _headline(tools: list[ToolReport], exposures: list[Exposure], audit: AuditReport) -> list[str]:
@@ -210,24 +218,34 @@ def _headline(tools: list[ToolReport], exposures: list[Exposure], audit: AuditRe
     secrets = sum(k.unique for t in tools if t.secret_scan for k in t.secret_scan.kinds)
     if takeable:
         share = "all of them" if len(takeable) == len(accounts) else f"{len(takeable)} of them"
-        counted = "distinct secrets" if len(tools) == 1 else "secret values (distinct per tool)"
-        history = f", plus history holding {secrets} {counted}" if secrets else ""
+        counted = (
+            "distinct secret-shaped values"
+            if len(tools) == 1
+            else "secret-shaped values (distinct per tool)"
+        )
+        history = f", plus data files holding {secrets} {counted}" if secrets else ""
         sentences.append(f"Anything that runs as you can take {share} without a prompt{history}.")
-    inherited = [f for f in audit.host.facts if f.topic == "reach" and f.concern]
+    inherited = [
+        f
+        for f in audit.host.facts
+        if f.topic == "reach" and f.concern and f.kind is not FactKind.ENV
+    ]
     if inherited and len(tools) > 1:
         names = join([f.name for f in inherited[:3]])
+        listed = names if len(inherited) <= 3 else f"including {names}"
         sentences.append(
-            f"The same goes for {plural(len(inherited), 'other credential')} on this machine, "
-            f"including {names}."
+            f"The same goes for {plural(len(inherited), 'other credential')} on this machine: "
+            f"{listed}."
         )
     unattended = [
         t.display_name for t in tools if any(x.id == f"{t.name}:no-approval" for x in exposures)
     ]
     if unattended:
-        verb = "runs" if len(unattended) == 1 else "run"
+        verb = "skips" if len(unattended) == 1 else "skip"
         sentences.append(
-            f"{join(unattended)} {verb} commands without asking, so a web page, repo file or tool "
-            "result that steers the model becomes code running on this machine."
+            f"{join(unattended)} {verb} approval prompts in some sessions, so in those sessions "
+            "a web page, repo file or tool result that steers the model can become code running "
+            "on this machine."
         )
     if audit.host.other_users and any(x.lens is Lens.ACCOUNT for x in exposures):
         sentences.append(
@@ -236,7 +254,7 @@ def _headline(tools: list[ToolReport], exposures: list[Exposure], audit: AuditRe
         )
     copies = sorted({x.label[:1].lower() + x.label[1:] for x in exposures if x.lens is Lens.COPIES})
     if copies:
-        sentences.append(f"Copies also live outside your control: {join(copies)}.")
+        sentences.append(f"Related data is also kept elsewhere: {join(copies)}.")
     unexpiring = [g for g in accounts if "no recorded expiry" in lifetime(g)]
     if unexpiring:
         sentences.append(

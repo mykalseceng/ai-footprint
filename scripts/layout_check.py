@@ -124,7 +124,7 @@ MEASURE = r"""
   const squash = (text) => text.replace(/\s+/g, ' ').trim();
   // References and keys that tie the document together; the values they point at are shown.
   const STRUCTURAL = new RegExp('(^|\\.)(id|exposure_id|finding_id|topic|tone|identity)$'
-    + '|^checklist\\.\\d+\\.exposures\\.|^views\\.host\\.across\\.'
+    + '|^checklist\\.\\d+\\.exposures\\.|^views\\.host\\.across\\.|^host\\.facts\\.\\d+\\.kind$'
     + '|(secret_scan\\.kinds|tokens)\\.\\d+\\.kind$');
   const shown = (value, keepTicks) => {
     let text = keepTicks ? String(value) : String(value).replaceAll('`', '');

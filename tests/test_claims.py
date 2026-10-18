@@ -12,6 +12,7 @@ from ai_footprint.model import (
     AuditReport,
     BinaryInfo,
     HostReport,
+    InstructionFile,
     Lens,
     Setting,
     ToolReport,
@@ -121,7 +122,7 @@ def test_skipping_the_bypass_prompt_alone_is_not_running_without_approval(tmp_pa
     report.settings.append(Setting("running with --dangerously-skip-permissions", "11, 12", ""))
     [found] = rules.rule_no_approval(report, ctx)
     assert found.statement.startswith(
-        "Claude Code runs commands without asking "
+        "Claude Code skips approval prompts in some sessions "
         "(2 running sessions started with --dangerously-skip-permissions)."
     )
     assert found.lens is Lens.MODEL
@@ -138,11 +139,13 @@ def test_logout_note_states_revocation_only_with_markers(tmp_path: Path):
         "`claude /logout` posts the refresh token to "
         "https://platform.claude.com/v1/oauth/token/revoke"
     )
-    [codex_without] = accounts._codex_revoke(ctx, report, "")
-    assert codex_without.text.startswith("No token-revocation marker was found")
+    codex_without = accounts._codex_revoke(ctx, report, "")
+    assert codex_without[0].text.startswith("No token-revocation marker was found")
     binary = fake_binary(tmp_path / "bin", "codex", list(codex.REVOKE_MARKERS))
-    [codex_with] = accounts._codex_revoke(ctx, report, str(binary))
-    assert codex_with.text.startswith("The installed Codex revokes its auth tokens")
+    codex_with = accounts._codex_revoke(ctx, report, str(binary))
+    assert codex_with[0].text.startswith("The installed Codex revokes its auth tokens")
+    assert codex_with[0].source == "markers in the installed codex binary"
+    assert all(n.source != "markers in the installed codex binary" for n in codex_with[1:])
 
 
 def test_memory_agents_and_commands_go_through_the_instruction_analysis(tmp_path: Path):
@@ -242,3 +245,30 @@ def test_dates_and_sentences_are_normalised():
         "The token expires 2026-10-18.",
         "~/x is read.",
     ]
+
+
+def test_missing_plugin_server_fix_disables_the_plugin(tmp_path: Path):
+    report = ToolReport(name="claude", display_name="Claude Code", installed=True)
+    fix = rules._dangling_fix(report, "guardian", "plugin semgrep@official", tmp_path)
+    [command] = fix.commands
+    assert command.text == "claude plugin disable semgrep@official"
+    assert command.help_probe == ("claude", "plugin", "disable")
+
+
+def test_trust_counts_only_instruction_files_the_tool_itself_loads(tmp_path: Path):
+    ctx = rules.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
+    project, other, downloads = tmp_path / "app", tmp_path / "lib", tmp_path / "Downloads" / "x"
+    report = ToolReport(name="codex", display_name="Codex CLI", installed=True)
+    report.trusted_folders = [str(project), str(other), str(downloads)]
+    report.instructions = [
+        InstructionFile(str(project / "AGENTS.md"), "project", ["codex"]),
+        InstructionFile(str(tmp_path / "AGENTS.md"), "global", ["codex"]),
+    ]
+    [found] = rules.rule_trust(report, ctx)
+    assert found.statement == (
+        "Codex CLI trusts 3 folders. 1 of them holds instruction files Codex CLI loads. "
+        "Broad folders on the list: ~/Downloads/x."
+    )
+    assert found.evidence == ["~/app/AGENTS.md"]
+    report.trusted_folders = [str(other)]
+    assert rules.rule_trust(report, ctx) == []

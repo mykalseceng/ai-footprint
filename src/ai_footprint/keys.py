@@ -12,19 +12,8 @@ from dataclasses import dataclass, field
 
 from ai_footprint import surface
 from ai_footprint.model import AuditReport, Credential, TokenInfo
+from ai_footprint.tokens import API_KEY, LOGIN, PASSWORD, SECRET, kind_of
 
-API_KEY = "API key"
-LOGIN = "OAuth login"
-PASSWORD = "Password"  # noqa: S105 - a row label, not a password
-SECRET = "Secret"  # noqa: S105 - a row label, not a secret
-API_KINDS = frozenset(
-    {"api_key", "anthropic_api_key", "anthropic_admin_key", "openai_project_key"}
-    | {"github_pat_classic", "github_pat_fine"}
-)
-API_FIELDS = frozenset({"key", "apikey", "api_key"})
-LOGIN_KINDS = frozenset(
-    {"jwt", "anthropic_oauth_access", "anthropic_oauth_refresh", "openai_refresh", "github_oauth"}
-)
 EMAIL_CLAIMS = ("email", "https://api.openai.com/profile.email")
 
 
@@ -59,19 +48,6 @@ class KeyRow:
     lifetime: str
     used_by: list[str] = field(default_factory=list)
     locations: list[KeyLocation] = field(default_factory=list)
-
-
-def kind_of(tokens: list[TokenInfo]) -> str:
-    """What a credential entry is, from its recorded token formats and field names."""
-    for token in tokens:
-        name = token.field.lower()
-        if token.kind in API_KINDS or name in API_FIELDS or name.endswith("_api_key"):
-            return API_KEY
-    if any(t.kind in LOGIN_KINDS for t in tokens):
-        return LOGIN
-    if any(t.field.lower() == "password" for t in tokens):
-        return PASSWORD
-    return SECRET
 
 
 def _shown(kind: str, tokens: list[TokenInfo]) -> str:

@@ -5,10 +5,11 @@ from pathlib import Path
 from hypothesis import given
 from hypothesis import strategies as st
 
-from ai_footprint import report_html, rules
+from ai_footprint import document, report_html, rules
 from ai_footprint.model import (
     AuditReport,
     Exposure,
+    FactKind,
     Fix,
     FixCommand,
     HostFact,
@@ -55,10 +56,14 @@ def host_exposures(audit: AuditReport) -> list[Exposure]:
     return found
 
 
+def host_view(audit: AuditReport) -> str:
+    return report_html._host_view(audit, document.build(audit, [])["views"])
+
+
 def host_page(facts: list[HostFact], tools: list[ToolReport] | None = None) -> str:
     audit = make_audit(facts, [], tools)
     audit.host_exposures = host_exposures(audit)
-    return report_html._host_view(audit)
+    return host_view(audit)
 
 
 def block(page: str, anchor: str) -> str:
@@ -69,7 +74,11 @@ def block(page: str, anchor: str) -> str:
 
 def pid(number: int, days: int, command: str) -> HostFact:
     return HostFact(
-        "unattended", f"pid {number}", f"running for {days} days: {command}", concern=True
+        "unattended",
+        f"pid {number}",
+        f"running for {days} days: {command}",
+        concern=True,
+        kind=FactKind.LONG_RUNNING,
     )
 
 
@@ -103,7 +112,7 @@ def test_breakable_only_adds_break_points_to_escaped_text(text: str):
 def test_host_tldr_names_findings_and_links_to_them():
     page = host_page([pid(4242, 3, "claude --dangerously-skip-permissions")])
     tldr = page[page.index('<div class="tldr">') : page.index("</header>")]
-    assert '<a href="#host:unattended">Processes running without a session</a>' in tldr
+    assert '<a href="#host:unattended">Long-running or orphaned AI processes</a>' in tldr
     assert "pid 4242" not in tldr
     assert "--dangerously-skip-permissions" not in tldr
 
@@ -154,7 +163,7 @@ def test_finding_without_a_question_gets_its_own_block():
         label="One folder steers several tools",
         evidence=["~/.claude/skills: Claude Code, OpenCode"],
     )
-    page = report_html._host_view(make_audit([], [finding]))
+    page = host_view(make_audit([], [finding]))
     assert "<h2>Across tools</h2>" in page
     section = block(page, "host:shared-surfaces")
     assert "One folder steers several tools" in section
@@ -172,8 +181,15 @@ def test_unattended_statement_counts_instead_of_listing_commands():
             "1 orphaned process(es) still running after their session ended",
             "/Apps/HopperMCPServer",
             concern=True,
+            kind=FactKind.ORPHAN,
         ),
-        HostFact("unattended", "com.example.agent", "starts at login: claude", concern=True),
+        HostFact(
+            "unattended",
+            "com.example.agent",
+            "starts at login: claude",
+            concern=True,
+            kind=FactKind.LOGIN_ITEM,
+        ),
     ]
     audit = make_audit(facts, [])
     [finding] = [x for x in host_exposures(audit) if x.id == "host:unattended"]
@@ -219,7 +235,7 @@ def test_inherited_credentials_sentence_agrees_with_one_tool():
     ]
     audit = make_audit(facts, [], [tool])
     [finding] = [x for x in host_exposures(audit) if x.id == "host:inherited-creds"]
-    assert "Claude Code runs commands without asking" in finding.statement
+    assert "Claude Code skips approval prompts in some sessions" in finding.statement
 
 
 def test_fix_steps_render_under_their_question():
@@ -235,7 +251,7 @@ def test_fix_steps_render_under_their_question():
         label="Processes running without a session",
         fix=fix,
     )
-    page = report_html._host_view(make_audit([pid(7, 2, "codex app-server")], [finding]))
+    page = host_view(make_audit([pid(7, 2, "codex app-server")], [finding]))
     section = block(page, "host:unattended")
     assert "Stop processes that outlived their sessions" in section
     assert "p-concern" in section
