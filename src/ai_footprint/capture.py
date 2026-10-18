@@ -154,7 +154,9 @@ def _started(proc: subprocess.Popen[bytes], path: Path) -> None:
     while time.time() < deadline:
         if proc.poll() is not None:
             stderr = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
-            raise CaptureError(f"tcpdump exited with status {proc.returncode}: {stderr.strip()}")
+            raise CaptureError(
+                f"sudo tcpdump exited with status {proc.returncode}: {stderr.strip()}"
+            )
         if path.is_file() and path.stat().st_size > 0:
             return
         time.sleep(0.2)

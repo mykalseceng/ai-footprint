@@ -115,3 +115,17 @@ def test_windows_round_trip_so_a_capture_can_be_analysed_again(tmp_path: Path):
     capture._write_private(capture.windows_path(path), json.dumps([capture._window_json(window)]))
     assert capture.load_windows(path) == [window]
     assert oct(capture.windows_path(path).stat().st_mode & 0o777) == "0o600"
+
+
+def test_capture_process_stays_in_the_terminal_session_sudo_authorised(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    seen: dict = {}
+
+    def fake_popen(argv, **kwargs):
+        seen.update(kwargs, argv=argv)
+
+    monkeypatch.setattr("ai_footprint.system.subprocess.Popen", fake_popen)
+    FakeSystem().start("sudo", ["-n", "/usr/sbin/tcpdump"])
+    assert seen["argv"][:2] == ["/usr/bin/sudo", "-n"]
+    assert not seen.get("start_new_session")

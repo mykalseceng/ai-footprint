@@ -233,7 +233,12 @@ class System:
         return code
 
     def start(self, name: str, args: Sequence[str]) -> subprocess.Popen[bytes]:
-        """Start a probe in the background (the packet capture) and record it."""
+        """Start a probe in the background (the packet capture) and record it.
+
+        The process stays in this terminal's session: macOS sudo keeps the password it
+        just accepted per terminal, so a process detached from the terminal would be asked
+        again.
+        """
         binary = self._require_probe(name)
         self.executed.append(
             ExecRecord(argv=[binary, *args], returncode=0, purpose=PROBES[name].purpose)
@@ -244,7 +249,6 @@ class System:
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
-            start_new_session=True,
         )
 
     def launch_idle(
