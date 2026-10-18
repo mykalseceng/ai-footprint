@@ -201,3 +201,63 @@ def test_metadata_parses_real_tcpdump_lines_including_names_with_parentheses():
         network.Meta(1792283229.69211, 64603, "Codex (Service)", 64603, "Codex (Service)", "in"),
         network.Meta(1792283228.98643, 0, "", 0, "", "in"),
     ]
+
+
+def analysed(tmp_path: Path, frames: list[tuple[float, bytes]], lines: list[str], pids: set[int]):
+    path = tmp_path / "t.pcapng"
+    path.write_bytes(pcapng(frames))
+    raw = pcap.read_packets(path)
+    meta = network.align(raw, network.parse_metadata("\n".join(lines)))
+    packets = [(p, m) for r, m in zip(raw, meta, strict=True) if (p := pcap.decode(r))]
+    window = network.Window("codex", "Codex CLI", "0.1", ["codex"], 10.0, 20.0, pids)
+    return network.tool_capture(window, packets, network.Names(p for p, _m in packets))
+
+
+def test_a_connection_whose_hello_has_no_process_is_still_named_and_counted(tmp_path: Path):
+    frames = [
+        (10.1, frame(LOCAL, REMOTE, tcp(50000, 443))),
+        (10.2, frame(LOCAL, REMOTE, tcp(50000, 443, client_hello("chatgpt.com")))),
+        (10.3, frame(REMOTE, LOCAL, tcp(443, 50000, b"\x16" * 9))),
+    ]
+    lines = [
+        meta_line(10.1, "codex", 5, "out"),
+        "10.200000 (out) IP x > y: tcp 0",
+        meta_line(10.3, "kernel_task", 0, "in", eproc="codex:5"),
+    ]
+    [row] = analysed(tmp_path, frames, lines, {5}).connections
+    assert (row.host, row.named_by, row.packets) == ("chatgpt.com", "TLS server name", 3)
+    assert row.processes == ["codex (pid 5)"]
+
+
+def test_shared_addresses_show_every_name_and_rows_merge_by_host(tmp_path: Path):
+    other = "104.18.33.47"
+    frames = [
+        (
+            10.0,
+            frame(RESOLVER, LOCAL, udp(53, 6000, dns_response("chatgpt.com", REMOTE)), pcap.UDP),
+        ),
+        (
+            10.0,
+            frame(RESOLVER, LOCAL, udp(53, 6001, dns_response("ab.chatgpt.com", REMOTE)), pcap.UDP),
+        ),
+        (10.1, frame(LOCAL, REMOTE, tcp(50000, 443, b"\x17\x03\x03"))),
+        (10.2, frame(LOCAL, other, tcp(50001, 443, client_hello("models.dev")))),
+        (10.3, frame(LOCAL, "104.18.34.47", tcp(50002, 443, client_hello("models.dev")))),
+    ]
+    lines = [
+        meta_line(10.0, "mDNSResponder", 90, "in"),
+        meta_line(10.0, "mDNSResponder", 90, "in"),
+        meta_line(10.1, "codex", 5, "out"),
+        meta_line(10.2, "codex", 5, "out"),
+        meta_line(10.3, "codex", 5, "out"),
+    ]
+    rows = analysed(tmp_path, frames, lines, {5}).connections
+    assert [(r.host, r.address, r.named_by, r.packets) for r in rows] == [
+        (
+            "chatgpt.com or ab.chatgpt.com",
+            REMOTE,
+            "DNS answers in this capture (several names share this address)",
+            1,
+        ),
+        ("models.dev", f"{other}, 104.18.34.47", "TLS server name", 2),
+    ]

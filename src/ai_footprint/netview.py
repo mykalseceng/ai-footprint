@@ -81,8 +81,8 @@ def view(audit: AuditReport) -> dict[str, Any]:
         "method": capture.method if capture else "",
         "started_at": capture.started_at if capture else "",
         "capture_file": tilde(capture.capture_file, audit.host.home) if capture else "",
-        "how": HOW,
+        "how": "" if capture else HOW,
         "tools": {t.name: _tool(audit, t) for t in audit.tools if t.installed},
         "unattributed": [dataclasses.asdict(c) for c in capture.unattributed] if capture else [],
-        "unattributed_note": UNATTRIBUTED,
+        "unattributed_note": UNATTRIBUTED if capture and capture.unattributed else "",
     }
