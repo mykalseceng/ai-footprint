@@ -18,9 +18,11 @@ import datetime
 import json
 import os
 import re
+import select
 import signal
 import subprocess
 import tempfile
+import termios
 import threading
 import time
 from collections.abc import Mapping
@@ -35,6 +37,7 @@ SECONDS = 60.0
 SAMPLE_EVERY = 0.2
 SETTLE_SECONDS = 3.0
 STARTUP_WAIT = 15.0
+CLOSE_WAIT = 5.0
 METHOD = "tcpdump -i pktap,all, with the kernel's per-packet process metadata"
 SWITCH = re.compile(r"DISABLE|TELEMETRY|OFFLINE|_PROXY$|^NO_PROXY$", re.IGNORECASE)
 """Environment variable names recorded with each launch: off-switches and proxies."""
@@ -61,17 +64,39 @@ def _tree(system: System, roots: set[int]) -> set[int]:
     return found
 
 
-def _drain(controller: int) -> threading.Thread:
-    """Read and discard terminal output so the tool never blocks writing to it."""
+class Terminal:
+    """The controller side of a tool's pseudo-terminal, read and discarded until closed.
 
-    def read() -> None:
-        with contextlib.suppress(OSError):
-            while os.read(controller, 65536):
-                pass
+    macOS makes ``close`` wait for another thread's blocked ``read`` on the same descriptor,
+    so the reader waits in ``select`` and checks a stop flag instead of blocking in ``read``.
+    """
 
-    thread = threading.Thread(target=read, daemon=True)
-    thread.start()
-    return thread
+    def __init__(self, controller: int) -> None:
+        self.fd = controller
+        self._stop = threading.Event()
+        self._reader = threading.Thread(target=self._drain, daemon=True)
+        self._reader.start()
+
+    def _drain(self) -> None:
+        while not self._stop.is_set():
+            ready, _w, _x = select.select([self.fd], [], [], 0.2)
+            if not ready:
+                continue
+            try:
+                if not os.read(self.fd, 65536):
+                    return
+            except OSError:
+                return
+
+    def close(self) -> None:
+        """Stop reading, drop unread input, then close without letting a stuck close hang."""
+        self._stop.set()
+        self._reader.join(timeout=2)
+        with contextlib.suppress(OSError, termios.error):
+            termios.tcflush(self.fd, termios.TCIOFLUSH)
+        closer = threading.Thread(target=os.close, args=(self.fd,), daemon=True)
+        closer.start()
+        closer.join(timeout=CLOSE_WAIT)
 
 
 def _quit(proc: subprocess.Popen[bytes], controller: int) -> None:
@@ -118,7 +143,7 @@ def launch(system: System, presence: ToolPresence, seconds: float) -> network.Wi
     with tempfile.TemporaryDirectory(prefix="ai-footprint-capture-") as cwd:
         start = time.time()
         proc, controller = system.launch_idle(binary.path, cwd=cwd, env=env)
-        reader = _drain(controller)
+        terminal = Terminal(controller)
         pids, samples = {proc.pid}, 0
         while time.time() - start < seconds and proc.poll() is None:
             pids |= _tree(system, pids)
@@ -127,8 +152,9 @@ def launch(system: System, presence: ToolPresence, seconds: float) -> network.Wi
         pids |= _tree(system, pids)
         _quit(proc, controller)
         end = time.time()
-        os.close(controller)
-        reader.join(timeout=1)
+        pids |= _tree(system, pids)
+        stopped = _stop_leftovers(system, pids, before)
+        terminal.close()
     system.note(
         "ps",
         ["-axo", "pid=,ppid="],
@@ -144,7 +170,7 @@ def launch(system: System, presence: ToolPresence, seconds: float) -> network.Wi
         end=end,
         pids=pids,
         switches=sorted(k for k in env if SWITCH.search(k)),
-        stopped=_stop_leftovers(system, pids, before),
+        stopped=stopped,
     )
 
 
@@ -220,6 +246,11 @@ def record(
         for presence in presences:
             windows.append(launch(system, presence, seconds))
             time.sleep(SETTLE_SECONDS)
+        if proc.poll() is not None:
+            raise CaptureError(
+                "tcpdump stopped before every tool had run, so later tools would wrongly show "
+                "no traffic; run --capture again"
+            )
     finally:
         _stop(system, proc)
     path.chmod(0o600)

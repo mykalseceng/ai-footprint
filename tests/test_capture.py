@@ -2,6 +2,7 @@
 
 import json
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -129,3 +130,80 @@ def test_capture_process_stays_in_the_terminal_session_sudo_authorised(
     FakeSystem().start("sudo", ["-n", "/usr/sbin/tcpdump"])
     assert seen["argv"][:2] == ["/usr/bin/sudo", "-n"]
     assert not seen.get("start_new_session")
+
+
+def test_a_raw_mode_tool_with_a_lingering_child_does_not_hang_the_launch(tmp_path: Path):
+    tool = tmp_path / "tui-tool"
+    detach = "perl -MPOSIX -e 'setsid(); sleep 300'"
+    tool.write_text(f"#!/bin/sh\nstty raw -echo\n{detach} &\nexec sleep 300\n")
+    tool.chmod(0o755)
+    presence = ToolPresence(
+        "tui", "TUI Tool", installed=True, binaries=[BinaryInfo(str(tool), str(tool), "1.0")]
+    )
+    system = System(verify_signatures=False)
+    done: list[network.Window] = []
+    worker = threading.Thread(
+        target=lambda: done.append(capture.launch(system, presence, 1.0)), daemon=True
+    )
+    worker.start()
+    worker.join(timeout=30)
+    assert done, "launch hung closing the pseudo-terminal"
+    assert done[0].stopped
+
+
+def test_a_close_that_never_returns_does_not_stop_the_run(monkeypatch: pytest.MonkeyPatch):
+    controller, other = os.openpty()
+    real_close = os.close
+    blocked = threading.Event()
+
+    def stuck_close(fd: int) -> None:
+        if fd == controller:
+            blocked.set()
+            threading.Event().wait()
+        real_close(fd)
+
+    monkeypatch.setattr(capture, "CLOSE_WAIT", 0.5)
+    monkeypatch.setattr(capture.os, "close", stuck_close)
+    terminal = capture.Terminal(controller)
+    started = time.time()
+    terminal.close()
+    assert blocked.is_set()
+    assert time.time() - started < 5
+    monkeypatch.undo()
+    os.close(other)
+
+
+class EndedEarly:
+    """A capture process that has already exited when the launches finish."""
+
+    pid = 999999
+    returncode = 0
+    stderr = None
+
+    def poll(self) -> int:
+        return 0
+
+    def wait(self, timeout: float) -> int:
+        del timeout
+        return 0
+
+
+def test_a_capture_that_ended_before_the_last_tool_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    path = tmp_path / "c.pcapng"
+    system = FakeSystem()
+    monkeypatch.setattr(system, "interactive", lambda _name, _args: 0)
+
+    def start(_name, _args):
+        path.write_bytes(b"header")
+        return EndedEarly()
+
+    monkeypatch.setattr(system, "start", start)
+    monkeypatch.setattr(capture, "_started", lambda _proc, _path: None)
+    monkeypatch.setattr(capture, "SETTLE_SECONDS", 0)
+    window = network.Window("pi", "pi", "1.2.0", ["/bin/pi"], 1.0, 2.0, {3})
+    monkeypatch.setattr(capture, "launch", lambda *_args: window)
+    presence = ToolPresence("pi", "pi", installed=True)
+    with pytest.raises(capture.CaptureError, match="tcpdump stopped before every tool had run"):
+        capture.record(system, [presence], path)
