@@ -1,5 +1,6 @@
 """The capture run: process-tree tracking, idle launches, reading the file back, saving."""
 
+import json
 import os
 import time
 from pathlib import Path
@@ -106,3 +107,11 @@ def test_idle_launch_tracks_children_and_stops_what_it_left_running(tmp_path: Pa
     purposes = [r.purpose for r in system.executed]
     assert "Launch idle with no prompt while the packet capture runs" in purposes
     assert any(p.startswith("Track Fake Tool's process tree") for p in purposes)
+
+
+def test_windows_round_trip_so_a_capture_can_be_analysed_again(tmp_path: Path):
+    path = tmp_path / "c.pcapng"
+    window = network.Window("pi", "pi", "1.2.0", ["/bin/pi"], 4.0, 64.0, {3, 5}, ["X"], ["y"])
+    capture._write_private(capture.windows_path(path), json.dumps([capture._window_json(window)]))
+    assert capture.load_windows(path) == [window]
+    assert oct(capture.windows_path(path).stat().st_mode & 0o777) == "0o600"

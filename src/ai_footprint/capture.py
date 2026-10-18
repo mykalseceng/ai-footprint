@@ -221,7 +221,42 @@ def record(
     finally:
         _stop(system, proc)
     path.chmod(0o600)
+    _write_private(windows_path(path), json.dumps([_window_json(w) for w in windows], indent=2))
     return analyse(system, path, windows, started_at)
+
+
+def windows_path(path: Path) -> Path:
+    """Where the launch windows are kept, so the file can be analysed again without sudo."""
+    return path.with_suffix(".windows.json")
+
+
+def _window_json(window: network.Window) -> dict[str, Any]:
+    return {**dataclasses.asdict(window), "pids": sorted(window.pids)}
+
+
+def load_windows(path: Path) -> list[network.Window]:
+    """Launch windows saved by ``record``."""
+    rows: list[dict[str, Any]] = json.loads(windows_path(path).read_text())
+    return [
+        network.Window(
+            tool=row["tool"],
+            display_name=row["display_name"],
+            version=row["version"],
+            command=list(row["command"]),
+            start=float(row["start"]),
+            end=float(row["end"]),
+            pids=set(row["pids"]),
+            switches=list(row["switches"]),
+            stopped=list(row["stopped"]),
+        )
+        for row in rows
+    ]
+
+
+def _write_private(path: Path, text: str) -> None:
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(text)
 
 
 def analyse(
