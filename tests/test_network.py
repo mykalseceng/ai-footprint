@@ -185,3 +185,19 @@ def test_alignment_fails_when_tcpdump_and_the_file_disagree(tmp_path: Path):
     shifted = [network.Meta(m.timestamp + 1, m.pid, m.name) for m in meta]
     with pytest.raises(network.AlignmentError):
         network.align(raw, shifted)
+
+
+def test_metadata_parses_real_tcpdump_lines_including_names_with_parentheses():
+    lines = [
+        "1792283228.629746 (proc Ollama:1530, out) IP 192.168.0.251.56546 > 185.1.1.1.443: tcp 0",
+        "1792283229.692110 (proc Codex (Service):64603, eproc Codex (Service):64603, in) IP "
+        "172.253.117.188.5228 > 192.168.0.251.58271: tcp 0",
+        "1792283228.986430 (in) IP 192.168.0.82.3000 > 255.255.255.255.2000: UDP, length 4 (x)",
+        "  continuation line without a timestamp",
+    ]
+    meta = network.parse_metadata("\n".join(lines))
+    assert meta == [
+        network.Meta(1792283228.629746, 1530, "Ollama", 0, "", "out"),
+        network.Meta(1792283229.69211, 64603, "Codex (Service)", 64603, "Codex (Service)", "in"),
+        network.Meta(1792283228.98643, 0, "", 0, "", "in"),
+    ]

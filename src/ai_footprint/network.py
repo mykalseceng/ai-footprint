@@ -23,7 +23,8 @@ HELPER_NAMES = frozenset({"node", "bun", "npm", "npx", "git", "curl", "uv", "uvx
 """Process names reported as unattributed when they talk during a tool's window but were not
 seen in its process tree (a short-lived child the process sampling missed, or unrelated)."""
 
-_LINE = re.compile(r"^(?P<ts>\d+\.\d+)\s+(?:\((?P<meta>[^)]*)\))?")
+_LINE = re.compile(r"^(?P<ts>\d+\.\d+)\s+(?:\((?P<meta>.*?\b(?:in|out))\))?")
+"""A packet line; the metadata ends at its direction, since process names hold parentheses."""
 _PROC = re.compile(r"(?:^|[ ,])proc (?P<name>.+?):(?P<pid>\d+)")
 _EPROC = re.compile(r"(?:^|[ ,])eproc (?P<name>.+?):(?P<pid>\d+)")
 _DIRECTION = re.compile(r"(?:^|[ ,])(?P<dir>in|out)(?:$|[ ,])")
