@@ -118,7 +118,9 @@ PROBES: dict[str, ProbeSpec] = {
             ("/usr/bin/sudo",),
             "Start the packet capture as root (--capture only; asks for your password)",
             _MAC,
-            apple_signed=True,
+            # macOS ships sudo mode 4511, unreadable by users, so codesign cannot open it to
+            # check its signature; it sits on the sealed, read-only system volume.
+            apple_signed=False,
         ),
         ProbeSpec(
             "tcpdump",

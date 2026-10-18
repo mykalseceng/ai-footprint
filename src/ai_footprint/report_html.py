@@ -729,6 +729,70 @@ def _checklist_view(checklist: Checklist) -> str:
 </section>"""
 
 
+def _connection_rows(rows: list[Views]) -> list[list[str]]:
+    return [
+        [
+            f"<code>{breakable(c['host'])}</code>",
+            f"<code>{e(c['address'])} {e(c['transport'])}/{c['port']}</code>",
+            e(c["named_by"]),
+            breakable(", ".join(c["processes"])),
+            f"{c['first_second']:.1f} s",
+            str(c["packets"]),
+            e(human_size(c["bytes"])),
+        ]
+        for c in rows
+    ]
+
+
+CONNECTION_HEADERS = ["Host", "Address", "Named by", "Process", "First packet", "Packets", "Bytes"]
+
+
+def _network_tool(name: str, display: str, view: Views) -> str:
+    parts = [f"<h2>{e(display)}</h2><p>{e(view['summary'])}</p>"]
+    if view["captured"]:
+        facts = [
+            ("Launched", " ".join(view["command"])),
+            ("Environment", ", ".join(view["switches"]) or "no off-switch or proxy variables set"),
+            ("Stopped afterwards", ", ".join(view["stopped"]) or "nothing left running"),
+            ("Local packets", f"{view['local_packets']} (loopback, link-local and multicast)"),
+        ]
+        parts.append(table(["Fact", "Value"], [[k, breakable(v)] for k, v in facts], raw=True))
+        parts.append("<h3>Connections observed</h3>")
+        parts.append(
+            table(CONNECTION_HEADERS, _connection_rows(view["observed"]), raw=True)
+            if view["observed"]
+            else "<p class='muted'>No packets to any host off this machine.</p>"
+        )
+        lookups = ", ".join(view["lookups"]) or "none attributed to its processes"
+        parts.append(f"<h3>Names looked up</h3><p>{breakable(lookups)}</p>")
+    heading = (
+        "Named in the binary, not observed in this capture"
+        if view["captured"]
+        else ("Named in the binary")
+    )
+    rows = [[f"<code>{e(u['host'])}</code>", e(u["purpose"])] for u in view["unobserved"]]
+    parts.append(f"<h3>{heading}</h3>")
+    parts.append(
+        table(["Host", "Purpose"], rows, raw=True) if rows else "<p class='muted'>None.</p>"
+    )
+    return f'<div id="network-{e(name)}">{"".join(parts)}</div>'
+
+
+def _network_view(audit: AuditReport, views: Views) -> str:
+    net = views["network"]
+    intro = f"{net['method']}; file {net['capture_file']}." if net["method"] else net["how"]
+    body = "".join(
+        _network_tool(t.name, t.display_name, net["tools"][t.name])
+        for t in audit.tools
+        if t.installed
+    )
+    if net["unattributed"]:
+        body += f"<h2>Not attributed</h2><p>{e(net['unattributed_note'])}</p>" + table(
+            CONNECTION_HEADERS, _connection_rows(net["unattributed"]), raw=True
+        )
+    return _page("network", "Network", intro, body)
+
+
 def _method_view(audit: AuditReport, views: Views) -> str:
     probes = table(
         ["Probe", "Checks"],
@@ -767,6 +831,7 @@ def _nav(audit: AuditReport) -> tuple[str, list[str]]:
         ("skills", "Skills"),
         ("plugins", "Plugins"),
         ("keys", "Keys"),
+        ("network", "Network"),
         ("host", "This machine"),
         ("checklist", "Checklist"),
         ("method", "How this was measured"),
@@ -820,6 +885,7 @@ def render(audit: AuditReport, checklist: Checklist, views: Views) -> str:
 {_extension_pages(views)}
 {_host_view(audit, views)}
 {_keys_view(audit, views)}
+{_network_view(audit, views)}
 {_checklist_view(checklist)}
 {_method_view(audit, views)}
 <footer>ai-footprint {e(audit.auditor_version)} · {e(audit.generated_at)} · Private: this file maps

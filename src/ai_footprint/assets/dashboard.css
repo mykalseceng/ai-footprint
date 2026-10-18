@@ -697,7 +697,7 @@ a.fg-cell:hover, a.fg-cell:focus-visible { border-color: var(--accent); box-shad
 .hq-a { color: var(--text-2); font-size: 13.5px; }
 .hq .state { text-transform: capitalize; }
 .facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.facts li { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 7px; font-size: 13px; background: var(--panel); }
+.facts li { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 7px; font-size: 13px; background: var(--panel); }
 .facts li.is-concern { border-left: 2px solid var(--exp); }
 .fact-n { font-weight: 550; }
 .fact-d { color: var(--text-2); }

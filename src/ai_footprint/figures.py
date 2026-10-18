@@ -14,7 +14,7 @@ from typing import Any
 
 from ai_footprint import keys, rules, surface, tokens
 from ai_footprint.fsinfo import disk_bytes, human_size, outermost
-from ai_footprint.model import Artifact, AuditReport, Category, Lens, ToolReport
+from ai_footprint.model import Artifact, AuditReport, Category, Lens, ToolCapture, ToolReport
 from ai_footprint.rules import Checklist
 
 TOOL_RUN_PURPOSES = ("Confirm tool version", "Confirm subcommand exists")
@@ -202,7 +202,33 @@ def approval(tool: ToolReport) -> Figure:
     )
 
 
-def for_tool(tool: ToolReport, checklist: Checklist) -> list[Figure]:
+NOT_CAPTURED = "not captured"
+
+
+def network(captured: ToolCapture | None) -> Figure:
+    """Distinct hosts a tool's processes reached when started idle under ``--capture``."""
+    if captured is None:
+        return Figure(
+            "network",
+            "Hosts reached when started",
+            NOT_CAPTURED,
+            NOT_CAPTURED,
+            "run ai-footprint --capture to record them",
+        )
+    hosts = len({c.host for c in captured.connections})
+    return Figure(
+        "network",
+        "Hosts reached when started",
+        hosts,
+        str(hosts),
+        f"distinct hosts its processes exchanged packets with in {captured.seconds:g}s idle, "
+        "with no prompt",
+    )
+
+
+def for_tool(
+    tool: ToolReport, checklist: Checklist, captured: ToolCapture | None = None
+) -> list[Figure]:
     """Figures for one tool's page."""
     checks = [c for c in checklist if c.scope == tool.display_name]
     readable = sum(1 for c in tool.credentials if c.readable_by_others)
@@ -245,6 +271,7 @@ def for_tool(tool: ToolReport, checklist: Checklist) -> list[Figure]:
         ),
         _secret_figure([tool]),
         approval(tool),
+        network(captured),
     ]
 
 

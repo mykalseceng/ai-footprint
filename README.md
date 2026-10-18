@@ -12,8 +12,8 @@ using another account on the same machine. Each tool gets its own page with the 
 the fixes that close it, and plain answers to the usual questions (where are the logs, where
 is the token, when does it expire, who can read what).
 
-The dashboard is a dark console with tabs for Overview, Signals, Tools, Checklist,
-Extensions, Machine, Method and Data. The overview shows each figure with a line saying
+The dashboard is a dark console with tabs for Overview, Signals, Keys, Tools, Checklist,
+Extensions, Network, Machine, Method and Data. The overview shows each figure with a line saying
 what it counts, then a grid of signals by attacker position and tool; selecting a cell
 lists those signals. Every signal opens in a side panel (`?f=<id>` on any page) with its
 evidence and fix steps, each with a copy button and the checks behind its badge. Tool pages
@@ -42,7 +42,8 @@ For each tool it reports:
   manifest or SKILL.md (two sentences, never paraphrased). A separate page lists them once
   across all tools, with the tools that load each one.
 - **Network**: endpoints and signature traits found in the installed binary, hosts mined
-  from local logs, and live sockets.
+  from local logs, and live sockets. With `--capture`, every host each tool actually reaches
+  when started with no prompt (see below).
 - **Secrets at rest**: a full scan of every byte of the tool's data, run in parallel.
   Only kinds, counts, last-4 characters and file paths are kept.
 - **Trusted-access program evidence**: Anthropic CVP and OpenAI TAC.
@@ -73,6 +74,8 @@ uv run ai-footprint all --html report.html # also write the static report (no sc
 uv run ai-footprint all --doctor           # each check: review, clear or not checked
 uv run ai-footprint --validate             # verify probes, fix commands, tool claims, CLI options
 uv run ai-footprint claude --live          # opt-in network checks (see below)
+uv run ai-footprint all --capture          # record where each tool connects when started (sudo)
+uv run ai-footprint all --network ai-footprint-capture.json   # show that capture again later
 ```
 
 Tool names are `claude`, `codex`, `opencode` and `pi`. Naming a tool that is not installed is an
@@ -90,6 +93,34 @@ no JavaScript at all. Both outputs are built from the same run and share every f
 run from a login hook. `--validate` also checks the command line itself: every example in
 `--help` must parse and select real tools, every option needs help text, documented
 defaults must match, and modes must refuse to combine.
+
+## Where each tool connects (`--capture`)
+
+The Network tab answers one question: when a tool starts and you type nothing, which hosts
+does it reach on its own, however briefly? Destinations you point an agent at are not part of
+it, because no prompt is ever sent.
+
+- **One packet capture for the run.** `sudo tcpdump -i pktap,all` records every packet with
+  the process macOS says owns it, then drops root (`-Z`), so the file belongs to you. sudo
+  asks for your password once. tcpdump also stops on its own after a time limit.
+- **Each tool in turn, idle.** The tool on your PATH starts in a pseudo-terminal in an empty
+  temporary folder, with your environment, configuration and logins, for 60 seconds, then
+  gets Ctrl-C, SIGTERM and SIGKILL. Its process tree is sampled with `ps` every 0.2 s so
+  packets from its children count. Processes it started that are still running afterwards
+  are stopped and listed. The tools write their own state as they do whenever you start them.
+- **Read back without root.** Packet contents come from the pcapng file itself: the TLS
+  server name of each connection, the Host header of plain HTTP, and DNS answers seen in the
+  same capture. Process ownership comes from `tcpdump -r -k`, checked packet by packet
+  against the file. A host with nothing in the capture naming it is shown as its address.
+- **What the tab shows per tool:** every remote host and port its processes exchanged packets
+  with, which packet named it, the process, seconds from launch to the first packet, packets
+  and bytes; the DNS names looked up on its behalf; off-switch and proxy variables that were
+  set; and, listed apart, hosts the binary names that no packet reached. Loopback, link-local
+  and multicast traffic is counted, not listed. Helper-named processes (node, bun, git…) that
+  talked during a tool's window but were never seen in its process tree are listed as not
+  attributed.
+- The capture is saved as `ai-footprint-capture.pcapng` and `.json` next to the dashboard
+  (mode 600, git-ignored). `--network FILE` shows it again in later audits.
 
 ## Observed, not inferred
 
@@ -124,10 +155,14 @@ itself did. It does not guess at tool behaviour:
 ## Safety properties
 
 - **Read-only.** The audit never changes your system. Fixes are printed, not applied.
+  `--capture` is the exception you opt into: it starts each tool, which writes its own state
+  as usual, and stops what that launch left running.
 - **Probe registry.** Every external command is declared in `system.PROBES` with an
   absolute path and run with a fixed `PATH`. On macOS each probe binary must pass an
-  Apple code-signature check first. Anything unregistered is refused. Tool binaries may
-  only be run with `--version` or `<subcommand> --help`.
+  Apple code-signature check first, except `sudo`, which macOS ships unreadable to users
+  (mode 4511) on the sealed system volume, so `codesign` cannot open it. Anything
+  unregistered is refused. Tool binaries may only be run with `--version` or
+  `<subcommand> --help`, or launched idle with no arguments under `--capture`.
 - **Validated fixes.** Every fix command is checked before it is shown:
   - it passes `sh -n`;
   - every program it calls resolves;
@@ -138,7 +173,8 @@ itself did. It does not guess at tool behaviour:
   claims, a 16-character SHA-256 fingerprint and, for values of 20 or more characters that
   are not JWTs, the last four characters. Tests enforce that no secret appears in
   the dashboard, JSON or terminal output.
-- **Offline by default.** `--live` adds two checks:
+- **Offline by default.** The tools themselves reach the network only under `--capture`,
+  which is the point of it. `--live` adds two checks:
   - one read-only call to Anthropic's OAuth profile endpoint (the token goes only to its
     issuer);
   - OpenAI JWT signature verification against the issuer's public JWKS (no token leaves

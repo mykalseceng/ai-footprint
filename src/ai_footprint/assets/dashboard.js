@@ -25,6 +25,7 @@
     { id: "tools", label: "Tools" },
     { id: "checklist", label: "Checklist" },
     { id: "extensions", label: "Extensions" },
+    { id: "network", label: "Network" },
     { id: "machine", label: "Machine" },
     { id: "method", label: "Method" },
     { id: "data", label: "Data" },
@@ -57,7 +58,9 @@
     if (parts.length % 2 === 0) parts[parts.length - 2] += "`" + parts.pop();
     const out = [];
     parts.forEach((p, i) => {
-      if (p) out.push(i % 2 ? h("code", null, p) : document.createTextNode(tidy(p)));
+      if (!p) return;
+      if (i % 2) out.push(h("code", null, p));
+      else out.push(...breakable(tidy(p)));
     });
     return out;
   }
@@ -134,6 +137,7 @@
     tools: ["M4 7.5l8-4.5 8 4.5v9l-8 4.5-8-4.5z", "M4 7.5l8 4.5 8-4.5", "M12 12v9"],
     checklist: ["M10 6h10", "M10 12h10", "M10 18h10", "M3.5 6l1.5 1.5L8 4.5", "M3.5 12l1.5 1.5L8 10.5", "M4 17.5h3v1H4z"],
     extensions: ["M9 2.5v5", "M15 2.5v5", "M5.5 7.5h13v3.5a6.5 6.5 0 0 1-13 0z", "M12 17.5v4"],
+    network: ["M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z", "M3 12h18", "M12 3c2.6 2.6 3.8 5.6 3.8 9s-1.2 6.4-3.8 9", "M12 3c-2.6 2.6-3.8 5.6-3.8 9s1.2 6.4 3.8 9"],
     machine: ["M3 4.5h18v11H3z", "M8 20h8", "M12 15.5V20"],
     method: ["M9 3h6", "M10 3v6.5L4.6 18.7A1.5 1.5 0 0 0 5.9 21h12.2a1.5 1.5 0 0 0 1.3-2.3L14 9.5V3", "M7.2 15h9.6"],
     data: [
@@ -1456,6 +1460,71 @@
 
   // --- method ----------------------------------------------------------------------------
 
+  // --- network: where each tool connected when started idle ---------------------------------
+
+  const CONNECTION_COLS = [
+    { label: "Host", cell: (c) => mono(c.host) },
+    { label: "Address", cell: (c) => mono(c.address + " " + c.transport + "/" + c.port) },
+    { label: "Named by", cell: (c) => c.named_by },
+    { label: "Process", cell: (c) => mono(c.processes.join(", ")) },
+    { label: "First packet", cls: "c-num", cell: (c) => mono(c.first_second.toFixed(1) + " s") },
+    { label: "Packets", cls: "c-num", cell: (c) => mono(String(c.packets)) },
+    { label: "Bytes", cls: "c-num", cell: (c) => mono(fmtBytes(c.bytes)) },
+  ];
+
+  function networkTool(t, view) {
+    const n = view || {};
+    const body = [h("p", { class: "lede" }, rich(n.summary))];
+    if (n.captured) {
+      body.push(
+        kv([
+          ["Launched", mono((n.command || []).join(" "))],
+          ["Environment", (n.switches || []).length ? h("span", { class: "chips" }, n.switches.map((s) => chip(s, "chip-mono"))) : "no off-switch or proxy variables set"],
+          ["Stopped afterwards", (n.stopped || []).length ? h("span", { class: "chips" }, n.stopped.map((s) => chip(s, "chip-mono"))) : "nothing left running"],
+          ["Local packets", mono(String(n.local_packets) + " (loopback, link-local and multicast; not listed)")],
+        ]),
+        h("h3", { class: "sublabel" }, "Connections observed"),
+        table(CONNECTION_COLS, n.observed || [], { empty: "No packets to any host off this machine." }),
+        h("h3", { class: "sublabel" }, "Names looked up"),
+        (n.lookups || []).length ? h("span", { class: "chips" }, n.lookups.map((s) => chip(s, "chip-mono"))) : empty("No DNS lookups were attributed to its processes."),
+      );
+    }
+    body.push(
+      h("h3", { class: "sublabel" }, n.captured ? "Named in the binary, not observed in this capture" : "Named in the binary"),
+      table([{ label: "Host", cell: (u) => mono(u.host) }, { label: "Purpose", cell: (u) => u.purpose }], n.unobserved || [], { empty: "None." }),
+    );
+    return panel(t.display_name, null, body);
+  }
+
+  function pageNetwork() {
+    const net = V.network || {};
+    const tool = route.params.get("tool") || "";
+    const shown = TOOLS.filter((t) => !tool || t.name === tool);
+    const make = (value) => {
+      const p = new URLSearchParams();
+      if (value) p.set("tool", value);
+      return hrefFor("network", "", p);
+    };
+    const sub = net.started_at ? "captured " + fmtTime(net.started_at) : "not captured";
+    const parts = [
+      pageHead("Network", sub),
+      h("p", { class: "page-note" }, rich(net.method ? net.method + "; file `" + net.capture_file + "`." : net.how)),
+      h("div", { class: "filters" }, filterChips("Tool", tool, [["", "All"]].concat(TOOLS.map((t) => [t.name, t.display_name])), make)),
+      shown.map((t) => networkTool(t, (net.tools || {})[t.name])),
+    ];
+    if ((net.unattributed || []).length) {
+      parts.push(
+        panel(
+          "Not attributed",
+          null,
+          h("p", { class: "lede" }, rich(net.unattributed_note)),
+          table(CONNECTION_COLS, net.unattributed),
+        ),
+      );
+    }
+    return parts;
+  }
+
   function pageMethod() {
     const vals = [
       ["Probe validation", DOC.probe_validation],
@@ -1597,6 +1666,7 @@
     tools: pageTools,
     checklist: pageChecklist,
     extensions: pageExtensions,
+    network: pageNetwork,
     machine: pageMachine,
     method: pageMethod,
     data: pageData,

@@ -11,7 +11,7 @@ the data is written here, in Python; the dashboard only lays it out.
 import dataclasses
 from typing import Any
 
-from ai_footprint import answers, figures, keys, surface
+from ai_footprint import answers, figures, keys, netview, surface
 from ai_footprint.model import (
     EXTENSION_PAGES,
     AuditReport,
@@ -64,7 +64,10 @@ def _views(audit: AuditReport, checklist: Checklist) -> dict[str, Any]:
                 )
             ],
             "tools": {
-                t.name: [dataclasses.asdict(f) for f in figures.for_tool(t, checklist)]
+                t.name: [
+                    dataclasses.asdict(f)
+                    for f in figures.for_tool(t, checklist, netview.captured(audit, t.name))
+                ]
                 for t in tools
             },
         },
@@ -72,6 +75,7 @@ def _views(audit: AuditReport, checklist: Checklist) -> dict[str, Any]:
         "keys": [dataclasses.asdict(row) for row in keys.rows(audit)],
         "disk": figures.disk_by_category(audit),
         "method": figures.method_summary(audit),
+        "network": netview.view(audit),
         "lenses": [
             {"id": lens.value, "title": lens.title, "question": lens.question} for lens in Lens
         ],

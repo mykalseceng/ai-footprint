@@ -65,6 +65,14 @@ def _approval(tool: Doc) -> str:
     return "not checked"
 
 
+def _network_hosts(doc: Doc, tool: Doc) -> int | str:
+    capture = doc.get("network") or {}
+    found = [t for t in capture.get("tools", []) if t["tool"] == tool["name"]]
+    if not found:
+        return "not captured"
+    return len({c["host"] for c in found[0]["connections"]})
+
+
 def _compare(figure: Doc | None, expected: object, show: Callable[[Any], str]) -> CheckResult:
     if figure is None:
         return CheckResult("figure present", passed=False, detail="missing")
@@ -113,6 +121,7 @@ def _tool(doc: Doc, tool: Doc) -> CommandValidation:
         _compare(shown.get("signals"), len(tool["exposures"]), str),
         _compare(shown.get("secrets"), _secret_total([tool]), lambda n: f"{n:,}"),
         _compare(shown.get("approval"), _approval(tool), str),
+        _compare(shown.get("network"), _network_hosts(doc, tool), str),
     ]
     return CommandValidation(f"figures on tool-{tool['name']}", checks)
 
