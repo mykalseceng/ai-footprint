@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ai_footprint import (
     __version__,
+    capture,
     dashboard,
     document,
     figurecheck,
@@ -17,7 +18,7 @@ from ai_footprint import (
     reportcheck,
 )
 from ai_footprint.audit import TOOLS, detect_tools, run_audit
-from ai_footprint.model import ToolPresence
+from ai_footprint.model import NetworkCapture, ToolPresence
 from ai_footprint.report_text import (
     Style,
     render_doctor,
@@ -40,7 +41,11 @@ which installed tools to audit; otherwise every installed tool is audited.
   ai-footprint codex opencode      audit only these
   ai-footprint all --html r.html   also write the static report (no scripts)
   ai-footprint all --doctor        each check: review, clear or not checked
+  ai-footprint all --capture       also record where each tool connects when started (sudo)
 """
+
+
+CAPTURE_NAME = "ai-footprint-capture"
 
 
 class SelectionError(SystemExit):
@@ -87,6 +92,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="allow network checks: Anthropic token liveness (token sent to "
         "Anthropic only) and OpenAI JWT signature verification (public JWKS)",
+    )
+    network = parser.add_mutually_exclusive_group()
+    network.add_argument(
+        "--capture",
+        action="store_true",
+        help=f"launch each selected tool idle for {capture.SECONDS:.0f}s, with no prompt, under a "
+        "sudo packet capture, and show every host it reached; saves "
+        f"{CAPTURE_NAME}.pcapng and .json next to the dashboard",
+    )
+    network.add_argument(
+        "--network", type=Path, help="show a capture saved earlier by --capture (its .json)"
     )
     parser.add_argument("--workers", type=int, help="secret-scan processes (default: CPU count)")
     parser.add_argument("--home", type=Path, default=Path.home(), help=argparse.SUPPRESS)
@@ -172,6 +188,35 @@ def _interactive() -> bool:
     return sys.stdin.isatty() and sys.stdout.isatty()
 
 
+def _network(
+    args: argparse.Namespace, system: System, selected: list[ToolPresence]
+) -> NetworkCapture | None:
+    """Run the packet capture, or load a saved one, when asked to.
+
+    Raises:
+        capture.CaptureError: The capture could not run, or the saved file is unreadable.
+    """
+    if (args.capture or args.network) and (args.doctor or args.validate):
+        raise capture.CaptureError("--capture and --network go with a full audit only")
+    if args.network:
+        return capture.load(args.network)
+    if not args.capture:
+        return None
+    launchable = [p for p in selected if p.binaries]
+    if not launchable:
+        raise capture.CaptureError("none of the selected tools has a binary on PATH to launch")
+    names = ", ".join(p.display_name for p in launchable)
+    print(
+        f"Capturing network traffic while {names} each start idle for {capture.SECONDS:.0f}s; "
+        "sudo asks for your password to start tcpdump…",
+        file=sys.stderr,
+    )
+    path = args.dashboard.with_name(f"{CAPTURE_NAME}.pcapng")
+    found = capture.record(system, launchable, path)
+    write_private(path.with_suffix(".json"), capture.dumps(found))
+    return found
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return the process exit code."""
     args = build_parser().parse_args(argv)
@@ -183,6 +228,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     tools = select_tools(args.tools, presences, ask=input if _interactive() else None)
     quick = args.doctor or args.validate
+    try:
+        network = _network(args, system, [p for p in presences if p.name in tools])
+    except capture.CaptureError as exc:
+        print(f"ai-footprint: {exc}", file=sys.stderr)
+        return 2
     if not quick:
         names = ", ".join(TOOLS[name].display_name for name in tools)
         print(f"Auditing {names} (full secret scan)…", file=sys.stderr)
@@ -195,6 +245,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         workers=args.workers,
         presences=presences,
     )
+    audit.network = network
     if args.validate:
         audit.option_validation = optioncheck.validate(
             build_parser(),

@@ -515,6 +515,56 @@ class HostReport:
 
 
 @dataclass
+class Connection:
+    """One remote address and port a tool's processes exchanged packets with during a capture.
+
+    Attributes:
+        host: The name the tool asked for (TLS server name, HTTP Host header or DNS answer),
+            or the address when no packet named it.
+        named_by: Which packet supplied ``host``.
+        first_second: Seconds from the tool's launch to the first packet.
+    """
+
+    host: str
+    address: str
+    port: int
+    transport: str
+    named_by: str
+    processes: list[str]
+    first_second: float
+    packets: int
+    bytes: int
+
+
+@dataclass
+class ToolCapture:
+    """What one tool sent over the network while launched idle, with no prompt."""
+
+    tool: str
+    display_name: str
+    version: str
+    command: list[str]
+    seconds: float
+    pids: list[int] = field(default_factory=list)
+    connections: list[Connection] = field(default_factory=list)
+    lookups: list[str] = field(default_factory=list)
+    local_packets: int = 0
+    stopped: list[str] = field(default_factory=list)
+    switches: list[str] = field(default_factory=list)
+
+
+@dataclass
+class NetworkCapture:
+    """A packet capture taken while each selected tool was launched idle, one at a time."""
+
+    method: str
+    started_at: str
+    capture_file: str
+    tools: list[ToolCapture] = field(default_factory=list)
+    unattributed: list[Connection] = field(default_factory=list)
+
+
+@dataclass
 class AuditReport:
     """The full audit: host, every tool, host-level exposures, and provenance."""
 
@@ -531,6 +581,7 @@ class AuditReport:
     claim_validation: list[CommandValidation] = field(default_factory=list)
     report_validation: list[CommandValidation] = field(default_factory=list)
     figure_validation: list[CommandValidation] = field(default_factory=list)
+    network: NetworkCapture | None = None
 
     def all_exposures(self) -> list[Exposure]:
         """Every exposure across tools and the host, grouped by lens in a fixed order."""

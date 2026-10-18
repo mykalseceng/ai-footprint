@@ -9,9 +9,16 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import cli, live, optioncheck
+from ai_footprint import capture, cli, live, optioncheck
 from ai_footprint.audit import TOOLS
-from ai_footprint.model import CommandValidation, ToolPresence
+from ai_footprint.model import (
+    BinaryInfo,
+    CommandValidation,
+    Connection,
+    NetworkCapture,
+    ToolCapture,
+    ToolPresence,
+)
 from tests.conftest import FakeSystem, build_claude_home, build_codex_home, jwks_for_test_key
 
 
@@ -150,6 +157,72 @@ def test_help_shows_every_example(capsys):
         assert example in out
 
 
+def saved_capture() -> NetworkCapture:
+    seen = Connection(
+        "models.dev", "104.18.32.47", 443, "tcp", "TLS server name", ["x"], 0.4, 9, 900
+    )
+    tool = ToolCapture("codex", "Codex CLI", "0.162.0", ["/bin/codex"], 60.0, connections=[seen])
+    return NetworkCapture(capture.METHOD, "2026-10-17T20:00:00+00:00", "/tmp/c.pcapng", [tool])
+
+
+def test_capture_records_the_selected_tools_and_saves_the_result(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+):
+    calls: list[tuple[list[str], Path]] = []
+
+    def fake_record(_system, presences, path):
+        calls.append(([p.name for p in presences], path))
+        return saved_capture()
+
+    detect = cli.detect_tools
+
+    def with_binary(**kwargs):
+        found = detect(**kwargs)
+        for presence in found:
+            presence.binaries = [BinaryInfo("/bin/codex", "/bin/codex", "0.162.0")]
+        return found
+
+    assert run(home, "codex", "--dashboard", str(home / "d.html"), "--capture") == 2
+    monkeypatch.setattr(cli, "detect_tools", with_binary)
+    monkeypatch.setattr(capture, "record", fake_record)
+    out = home / "r.json"
+    assert (
+        run(home, "codex", "--dashboard", str(home / "d.html"), "--json", str(out), "--capture")
+        == 0
+    )
+    assert calls == [(["codex"], home / "ai-footprint-capture.pcapng")]
+    saved = home / "ai-footprint-capture.json"
+    assert stat.S_IMODE(saved.stat().st_mode) == 0o600
+    assert capture.load(saved) == saved_capture()
+    assert json.loads(out.read_text())["network"]["tools"][0]["connections"][0]["host"] == (
+        "models.dev"
+    )
+
+
+def test_network_shows_a_saved_capture_and_refuses_quick_modes(home: Path, capsys):
+    saved = home / "c.json"
+    saved.write_text(capture.dumps(saved_capture()))
+    out = home / "r.json"
+    assert (
+        run(
+            home,
+            "codex",
+            "--dashboard",
+            str(home / "d.html"),
+            "--json",
+            str(out),
+            "--network",
+            str(saved),
+        )
+        == 0
+    )
+    assert json.loads(out.read_text())["network"]["method"] == capture.METHOD
+    assert run(home, "codex", "--doctor", "--network", str(saved)) == 2
+    assert "full audit only" in capsys.readouterr().err
+    saved.write_text("{}")
+    assert run(home, "codex", "--dashboard", str(home / "d.html"), "--network", str(saved)) == 2
+
+
 OPTION_TESTS = {
     "tools": test_tools_positional_audits_only_named_tools,
     "list": test_list_shows_installed_and_missing_tools,
@@ -160,6 +233,8 @@ OPTION_TESTS = {
     "json": test_json_writes_private_parseable_report,
     "live": test_live_verifies_signatures_only_when_asked,
     "workers": test_workers_reaches_the_scanner,
+    "capture": test_capture_records_the_selected_tools_and_saves_the_result,
+    "network": test_network_shows_a_saved_capture_and_refuses_quick_modes,
     "home": test_home_selects_the_audited_home,
     "version": test_version_prints_package_version,
     "help": test_help_shows_every_example,

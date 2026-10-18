@@ -2,12 +2,14 @@
 
 Every probe is declared in ``PROBES`` with an absolute binary path, so the audit cannot be
 PATH-hijacked the way a bare ``security`` call can. Every probe is read-only. Tool
-binaries (claude, codex, opencode) may only be run with ``--version`` or ``... --help``.
+binaries (claude, codex, opencode, pi) may only be run with ``--version`` or ``... --help``,
+except that ``--capture`` launches each one idle, with no prompt, under a packet capture.
 Anything else raises ``CommandRefusedError``. Every execution is logged so the report can
 list exactly what the audit ran.
 """
 
 import os
+import pty
 import shutil
 import stat
 import subprocess
@@ -112,6 +114,20 @@ PROBES: dict[str, ProbeSpec] = {
             env_passthrough=("SSH_AUTH_SOCK",),
         ),
         ProbeSpec(
+            "sudo",
+            ("/usr/bin/sudo",),
+            "Start the packet capture as root (--capture only; asks for your password)",
+            _MAC,
+            apple_signed=True,
+        ),
+        ProbeSpec(
+            "tcpdump",
+            ("/usr/sbin/tcpdump",),
+            "Record packets with their owning process (--capture), then read the file back",
+            _MAC,
+            apple_signed=True,
+        ),
+        ProbeSpec(
             "sh",
             ("/bin/sh",),
             "Syntax-check fix commands with `sh -n` (parses, never executes)",
@@ -161,7 +177,13 @@ class System:
         return self._find_binary(spec) is not None
 
     def run(
-        self, name: str, args: Sequence[str], *, stdin: str | None = None, timeout: float = 30
+        self,
+        name: str,
+        args: Sequence[str],
+        *,
+        stdin: str | None = None,
+        timeout: float = 30,
+        log: bool = True,
     ) -> ProbeResult:
         """Run a registered probe by absolute path.
 
@@ -170,6 +192,8 @@ class System:
             args: Arguments after the binary.
             stdin: Optional text fed to the process.
             timeout: Seconds before the process is killed.
+            log: False for a probe repeated in a loop; the caller records it once with
+                ``note``.
 
         Returns:
             The captured result.
@@ -179,7 +203,83 @@ class System:
         """
         binary = self._require_probe(name)
         extra = {k: self.env[k] for k in PROBES[name].env_passthrough if k in self.env}
+        if not log:
+            return self._execute([binary, *args], stdin, timeout, extra)
         return self._record([binary, *args], PROBES[name].purpose, stdin, timeout, extra)
+
+    def probe_path(self, name: str) -> str:
+        """Absolute path of a registered probe, after its signature check.
+
+        Raises:
+            CommandRefusedError: The probe is unknown, unavailable, or fails its signature check.
+        """
+        return self._require_probe(name)
+
+    def note(self, name: str, args: Sequence[str], purpose: str) -> None:
+        """Record a probe that ran repeatedly unlogged, once, with why and how often."""
+        binary = self._require_probe(name)
+        self.executed.append(ExecRecord(argv=[binary, *args], returncode=0, purpose=purpose))
+
+    def interactive(self, name: str, args: Sequence[str]) -> int:
+        """Run a probe attached to this terminal (``sudo -v`` asking for a password)."""
+        binary = self._require_probe(name)
+        # argv[0] is an absolute path from PROBES.
+        code = subprocess.call([binary, *args])  # noqa: S603
+        self.executed.append(
+            ExecRecord(argv=[binary, *args], returncode=code, purpose=PROBES[name].purpose)
+        )
+        return code
+
+    def start(self, name: str, args: Sequence[str]) -> subprocess.Popen[bytes]:
+        """Start a probe in the background (the packet capture) and record it."""
+        binary = self._require_probe(name)
+        self.executed.append(
+            ExecRecord(argv=[binary, *args], returncode=0, purpose=PROBES[name].purpose)
+        )
+        # argv[0] is an absolute path from PROBES.
+        return subprocess.Popen(  # noqa: S603
+            [binary, *args],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+
+    def launch_idle(
+        self, binary: str, *, cwd: str, env: Mapping[str, str]
+    ) -> tuple[subprocess.Popen[bytes], int]:
+        """Start a tool binary with no arguments in a pseudo-terminal, for the capture.
+
+        Returns:
+            The process and the terminal's controller descriptor, which the caller drains
+            and closes.
+
+        Raises:
+            CommandRefusedError: ``binary`` is not an absolute path to an executable file.
+        """
+        path = Path(binary)
+        if not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
+            raise CommandRefusedError(f"refusing to launch {binary}: not an executable path")
+        controller, terminal = pty.openpty()
+        # binary is an absolute path to an installed tool, checked above.
+        proc = subprocess.Popen(  # noqa: S603
+            [binary],
+            stdin=terminal,
+            stdout=terminal,
+            stderr=terminal,
+            cwd=cwd,
+            env=dict(env),
+            start_new_session=True,
+        )
+        os.close(terminal)
+        self.executed.append(
+            ExecRecord(
+                argv=[binary],
+                returncode=0,
+                purpose="Launch idle with no prompt while the packet capture runs",
+            )
+        )
+        return proc, controller
 
     def run_tool(self, binary: str, args: Sequence[str], *, timeout: float = 30) -> ProbeResult:
         """Run an AI tool binary, limited to ``--version`` or ``<subcommand...> --help``.

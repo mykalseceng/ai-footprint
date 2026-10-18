@@ -12,3 +12,6 @@ wheels/
 # Audit output maps your attack surface; never commit it
 ai-footprint-*.html
 ai-footprint-*.json
+
+# Packet captures from --capture hold this machine's traffic metadata
+ai-footprint-*.pcapng
