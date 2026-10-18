@@ -119,8 +119,9 @@ it, because no prompt is ever sent.
   and multicast traffic is counted, not listed. Helper-named processes (node, bun, git…) that
   talked during a tool's window but were never seen in its process tree are listed as not
   attributed.
-- The capture is saved as `ai-footprint-capture.pcapng` and `.json` next to the dashboard
-  (mode 600, git-ignored). `--network FILE` shows it again in later audits.
+- The capture is saved as `ai-footprint-capture.pcapng`, `.json` (the result) and
+  `.windows.json` (when each tool ran and its processes) next to the dashboard, all mode 600
+  and git-ignored. `--network FILE` shows the result again in later audits.
 
 ## Observed, not inferred
 
