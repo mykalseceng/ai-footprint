@@ -14,7 +14,7 @@ import json
 from importlib import resources
 from typing import Any
 
-ASSETS = resources.files("ai_footprint") / "assets"
+ASSETS = resources.files("ai_footprint.reporting") / "assets"
 _JSON_ESCAPES = {
     "<": "\\u003c",
     ">": "\\u003e",

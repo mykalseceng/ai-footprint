@@ -7,20 +7,12 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from ai_footprint import (
-    __version__,
-    capture,
-    dashboard,
-    document,
-    figurecheck,
-    optioncheck,
-    report_html,
-    reportcheck,
-)
+from ai_footprint import __version__, capture, optioncheck
 from ai_footprint.audit import detect_tools, run_audit
 from ai_footprint.harnesses import registry
 from ai_footprint.model import NetworkCapture, ToolPresence
-from ai_footprint.report_text import (
+from ai_footprint.reporting import dashboard, document, figurecheck, report_html, reportcheck
+from ai_footprint.reporting.report_text import (
     Style,
     render_doctor,
     render_list,

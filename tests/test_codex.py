@@ -5,13 +5,14 @@ import sqlite3
 import time
 from pathlib import Path
 
-from ai_footprint import checks, extensions, figures
+from ai_footprint import checks, extensions
 from ai_footprint.checks import needs, steering
 from ai_footprint.harnesses.codex import account as codex_account
 from ai_footprint.harnesses.codex import collector as codex
 from ai_footprint.harnesses.common import Context, shell_shortcuts, socket_endpoints
 from ai_footprint.host import Socket
 from ai_footprint.model import THREADS_WITHOUT_APPROVAL, HostReport, ProcessInfo, ToolReport
+from ai_footprint.reporting import figures
 from ai_footprint.system import ProbeResult
 from tests.conftest import FakeSystem
 

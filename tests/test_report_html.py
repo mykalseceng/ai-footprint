@@ -5,7 +5,7 @@ from pathlib import Path
 from hypothesis import given
 from hypothesis import strategies as st
 
-from ai_footprint import checks, document, report_html
+from ai_footprint import checks
 from ai_footprint.model import (
     AuditReport,
     Exposure,
@@ -17,6 +17,7 @@ from ai_footprint.model import (
     Lens,
     ToolReport,
 )
+from ai_footprint.reporting import document, report_html
 
 HOME = "/Users/tester"
 CLAUDE_BRIDGE = (

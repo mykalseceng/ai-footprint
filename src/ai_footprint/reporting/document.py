@@ -11,7 +11,6 @@ the data is written here, in Python; the dashboard only lays it out.
 import dataclasses
 from typing import Any
 
-from ai_footprint import answers, figures, keys, netview, surface
 from ai_footprint.checks import Checklist
 from ai_footprint.model import (
     EXTENSION_PAGES,
@@ -23,7 +22,8 @@ from ai_footprint.model import (
     Lens,
     ToolReport,
 )
-from ai_footprint.report_text import validation_label
+from ai_footprint.reporting import answers, figures, keys, netview, surface
+from ai_footprint.reporting.report_text import validation_label
 from ai_footprint.text import join, plural
 
 HOST_SCOPE = (

@@ -6,10 +6,10 @@ import textwrap
 from collections import Counter
 from collections.abc import Iterable
 
-from ai_footprint import reportcheck, surface
 from ai_footprint.checks import Check
 from ai_footprint.fsinfo import disk_bytes, human_size, outermost, tilde
 from ai_footprint.model import AuditReport, CommandValidation, Fix, ToolPresence
+from ai_footprint.reporting import reportcheck, surface
 from ai_footprint.text import join, plural
 
 _COLORS = {

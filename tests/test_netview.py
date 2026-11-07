@@ -8,9 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import capture, document, figurecheck, netview, report_html
+from ai_footprint import capture
 from ai_footprint.audit import run_audit
 from ai_footprint.model import AuditReport, Connection, Endpoint, NetworkCapture, ToolCapture
+from ai_footprint.reporting import document, figurecheck, netview, report_html
 from tests.conftest import build_codex_home
 from tests.test_audit import QuietFakeSystem
 

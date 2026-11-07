@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ai_footprint import checks, document
+from ai_footprint import checks
 from ai_footprint.model import (
     AuditReport,
     CheckResult,
@@ -19,6 +19,7 @@ from ai_footprint.model import (
     TokenInfo,
     ToolReport,
 )
+from ai_footprint.reporting import document
 
 HOME = "/Users/tester"
 CLAUDE_BRIDGE = (

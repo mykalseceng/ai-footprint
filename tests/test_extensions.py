@@ -4,11 +4,12 @@ import json
 import time
 from pathlib import Path
 
-from ai_footprint import document, extensions
+from ai_footprint import extensions
 from ai_footprint.harnesses import registry
 from ai_footprint.harnesses.claude import collector as claude
 from ai_footprint.harnesses.common import Context
 from ai_footprint.model import AuditReport, Extension, HostReport
+from ai_footprint.reporting import document
 from tests.conftest import FakeSystem, build_claude_home
 
 CLAUDE = registry()["claude"]

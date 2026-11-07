@@ -1,6 +1,6 @@
 """Rules read typed fields; the prose they show is never parsed back."""
 
-from ai_footprint import daemons, document, surface
+from ai_footprint import daemons
 from ai_footprint.harnesses.claude import collector as claude
 from ai_footprint.model import (
     BARE_SECURITY,
@@ -12,6 +12,7 @@ from ai_footprint.model import (
     TokenInfo,
     ToolReport,
 )
+from ai_footprint.reporting import document, surface
 from tests.test_host_view import host_exposures, make_audit
 
 

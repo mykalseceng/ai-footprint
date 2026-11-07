@@ -14,10 +14,10 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import document, report_html
 from ai_footprint.audit import run_audit
 from ai_footprint.model import CommandValidation
-from ai_footprint.report_text import Style, render_doctor
+from ai_footprint.reporting import document, report_html
+from ai_footprint.reporting.report_text import Style, render_doctor
 from tests.conftest import (
     FakeSystem,
     build_claude_home,

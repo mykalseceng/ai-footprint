@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import checks, document, figurecheck, figures, fsinfo
+from ai_footprint import checks, fsinfo
 from ai_footprint.audit import run_audit
 from ai_footprint.model import (
     Artifact,
@@ -25,6 +25,7 @@ from ai_footprint.model import (
     Setting,
     ToolReport,
 )
+from ai_footprint.reporting import document, figurecheck, figures
 from tests.conftest import (
     FakeSystem,
     build_claude_home,

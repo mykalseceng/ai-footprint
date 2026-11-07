@@ -10,8 +10,8 @@ row says the owner is not recorded on disk.
 
 from dataclasses import dataclass, field
 
-from ai_footprint import surface
 from ai_footprint.model import AuditReport, Credential, TokenInfo
+from ai_footprint.reporting import surface
 from ai_footprint.tokens import API_KEY, LOGIN, PASSWORD, SECRET, kind_of
 
 EMAIL_CLAIMS = ("email", "https://api.openai.com/profile.email")

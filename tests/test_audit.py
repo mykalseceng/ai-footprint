@@ -10,17 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import (
-    answers,
-    cli,
-    dashboard,
-    document,
-    figures,
-    fsinfo,
-    report_html,
-    reportcheck,
-    surface,
-)
+from ai_footprint import cli, fsinfo
 from ai_footprint.audit import detect_tools, run_audit
 from ai_footprint.model import (
     Artifact,
@@ -31,7 +21,16 @@ from ai_footprint.model import (
     HostReport,
     ToolReport,
 )
-from ai_footprint.report_text import Style, render_doctor, render_summary
+from ai_footprint.reporting import (
+    answers,
+    dashboard,
+    document,
+    figures,
+    report_html,
+    reportcheck,
+    surface,
+)
+from ai_footprint.reporting.report_text import Style, render_doctor, render_summary
 from ai_footprint.text import plural
 from tests.conftest import (
     FAKE_ANTHROPIC_ACCESS,
