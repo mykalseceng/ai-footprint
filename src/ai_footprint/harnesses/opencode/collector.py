@@ -1,34 +1,28 @@
 """OpenCode (``opencode``) footprint collector."""
 
 import json
-import re
 import sqlite3
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 from ai_footprint import extensions, instructions
-from ai_footprint.collectors.common import (
-    ArtifactSpec,
+from ai_footprint.fsinfo import mode_string, readable_by_others
+from ai_footprint.harnesses import profile
+from ai_footprint.harnesses.base import artifacts, fingerprint, known_endpoints, resolve_roots
+from ai_footprint.harnesses.common import (
     Claim,
     Context,
-    binary_info,
     binary_path,
     confirmed_settings,
-    describe_all,
     endpoints,
-    fingerprint_items,
     load_json,
     load_jsonc,
-    presence,
     provider_credential,
     value_or_unset,
 )
-from ai_footprint.fsinfo import mode_string, readable_by_others
 from ai_footprint.host import Socket, processes, sockets
 from ai_footprint.model import (
-    BinaryInfo,
-    Category,
     Credential,
     Endpoint,
     Extension,
@@ -40,14 +34,11 @@ from ai_footprint.model import (
 from ai_footprint.secrets import scan_paths
 from ai_footprint.tokens import inspect_token, iso_time
 
-NAME = "opencode"
-DISPLAY = "OpenCode"
-PROCESS = r"(^|/)opencode2?(\.exe)?(\s|$)"
-"""OpenCode's command line; 2.x sessions set their process title to ``opencode2``."""
+PROFILE = profile.load_beside(__name__)
+NAME = PROFILE.name
+DISPLAY = PROFILE.display_name
 SESSION_TABLES = ("session", "session_v2")
 MESSAGE_TABLES = ("message", "session_message")
-C = Category
-
 PROVIDER_HOSTS = {
     "anthropic": "api.anthropic.com",
     "openai": "chatgpt.com / api.openai.com",
@@ -72,52 +63,15 @@ PROVIDER_NAMES = {
     "openrouter": "OpenRouter",
 }
 
-ENDPOINTS = {
-    "opencode.ai": "Config schema, themes, Zen model gateway, updates",
-    "models.dev": "Model catalog",
-}
-
-FINGERPRINT = (
-    ("User-Agent", "opencode/{version}", '"User-Agent":`opencode/${'),
-    (
-        "Gateway headers",
-        "x-opencode-client, x-opencode-session, x-opencode-project (opencode.ai requests)",
-        '"x-opencode-client"',
-    ),
-    (
-        "Local server",
-        "HTTP Basic auth; password from OPENCODE_SERVER_PASSWORD (realm 'Secure Area')",
-        "OPENCODE_SERVER_PASSWORD",
-    ),
-    ("Shared skill dirs", "reads ~/.claude and ~/.agents skill folders", '[".claude",".agents"]'),
-    (
-        "Instruction files",
-        "AGENTS.md, CLAUDE.md, CONTEXT.md; ~/.claude/CLAUDE.md unless "
-        "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT is set",
-        "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT",
-    ),
-)
-
 DISABLE_CLAUDE_VARS = ("OPENCODE_DISABLE_CLAUDE_CODE", "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT")
-SETTING_KEYS = ('"permission"', '"share"', "autoupdate:", '"plugin"', '"instructions"')
-CLAIMS: tuple[Claim, ...] = (
-    *(Claim(f"endpoint {host}", host) for host in ENDPOINTS),
-    *(Claim(f"signature: {label}", marker) for label, _value, marker in FINGERPRINT),
-    *(Claim(f"setting {key}", key) for key in SETTING_KEYS),
+EXTRA_CLAIMS: tuple[Claim, ...] = (
     Claim("Basic-auth realm", "Secure Area"),
     Claim("share value", '"disabled"'),
 )
 
 
 def _roots(ctx: Context) -> dict[str, Path]:
-    env = ctx.system.env
-    return {
-        "data": Path(env.get("XDG_DATA_HOME") or ctx.home / ".local/share") / "opencode",
-        "config": Path(env.get("XDG_CONFIG_HOME") or ctx.home / ".config") / "opencode",
-        "state": Path(env.get("XDG_STATE_HOME") or ctx.home / ".local/state") / "opencode",
-        "cache": Path(env.get("XDG_CACHE_HOME") or ctx.home / ".cache") / "opencode",
-        "install": ctx.home / ".opencode",
-    }
+    return resolve_roots(ctx, PROFILE)
 
 
 def _service_files(roots: dict[str, Path]) -> list[Path]:
@@ -125,87 +79,15 @@ def _service_files(roots: dict[str, Path]) -> list[Path]:
     return [roots["config"] / "service.json", roots["state"] / "service.json"]
 
 
-def _presence_roots(roots: dict[str, Path]) -> list[Path]:
-    return [roots["data"], roots["config"], roots["install"]]
-
-
-def _artifact_specs(roots: dict[str, Path]) -> list[ArtifactSpec]:
-    data, config, state = roots["data"], roots["config"], roots["state"]
-    return [
-        ArtifactSpec(
-            "Provider credentials",
-            str(data / "auth.json"),
-            C.CREDENTIAL,
-            "OAuth tokens and API keys per provider, plaintext",
-        ),
-        ArtifactSpec(
-            "Database",
-            str(data / "opencode.db"),
-            C.SESSION,
-            "Sessions, messages, tool output, and a credential table",
-        ),
-        ArtifactSpec(
-            "Database WAL", str(data / "opencode.db-wal"), C.SESSION, "Uncommitted database pages"
-        ),
-        ArtifactSpec("Legacy storage", str(data / "storage"), C.SESSION, "Pre-SQLite sessions"),
-        ArtifactSpec(
-            "Snapshots",
-            str(data / "snapshot"),
-            C.CACHE,
-            "Git snapshots of project files for undo",
-        ),
-        ArtifactSpec("Tool output", str(data / "tool-output"), C.SESSION, "Large tool results"),
-        ArtifactSpec("Logs", str(data / "log"), C.LOG, "Client and server logs"),
-        ArtifactSpec("Config", str(config / "opencode.jsonc"), C.CONFIG, "Main config"),
-        ArtifactSpec("Config (json)", str(config / "opencode.json"), C.CONFIG, "Main config"),
-        ArtifactSpec(
-            "Server password",
-            str(config / "service.json"),
-            C.CREDENTIAL,
-            "Basic-auth password for the local opencode server",
-        ),
-        ArtifactSpec(
-            "Global instructions",
-            str(config / "AGENTS.md"),
-            C.INSTRUCTIONS,
-            "Loaded into every session",
-        ),
-        ArtifactSpec(
-            "Plugin deps",
-            str(config / "node_modules"),
-            C.EXTENSION,
-            "npm packages loaded by plugins",
-        ),
-        ArtifactSpec(
-            "Prompt history",
-            str(state / "prompt-history.jsonl"),
-            C.SESSION,
-            "Prompts typed into the TUI",
-        ),
-        ArtifactSpec(
-            "Server registration",
-            str(state / "service.json"),
-            C.CREDENTIAL,
-            "URL, pid and Basic-auth password of the running local server",
-        ),
-        ArtifactSpec(
-            "Model state", str(state / "model.json"), C.CACHE, "Recent and favourite models"
-        ),
-        ArtifactSpec("TUI state", str(state / "latest"), C.CACHE, "TUI state and locks"),
-        ArtifactSpec("Cache", str(roots["cache"]), C.CACHE, "Model catalog, downloads"),
-        ArtifactSpec("Install", str(roots["install"]), C.BINARY, "Installed binary and deps"),
-    ]
-
-
-def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport, dict[str, Any]]:
+def collect(ctx: Context, found: ToolPresence) -> tuple[ToolReport, dict[str, Any]]:
     """Collect OpenCode's footprint.
 
     Args:
         ctx: Collection context.
-        found: This tool's presence when already detected, so binaries are probed once.
+        found: This tool's presence from ``detect``.
 
     Returns:
-        The report and private facts for the rule engine.
+        The report and the parsed config, which the account notes read.
     """
     report = ToolReport(name=NAME, display_name=DISPLAY)
     roots = _roots(ctx)
@@ -214,16 +96,14 @@ def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport
         or load_jsonc(roots["config"] / "opencode.json")
         or {}
     )
-    found = found or detect(ctx, sized=False)
     report.binaries = found.binaries
     report.installed = found.installed
     db = roots["data"] / "opencode.db"
-    facts: dict[str, Any] = {"config": config, "roots": roots, "db": db}
     if not report.installed:
-        return report, facts
-    report.artifacts = describe_all(Path("/"), _artifact_specs(roots))
-    report.credentials, facts["fingerprints"], providers = _credentials(ctx, roots, db)
-    report.processes = processes(ctx.system, PROCESS)
+        return report, config
+    report.artifacts = artifacts(ctx, PROFILE)
+    report.credentials, known, providers = _credentials(ctx, roots, db)
+    report.processes = processes(ctx.system, PROFILE.process)
     socks = sockets(ctx.system, [p.pid for p in report.processes])
     binary = binary_path(report)
     report.settings = _settings(ctx, config, db, binary)
@@ -236,34 +116,17 @@ def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport
     server = _server_setting(ctx, roots, socks)
     if server:
         report.settings.append(server)
-    version = report.binaries[0].version if report.binaries else "?"
-    rows = [(label, value.format(version=version), marker) for label, value, marker in FINGERPRINT]
-    report.fingerprint = fingerprint_items(ctx, binary, rows)
+    report.fingerprint = fingerprint(ctx, PROFILE, report)
     report.stats = _stats(db)
     if ctx.scan:
         report.secret_scan = scan_paths(
             [roots["data"], roots["config"] / "service.json", roots["state"]],
             workers=ctx.workers,
             display=ctx.display,
-            known=facts["fingerprints"],
+            known=known,
             stores=[roots["data"] / "auth.json", db, *_service_files(roots)],
         )
-    return report, facts
-
-
-def detect(ctx: Context, *, sized: bool = True) -> ToolPresence:
-    """Is OpenCode installed, and where?"""
-    return presence(NAME, DISPLAY, _binaries(ctx), _presence_roots(_roots(ctx)), sized=sized)
-
-
-def _binaries(ctx: Context) -> list[BinaryInfo]:
-    found = []
-    for path in ctx.system.which_all("opencode"):
-        resolved = str(Path(path).resolve())
-        result = ctx.system.run_tool(resolved, ["--version"])
-        match = re.search(r"\d+\.\d+\.\d+", result.stdout)
-        found.append(binary_info(ctx.system, path, version=match.group(0) if match else ""))
-    return found
+    return report, config
 
 
 def _credentials(
@@ -502,7 +365,7 @@ def _endpoints(
         for p in sorted(providers & set(PROVIDER_HOSTS))
     ]
     logs = [roots["data"] / "log"]
-    return endpoints(ctx, report, ENDPOINTS, logs, extra=hosts, socks=socks)
+    return endpoints(ctx, report, known_endpoints(PROFILE), logs, extra=hosts, socks=socks)
 
 
 def _server_setting(ctx: Context, roots: dict[str, Path], socks: list[Socket]) -> Setting | None:

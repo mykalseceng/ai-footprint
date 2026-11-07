@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 
 from ai_footprint import daemons, rules
-from ai_footprint.collectors.common import Context
+from ai_footprint.harnesses.common import Context
 from ai_footprint.host import listeners, processes
 from ai_footprint.model import BinaryInfo, Daemon, HostReport, Listener, ProcessInfo, ToolReport
 from ai_footprint.system import ProbeResult

@@ -5,8 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import accounts, rules
-from ai_footprint.collectors.common import AD_HOC, Context, signer
+from ai_footprint import rules
+from ai_footprint.harnesses.common import AD_HOC, Context, signer
+from ai_footprint.harnesses.opencode import account as opencode_account
+from ai_footprint.harnesses.pi import account as pi_account
 from ai_footprint.model import (
     BinaryInfo,
     Credential,
@@ -101,7 +103,7 @@ def oauth(provider: str, *, issued: float, expires: float) -> Credential:
 def test_an_expired_login_states_issue_and_expiry_dates_only(tmp_path: Path):
     report = ToolReport(name="pi", display_name="pi", installed=True)
     report.credentials = [oauth("OpenAI", issued=1777413000, expires=1778278200)]
-    [note] = [n for n in accounts.pi(_ctx(tmp_path), report, {}) if n.topic == "detect"]
+    [note] = [n for n in pi_account.notes(_ctx(tmp_path), report, {}) if n.topic == "detect"]
     assert note.text == (
         "Stored pi logins whose access token expired and was not replaced: OpenAI access token "
         "issued 2026-04-28, expired 2026-05-08. Their refresh tokens have no recorded expiry."
@@ -112,10 +114,10 @@ def test_an_expired_login_states_issue_and_expiry_dates_only(tmp_path: Path):
 def test_a_current_login_raises_no_stale_note(tmp_path: Path):
     report = ToolReport(name="pi", display_name="pi", installed=True)
     report.credentials = [oauth("OpenAI", issued=time.time(), expires=time.time() + 3600)]
-    assert not [n for n in accounts.pi(_ctx(tmp_path), report, {}) if n.topic == "detect"]
+    assert not [n for n in pi_account.notes(_ctx(tmp_path), report, {}) if n.topic == "detect"]
 
 
-def test_revoke_advice_names_only_the_stored_providers(tmp_path: Path):
+def test_revoke_advice_names_only_the_stored_providers():
     report = ToolReport(name="opencode", display_name="OpenCode", installed=True)
     report.credentials = [
         oauth("OpenAI", issued=time.time(), expires=time.time() + 60),
@@ -124,7 +126,7 @@ def test_revoke_advice_names_only_the_stored_providers(tmp_path: Path):
             "opencode", "OpenCode local server", StoreKind.FILE, "/s.json", "", local_service=True
         ),
     ]
-    notes = accounts.opencode(_ctx(tmp_path), report, {"config": {}})
+    notes = opencode_account.notes(report, {})
     [revoke] = [n.text for n in notes if n.topic == "revoke"]
     assert "claude.ai" not in revoke
     assert "sign out of all devices in ChatGPT security settings" in revoke

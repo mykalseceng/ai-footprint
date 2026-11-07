@@ -6,27 +6,24 @@ from pathlib import Path
 from typing import Any
 
 from ai_footprint import extensions, instructions, keychain, live
-from ai_footprint.collectors.common import (
-    ArtifactSpec,
+from ai_footprint.fsinfo import mode_string, readable_by_others
+from ai_footprint.harnesses import profile
+from ai_footprint.harnesses.base import artifacts, endpoint_markers, fingerprint, known_endpoints
+from ai_footprint.harnesses.common import (
     Claim,
     Context,
     binary_info,
     binary_path,
     confirmed_settings,
-    describe_all,
     endpoints,
-    fingerprint_items,
     load_json,
-    presence,
     shell_shortcuts,
     value_or_unset,
 )
-from ai_footprint.fsinfo import mode_string, readable_by_others
 from ai_footprint.host import processes
 from ai_footprint.model import (
-    BARE_SECURITY,
+    RUNNING_BYPASS,
     BinaryInfo,
-    Category,
     Credential,
     Endpoint,
     Extension,
@@ -40,134 +37,12 @@ from ai_footprint.secrets import scan_paths
 from ai_footprint.text import plural
 from ai_footprint.tokens import inspect_token
 
-NAME = "claude"
-DISPLAY = "Claude Code"
+PROFILE = profile.load_beside(__name__)
+NAME = PROFILE.name
+DISPLAY = PROFILE.display_name
 KEYCHAIN_SERVICE = "Claude Code-credentials"
 CYBER_MARKER = b'"apiRefusalCategory":"cyber"'
 BYPASS_MODE = "bypassPermissions"
-C = Category
-
-ARTIFACTS = (
-    ArtifactSpec(
-        "Global config",
-        ".claude.json",
-        C.CONFIG,
-        "Account profile, project paths and trust, MCP servers",
-    ),
-    ArtifactSpec("Config backup", ".claude.json.backup", C.CONFIG, "Older copy of .claude.json"),
-    ArtifactSpec("Config backups", ".claude/backups", C.CONFIG, "Timestamped .claude.json copies"),
-    ArtifactSpec(
-        "Settings", ".claude/settings.json", C.CONFIG, "Permissions, hooks, plugins, env vars"
-    ),
-    ArtifactSpec("Local settings", ".claude/settings.local.json", C.CONFIG, "Per-machine settings"),
-    ArtifactSpec(
-        "Plaintext credentials", ".claude/.credentials.json", C.CREDENTIAL, "OAuth tokens as JSON"
-    ),
-    ArtifactSpec(
-        "Transcripts",
-        ".claude/projects",
-        C.SESSION,
-        "Full conversations including every tool input and output",
-    ),
-    ArtifactSpec("Prompt history", ".claude/history.jsonl", C.SESSION, "Every prompt typed"),
-    ArtifactSpec(
-        "File snapshots", ".claude/file-history", C.SESSION, "Before/after copies of edited files"
-    ),
-    ArtifactSpec("Paste cache", ".claude/paste-cache", C.SESSION, "Large pasted content"),
-    ArtifactSpec("Todos", ".claude/todos", C.SESSION, "Task lists"),
-    ArtifactSpec("Plans", ".claude/plans", C.SESSION, "Plan-mode plans"),
-    ArtifactSpec("Tasks", ".claude/tasks", C.SESSION, "Background task state"),
-    ArtifactSpec("Teams", ".claude/teams", C.SESSION, "Agent-team state"),
-    ArtifactSpec(
-        "Session registry",
-        ".claude/sessions",
-        C.SESSION,
-        "Per-pid files (process start, peer token) and session key files",
-    ),
-    ArtifactSpec("Debug logs", ".claude/debug", C.LOG, "Per-session debug logs"),
-    ArtifactSpec("Telemetry", ".claude/telemetry", C.LOG, "Telemetry event batches"),
-    ArtifactSpec("Statsig cache", ".claude/statsig", C.LOG, "Feature-flag cache"),
-    ArtifactSpec(
-        "Shell snapshots",
-        ".claude/shell-snapshots",
-        C.LOG,
-        "Your aliases, functions and PATH, sourced before each command",
-    ),
-    ArtifactSpec("Session env", ".claude/session-env", C.LOG, "Per-session env files"),
-    ArtifactSpec(
-        "Global instructions", ".claude/CLAUDE.md", C.INSTRUCTIONS, "Loaded into every session"
-    ),
-    ArtifactSpec("Skills", ".claude/skills", C.EXTENSION, "User skills"),
-    ArtifactSpec("Commands", ".claude/commands", C.EXTENSION, "Custom slash commands"),
-    ArtifactSpec("Agents", ".claude/agents", C.EXTENSION, "Custom subagents"),
-    ArtifactSpec("Plugins", ".claude/plugins", C.EXTENSION, "Marketplaces and plugin cache"),
-    ArtifactSpec("Chrome bridge", ".claude/chrome", C.EXTENSION, "Native-messaging host wrapper"),
-    ArtifactSpec("Status line", ".claude/statusline.sh", C.EXTENSION, "Status line script"),
-    ArtifactSpec(
-        "MCP logs (macOS)",
-        "Library/Caches/claude-cli-nodejs",
-        C.LOG,
-        "Per-project MCP connection logs",
-    ),
-    ArtifactSpec("MCP logs", ".cache/claude-cli-nodejs", C.LOG, "Per-project MCP connection logs"),
-    ArtifactSpec("Install", ".local/share/claude", C.BINARY, "Native install and old versions"),
-)
-
-ENDPOINTS = {
-    "api.anthropic.com": "Inference, OAuth profile and roles",
-    "platform.claude.com": "OAuth authorize and token refresh",
-    "claude.com": "OAuth authorize for claude.ai logins",
-    "claude.ai": "OAuth client metadata, settings pages",
-    "mcp-proxy.anthropic.com": "claude.ai connectors (Gmail, Drive, Calendar, ...)",
-    "downloads.claude.ai": "Version checks and updates",
-    "storage.googleapis.com": "Release artifacts",
-    "http-intake.logs.us5.datadoghq.com": "Error and event logging",
-    "cdn.growthbook.io": "Feature flags",
-    "raw.githubusercontent.com": "Plugin marketplaces",
-    "github.com": "Plugin marketplaces",
-}
-
-FINGERPRINT = (
-    ("User-Agent", "claude-cli/{version} (external, cli)", "claude-cli/"),
-    ("App header", "x-app: cli", '"x-app"'),
-    (
-        "Beta header",
-        "anthropic-beta: claude-code-20250219,oauth-2025-04-20,…",
-        "claude-code-20250219",
-    ),
-    ("Auth header", "Authorization: Bearer sk-ant-oat01-…", "oauth-2025-04-20"),
-    (
-        "OAuth client",
-        "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
-        "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
-    ),
-    ("Token endpoint", "https://platform.claude.com/v1/oauth/token", "/v1/oauth/token"),
-    ("Keychain item", f"{KEYCHAIN_SERVICE} (name assembled at runtime)", "-credentials"),
-    ("Child shell", "zsh -c source ~/.claude/shell-snapshots/snapshot-*.sh", "shell-snapshots"),
-    (
-        "Child env",
-        "CLAUDECODE=1, CLAUDE_CODE_ENTRYPOINT, CLAUDE_CODE_SESSION_ID",
-        "CLAUDE_CODE_ENTRYPOINT",
-    ),
-    (
-        "Keychain read",
-        BARE_SECURITY,
-        '"security",["find-generic-password"',
-    ),
-)
-
-ENDPOINT_MARKERS = {"claude.com": "https://claude.com/"}
-SETTING_KEYS = (
-    "defaultMode",
-    "skipDangerousModePermissionPrompt",
-    "disableBypassPermissionsMode",
-    "enableAllProjectMcpServers",
-    "cleanupPeriodDays",
-    "DISABLE_TELEMETRY",
-    "DISABLE_ERROR_REPORTING",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
-    "claudeInChromeDefaultEnabled",
-)
 REVOKE_MARKERS = ("oauth_token_revoke", "continuing with local logout")
 OAUTH_URL = "https://platform.claude.com/v1/oauth/token"
 TRAINING_MARKERS = ("Help improve our AI models", "extends data retention from 30 days to 5 years")
@@ -177,10 +52,7 @@ LOG_MARKERS = {
     "invalid_grant": "refresh rejected (invalid_grant)",
     "Please run /login": "asked to log in again",
 }
-CLAIMS: tuple[Claim, ...] = (
-    *(Claim(f"endpoint {host}", ENDPOINT_MARKERS.get(host, host)) for host in ENDPOINTS),
-    *(Claim(f"signature: {label}", marker) for label, _value, marker in FINGERPRINT),
-    *(Claim(f"setting {key}", key) for key in SETTING_KEYS),
+EXTRA_CLAIMS: tuple[Claim, ...] = (
     Claim("permissions.defaultMode value", BYPASS_MODE),
     *(Claim("logout revokes the token", marker) for marker in REVOKE_MARKERS),
     Claim("OAuth token endpoint", OAUTH_URL),
@@ -192,30 +64,28 @@ CLAIMS: tuple[Claim, ...] = (
 )
 
 
-def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport, dict[str, Any]]:
+def collect(ctx: Context, found: ToolPresence) -> tuple[ToolReport, dict[str, Any]]:
     """Collect Claude Code's footprint.
 
     Args:
         ctx: Collection context.
-        found: This tool's presence when already detected, so binaries are probed once.
+        found: This tool's presence from ``detect``.
 
     Returns:
-        The report and a private ``facts`` dict the rule engine uses (never rendered).
+        The report and the parsed ``~/.claude.json``, which the account notes read.
     """
     report = ToolReport(name=NAME, display_name=DISPLAY)
     home = ctx.home
     config = load_json(home / ".claude.json") or {}
     settings = load_json(home / ".claude" / "settings.json") or {}
-    found = found or detect(ctx, sized=False)
     report.binaries = found.binaries
     report.installed = found.installed
-    facts: dict[str, Any] = {"config": config, "settings": settings}
     if not report.installed:
-        return report, facts
-    report.artifacts = describe_all(home, ARTIFACTS)
-    report.credentials, facts["fingerprints"] = _credentials(ctx, report.binaries)
+        return report, config
+    report.artifacts = artifacts(ctx, PROFILE)
+    report.credentials, known = _credentials(ctx, report.binaries)
     _set_owner(report.credentials, config)
-    report.processes = processes(ctx.system, r"(^|/)claude(\s|$)")
+    report.processes = processes(ctx.system, PROFILE.process)
     report.settings = _settings(ctx, settings, config, report)
     report.trusted_folders = [
         p for p, v in config.get("projects", {}).items() if v.get("hasTrustDialogAccepted")
@@ -223,10 +93,7 @@ def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport
     report.instructions = instructions.collect(_instruction_candidates(home, config))
     report.extensions = _extensions(ctx, settings, config)
     report.endpoints = _endpoints(ctx, report)
-    binary = binary_path(report)
-    version = report.binaries[0].version if report.binaries else "?"
-    rows = [(label, value.format(version=version), marker) for label, value, marker in FINGERPRINT]
-    report.fingerprint = fingerprint_items(ctx, binary, rows)
+    report.fingerprint = fingerprint(ctx, PROFILE, report)
     report.stats = _stats(ctx, config)
     if ctx.scan:
         report.secret_scan = scan_paths(
@@ -234,25 +101,16 @@ def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport
             workers=ctx.workers,
             display=ctx.display,
             markers={"cyber": ("Cyber-safeguard refusals", CYBER_MARKER)},
-            known=facts["fingerprints"],
+            known=known,
             stores=[home / ".claude" / ".credentials.json"],
             exclude=[home / ".claude" / "plugins"],
         )
     report.programs = [_cvp_status(report)]
-    return report, facts
+    return report, config
 
 
-def data_paths(ctx: Context) -> list[Path]:
-    """Folders and files Claude Code writes."""
-    return [ctx.home / ".claude", ctx.home / ".claude.json"]
-
-
-def detect(ctx: Context, *, sized: bool = True) -> ToolPresence:
-    """Is Claude Code installed, and where?"""
-    return presence(NAME, DISPLAY, _binaries(ctx), data_paths(ctx), sized=sized)
-
-
-def _binaries(ctx: Context) -> list[BinaryInfo]:
+def binaries(ctx: Context) -> list[BinaryInfo]:
+    """Each claude on PATH; the native installer names the resolved file after its version."""
     found = []
     for path in ctx.system.which_all("claude"):
         resolved = Path(path).resolve()
@@ -512,7 +370,7 @@ def _bypass_evidence(ctx: Context, report: ToolReport) -> list[Setting]:
     if running:
         out.append(
             Setting(
-                "running with --dangerously-skip-permissions",
+                RUNNING_BYPASS,
                 ", ".join(str(p.pid) for p in running),
                 "These sessions run every tool call without asking",
                 concern=True,
@@ -689,7 +547,7 @@ def _chrome_extensions(ctx: Context, config: dict[str, Any]) -> list[Extension]:
 
 def _endpoints(ctx: Context, report: ToolReport) -> list[Endpoint]:
     logs = [ctx.home / ".claude" / "debug", ctx.home / "Library/Caches/claude-cli-nodejs"]
-    return endpoints(ctx, report, ENDPOINTS, logs, markers=ENDPOINT_MARKERS)
+    return endpoints(ctx, report, known_endpoints(PROFILE), logs, markers=endpoint_markers(PROFILE))
 
 
 def _stats(ctx: Context, config: dict[str, Any]) -> dict[str, str]:

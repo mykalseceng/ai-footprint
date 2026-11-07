@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint.collectors.common import search_file
+from ai_footprint.harnesses.common import search_file
 
 
 @pytest.mark.parametrize("offset", range(8))

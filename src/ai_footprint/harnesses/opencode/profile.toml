@@ -1,0 +1,202 @@
+# opencode: what ai-footprint knows about this harness. Schema: harnesses/profile.py.
+name = "opencode"
+display_name = "OpenCode"
+binaries = ["opencode"]
+process = "(^|/)opencode2?(\\.exe)?(\\s|$)"
+presence = ["{data}", "{config}", "{install}"]
+process_words = ["opencode"]
+capabilities = ["account-signals"]
+settings = ["\"permission\"", "\"share\"", "autoupdate:", "\"plugin\"", "\"instructions\""]
+
+[roots]
+data = { env = "XDG_DATA_HOME", default = "~/.local/share", child = "opencode" }
+config = { env = "XDG_CONFIG_HOME", default = "~/.config", child = "opencode" }
+state = { env = "XDG_STATE_HOME", default = "~/.local/state", child = "opencode" }
+cache = { env = "XDG_CACHE_HOME", default = "~/.cache", child = "opencode" }
+install = { default = "~/.opencode" }
+
+[[artifacts]]
+label = "Provider credentials"
+path = "{data}/auth.json"
+category = "credential"
+description = "OAuth tokens and API keys per provider, plaintext"
+
+[[artifacts]]
+label = "Database"
+path = "{data}/opencode.db"
+category = "session"
+description = "Sessions, messages, tool output, and a credential table"
+
+[[artifacts]]
+label = "Database WAL"
+path = "{data}/opencode.db-wal"
+category = "session"
+description = "Uncommitted database pages"
+
+[[artifacts]]
+label = "Legacy storage"
+path = "{data}/storage"
+category = "session"
+description = "Pre-SQLite sessions"
+
+[[artifacts]]
+label = "Snapshots"
+path = "{data}/snapshot"
+category = "cache"
+description = "Git snapshots of project files for undo"
+
+[[artifacts]]
+label = "Tool output"
+path = "{data}/tool-output"
+category = "session"
+description = "Large tool results"
+
+[[artifacts]]
+label = "Logs"
+path = "{data}/log"
+category = "log"
+description = "Client and server logs"
+
+[[artifacts]]
+label = "Config"
+path = "{config}/opencode.jsonc"
+category = "config"
+description = "Main config"
+
+[[artifacts]]
+label = "Config (json)"
+path = "{config}/opencode.json"
+category = "config"
+description = "Main config"
+
+[[artifacts]]
+label = "Server password"
+path = "{config}/service.json"
+category = "credential"
+description = "Basic-auth password for the local opencode server"
+
+[[artifacts]]
+label = "Global instructions"
+path = "{config}/AGENTS.md"
+category = "instructions"
+description = "Loaded into every session"
+
+[[artifacts]]
+label = "Plugin deps"
+path = "{config}/node_modules"
+category = "extension"
+description = "npm packages loaded by plugins"
+
+[[artifacts]]
+label = "Prompt history"
+path = "{state}/prompt-history.jsonl"
+category = "session"
+description = "Prompts typed into the TUI"
+
+[[artifacts]]
+label = "Server registration"
+path = "{state}/service.json"
+category = "credential"
+description = "URL, pid and Basic-auth password of the running local server"
+
+[[artifacts]]
+label = "Model state"
+path = "{state}/model.json"
+category = "cache"
+description = "Recent and favourite models"
+
+[[artifacts]]
+label = "TUI state"
+path = "{state}/latest"
+category = "cache"
+description = "TUI state and locks"
+
+[[artifacts]]
+label = "Cache"
+path = "{cache}"
+category = "cache"
+description = "Model catalog, downloads"
+
+[[artifacts]]
+label = "Install"
+path = "{install}"
+category = "binary"
+description = "Installed binary and deps"
+
+[[endpoints]]
+host = "opencode.ai"
+purpose = "Config schema, themes, Zen model gateway, updates"
+
+[[endpoints]]
+host = "models.dev"
+purpose = "Model catalog"
+
+[[fingerprint]]
+label = "User-Agent"
+value = "opencode/{version}"
+marker = "\"User-Agent\":`opencode/${"
+
+[[fingerprint]]
+label = "Gateway headers"
+value = "x-opencode-client, x-opencode-session, x-opencode-project (opencode.ai requests)"
+marker = "\"x-opencode-client\""
+
+[[fingerprint]]
+label = "Local server"
+value = "HTTP Basic auth; password from OPENCODE_SERVER_PASSWORD (realm 'Secure Area')"
+marker = "OPENCODE_SERVER_PASSWORD"
+
+[[fingerprint]]
+label = "Shared skill dirs"
+value = "reads ~/.claude and ~/.agents skill folders"
+marker = "[\".claude\",\".agents\"]"
+
+[[fingerprint]]
+label = "Instruction files"
+value = "AGENTS.md, CLAUDE.md, CONTEXT.md; ~/.claude/CLAUDE.md unless OPENCODE_DISABLE_CLAUDE_CODE_PROMPT is set"
+marker = "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT"
+
+[remedies.require-approval]
+summary = "Require approval for shell and edit tools"
+commands = [
+  { manual = "Add \"permission\": {\"bash\": \"ask\", \"edit\": \"ask\"} to the opencode config", markers = ["\"ask\""] },
+]
+
+[remedies.protect-credentials]
+summary = "Remove provider credentials you no longer use"
+commands = [
+  { run = "opencode auth list", help = ["auth", "list"] },
+  { run = "opencode auth logout", help = ["auth", "logout"] },
+]
+
+[remedies.remove-mcp]
+summary = "Remove the server entry"
+commands = [{ manual = "Delete mcp.$name from the opencode config" }]
+
+[remedies.disable-share]
+summary = "Unshare and turn off auto-share"
+commands = [{ manual = "Set \"share\": \"disabled\" in the opencode config", markers = ["disabled"] }]
+
+[remedies.data-controls]
+summary = "Review the provider's data settings"
+commands = [{ manual = "Set \"share\": \"disabled\" and review each provider's data settings" }]
+
+[[docs]]
+url = "https://opencode.ai/docs/config/"
+topic = "config file and keys"
+
+[[docs]]
+url = "https://opencode.ai/docs/cli/"
+topic = "subcommands and flags"
+
+[[docs]]
+url = "https://opencode.ai/docs/permissions/"
+topic = "permissions"
+
+[[docs]]
+url = "https://opencode.ai/docs/server/"
+topic = "local server"
+
+[[docs]]
+url = "https://opencode.ai/docs/share/"
+topic = "session sharing"

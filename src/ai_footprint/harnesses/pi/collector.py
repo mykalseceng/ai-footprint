@@ -15,26 +15,29 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from ai_footprint import extensions, instructions
-from ai_footprint.collectors.common import (
-    ArtifactSpec,
+from ai_footprint.fsinfo import mode_string, owner_name, readable_by_others
+from ai_footprint.harnesses import profile
+from ai_footprint.harnesses.base import (
+    artifacts,
+    endpoint_markers,
+    fingerprint,
+    known_endpoints,
+    resolve_roots,
+)
+from ai_footprint.harnesses.common import (
     Claim,
     Context,
     binary_info,
     binary_path,
     confirmed_settings,
-    describe_all,
     endpoints,
-    fingerprint_items,
     load_json,
-    presence,
     provider_credential,
     value_or_unset,
 )
-from ai_footprint.fsinfo import mode_string, owner_name, readable_by_others
 from ai_footprint.host import processes
 from ai_footprint.model import (
     BinaryInfo,
-    Category,
     Credential,
     Endpoint,
     Extension,
@@ -46,39 +49,11 @@ from ai_footprint.model import (
 from ai_footprint.secrets import scan_paths
 from ai_footprint.tokens import inspect_token
 
-NAME = "pi"
-DISPLAY = "pi"
+PROFILE = profile.load_beside(__name__)
+NAME = PROFILE.name
+DISPLAY = PROFILE.display_name
 PACKAGE = "pi-coding-agent"
-AGENT_DIR_VAR = "PI_CODING_AGENT_DIR"
 SESSION_DIR_VAR = "PI_CODING_AGENT_SESSION_DIR"
-C = Category
-
-ARTIFACTS = (
-    ArtifactSpec(
-        "Provider credentials", "auth.json", C.CREDENTIAL, "Provider keys and OAuth tokens as JSON"
-    ),
-    ArtifactSpec(
-        "Model config", "models.json", C.CONFIG, "Provider base URLs, API keys and model lists"
-    ),
-    ArtifactSpec(
-        "Model catalog cache", "models-store.json", C.CACHE, "Provider model catalogs pi refreshes"
-    ),
-    ArtifactSpec("Settings", "settings.json", C.CONFIG, "Defaults, packages, trust, analytics"),
-    ArtifactSpec("Project trust", "trust.json", C.CONFIG, "Trust decision per project folder"),
-    ArtifactSpec("MCP servers", "mcp.json", C.EXTENSION, "Global MCP server config"),
-    ArtifactSpec(
-        "Sessions", "sessions", C.SESSION, "Session JSONL per project: messages and tool output"
-    ),
-    ArtifactSpec("Packages", "npm", C.EXTENSION, "Extension packages installed with npm"),
-    ArtifactSpec("Extensions", "extensions", C.EXTENSION, "In-process extension code"),
-    ArtifactSpec("Skills", "skills", C.EXTENSION, "User skills"),
-    ArtifactSpec("Prompts", "prompts", C.EXTENSION, "Prompt templates"),
-    ArtifactSpec("Tools", "tools", C.EXTENSION, "Custom tools"),
-    ArtifactSpec("Themes", "themes", C.CACHE, "Custom themes"),
-    ArtifactSpec("Managed binaries", "bin", C.BINARY, "fd and rg managed by pi"),
-    ArtifactSpec("Debug log", "pi-debug.log", C.LOG, "Debug log"),
-)
-
 PROVIDER_HOSTS = {
     "anthropic": "api.anthropic.com",
     "openai": "api.openai.com",
@@ -104,49 +79,12 @@ PROVIDER_NAMES = {
     "github-copilot": "GitHub Copilot",
 }
 
-ENDPOINTS = {
-    "pi.dev": "Session share viewer",
-    "radius.pi.dev": "pi model gateway",
-}
-ENDPOINT_MARKERS = {"pi.dev": "https://pi.dev/session/"}
-
-FINGERPRINT = (
-    ("User-Agent", "pi-coding-agent", '"User-Agent":"pi-coding-agent"'),
-    ("Config dir", "~/.pi/agent, or PI_CODING_AGENT_DIR", "_CODING_AGENT_DIR"),
-    ("Share viewer", "https://pi.dev/session/#<gist id>", "https://pi.dev/session/"),
-    (
-        "Context files",
-        "AGENTS.override.md, AGENTS.md, CLAUDE.md, walking up from the working directory",
-        '"AGENTS.override.md","AGENTS.md"',
-    ),
-    (
-        "Trusted-project resources",
-        ".pi/settings.json, mcp.json, extensions, skills, prompts, themes, SYSTEM.md, "
-        "APPEND_SYSTEM.md",
-        "APPEND_SYSTEM.md",
-    ),
-    ("Skills", "SKILL.md folders", "SKILL.md"),
-)
-SETTING_KEYS = (
-    "defaultProjectTrust",
-    "enableAnalytics",
-    "enableInstallTelemetry",
-    "shellCommandPrefix",
-    "defaultProvider",
-    '"packages"',
-)
-ENV_VARS = ("PI_TELEMETRY", "PI_OFFLINE", "PI_SHARE_VIEWER_URL", SESSION_DIR_VAR)
-ENV_MARKERS = {SESSION_DIR_VAR: "_CODING_AGENT_SESSION_DIR"}
 CONTEXT_FILES = ("AGENTS.override.md", "AGENTS.md", "CLAUDE.md")
 SHARED_SKILLS_MARKER = '".agents","skills"'
 LOOPBACK = frozenset({"127.0.0.1", "localhost", "::1"})
 DATED = re.compile(r"\d{4}-\d{2}-\d{2}")
 PROJECT_PROMPTS = (".pi/SYSTEM.md", ".pi/APPEND_SYSTEM.md")
-CLAIMS: tuple[Claim, ...] = (
-    *(Claim(f"endpoint {host}", ENDPOINT_MARKERS.get(host, host)) for host in ENDPOINTS),
-    *(Claim(f"signature: {label}", marker) for label, _value, marker in FINGERPRINT),
-    *(Claim(f"setting {key}", key) for key in SETTING_KEYS),
-    *(Claim(f"env {var}", ENV_MARKERS.get(var, var)) for var in ENV_VARS),
+EXTRA_CLAIMS: tuple[Claim, ...] = (
     Claim("trust store", "trust.json"),
     Claim("MCP config shape", "mcpServers"),
     Claim("credential file", '"auth.json"'),
@@ -156,33 +94,30 @@ CLAIMS: tuple[Claim, ...] = (
 
 
 def agent_dir(ctx: Context) -> Path:
-    """The agent directory, honouring ``PI_CODING_AGENT_DIR``."""
-    custom = ctx.system.env.get(AGENT_DIR_VAR)
-    return Path(custom).expanduser() if custom else ctx.home / ".pi" / "agent"
+    """Pi's agent folder, honouring PI_CODING_AGENT_DIR."""
+    return resolve_roots(ctx, PROFILE)["agent"]
 
 
-def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport, dict[str, Any]]:
+def collect(ctx: Context, found: ToolPresence) -> tuple[ToolReport, dict[str, Any]]:
     """Collect pi's footprint.
 
     Args:
         ctx: Collection context.
-        found: This tool's presence when already detected, so binaries are probed once.
+        found: This tool's presence from ``detect``.
 
     Returns:
-        The report and private facts for the rule engine.
+        The report and the parsed settings.json, which the account notes read.
     """
     report = ToolReport(name=NAME, display_name=DISPLAY)
     agent = agent_dir(ctx)
     settings = load_json(agent / "settings.json") or {}
-    found = found or detect(ctx, sized=False)
     report.binaries = found.binaries
     report.installed = found.installed
-    facts: dict[str, Any] = {"settings": settings, "agent": agent}
     if not report.installed:
-        return report, facts
-    report.artifacts = describe_all(agent, ARTIFACTS)
-    report.credentials, facts["fingerprints"], providers = _credentials(ctx, agent)
-    report.processes = processes(ctx.system, rf"(^|/)pi(\s|$)|{PACKAGE}")
+        return report, settings
+    report.artifacts = artifacts(ctx, PROFILE)
+    report.credentials, known, providers = _credentials(ctx, agent)
+    report.processes = processes(ctx.system, PROFILE.process)
     binary = binary_path(report)
     report.trusted_folders = _trusted(agent)
     report.settings = _settings(ctx, settings, agent, binary, len(report.trusted_folders))
@@ -193,27 +128,20 @@ def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport
         shared = extensions.skill_rows(ctx.home / ".agents" / "skills", NAME, ctx)
         report.extensions = extensions.dedupe(report.extensions + shared)
     report.endpoints = _endpoints(ctx, agent, report, providers)
-    version = report.binaries[0].version if report.binaries else "?"
-    rows = [(label, value.format(version=version), marker) for label, value, marker in FINGERPRINT]
-    report.fingerprint = fingerprint_items(ctx, binary, rows)
+    report.fingerprint = fingerprint(ctx, PROFILE, report)
     report.stats = _stats(_sessions_dir(ctx, agent), projects)
     if ctx.scan:
         report.secret_scan = scan_paths(
             [agent],
             workers=ctx.workers,
             display=ctx.display,
-            known=facts["fingerprints"],
+            known=known,
             stores=[agent / "auth.json", agent / "models.json"],
         )
-    return report, facts
+    return report, settings
 
 
-def detect(ctx: Context, *, sized: bool = True) -> ToolPresence:
-    """Is pi installed, and where?"""
-    return presence(NAME, DISPLAY, _binaries(ctx), [agent_dir(ctx)], sized=sized)
-
-
-def _binaries(ctx: Context) -> list[BinaryInfo]:
+def binaries(ctx: Context) -> list[BinaryInfo]:
     """The ``pi`` launchers on PATH, each resolved to the folder holding its bundled code."""
     found = []
     for path in ctx.system.which_all("pi"):
@@ -388,10 +316,14 @@ def _settings(
     ]
     rows += [
         (
-            Setting(f"env.{var}", value_or_unset(ctx.system.env, var), "Set in this environment"),
-            ENV_MARKERS.get(var, var),
+            Setting(
+                f"env.{env.name}",
+                value_or_unset(ctx.system.env, env.name),
+                "Set in this environment",
+            ),
+            env.marker,
         )
-        for var in ENV_VARS
+        for env in PROFILE.env
     ]
     store = agent / "models-store.json"
     if store.is_file() and not os.access(store, os.R_OK):
@@ -480,7 +412,14 @@ def _endpoints(
         for p in sorted(providers & set(PROVIDER_HOSTS))
     ]
     logs = [agent / "pi-debug.log"]
-    return endpoints(ctx, report, ENDPOINTS, logs, markers=ENDPOINT_MARKERS, extra=hosts)
+    return endpoints(
+        ctx,
+        report,
+        known_endpoints(PROFILE),
+        logs,
+        markers=endpoint_markers(PROFILE),
+        extra=hosts,
+    )
 
 
 def _stats(sessions: Path, projects: list[str]) -> dict[str, str]:

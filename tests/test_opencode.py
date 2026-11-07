@@ -8,11 +8,15 @@ from pathlib import Path
 import pytest
 
 from ai_footprint import rules
-from ai_footprint.collectors import opencode
-from ai_footprint.collectors.common import Context
+from ai_footprint.harnesses import registry
+from ai_footprint.harnesses.common import Context
+from ai_footprint.harnesses.opencode import collector as opencode
 from ai_footprint.model import Category, HostReport
 from ai_footprint.system import ProbeResult
 from tests.conftest import FakeSystem, build_opencode_home
+
+OPENCODE = registry()["opencode"]
+
 
 PS = (
     "  50614 50222 Fri Oct 16 14:37:00 2026 opencode2\n"
@@ -67,7 +71,7 @@ def rule_ctx(home: Path) -> rules.RuleContext:
 
 
 def server_setting(home: Path):
-    report, _facts = opencode.collect(context(home))
+    report = OPENCODE.collect(context(home))
     return [s for s in report.settings if "server" in s.key], report
 
 
@@ -111,7 +115,7 @@ def test_both_service_files_are_credential_locations(tmp_path: Path):
     config = tmp_path / ".config" / "opencode"
     config.mkdir(parents=True)
     (config / "service.json").write_text(json.dumps({"password": PASSWORD}))
-    report, _facts = opencode.collect(context(tmp_path))
+    report = OPENCODE.collect(context(tmp_path))
     servers = [c for c in report.credentials if c.provider == "OpenCode local server"]
     assert {c.location for c in servers} == {str(state), str(config / "service.json")}
     assert len({c.tokens[0].fingerprint for c in servers}) == 1
@@ -121,7 +125,7 @@ def test_the_2x_session_process_is_matched_and_incoming_sockets_are_not_destinat
     tmp_path: Path,
 ):
     build_opencode_home(tmp_path)
-    report, _facts = opencode.collect(context(tmp_path))
+    report = OPENCODE.collect(context(tmp_path))
     assert [p.pid for p in report.processes] == [50614, 50615]
     live = [e.host for e in report.endpoints if e.source == "live-socket"]
     assert "127.0.0.1:60006" not in live
@@ -142,7 +146,7 @@ def test_v2_tables_are_counted_once_with_legacy_rows(tmp_path: Path):
         conn.execute("CREATE TABLE session_message (id text)")
         conn.executemany("INSERT INTO message VALUES (?)", [("m1",)])
         conn.executemany("INSERT INTO session_message VALUES (?)", [("m1",), ("m2",)])
-    report, _facts = opencode.collect(context(tmp_path))
+    report = OPENCODE.collect(context(tmp_path))
     assert report.stats["sessions"] == "2"
     assert report.stats["messages"] == "2"
     assert report.stats["first session"] == "2026-04-07"
@@ -153,7 +157,7 @@ def test_v2_tables_are_counted_once_with_legacy_rows(tmp_path: Path):
 
 def test_legacy_only_databases_still_report_their_counts(tmp_path: Path):
     build_opencode_home(tmp_path)
-    report, _facts = opencode.collect(context(tmp_path))
+    report = OPENCODE.collect(context(tmp_path))
     assert report.stats["sessions"] == "0"
     assert "messages" not in report.stats
 
@@ -161,20 +165,19 @@ def test_legacy_only_databases_still_report_their_counts(tmp_path: Path):
 def test_a_config_folder_alone_is_installed_for_both_detect_and_collect(tmp_path: Path):
     (tmp_path / ".config" / "opencode").mkdir(parents=True)
     ctx = context(tmp_path)
-    assert opencode.detect(ctx).installed
-    report, _facts = opencode.collect(ctx)
+    assert OPENCODE.detect(ctx).installed
+    report = OPENCODE.collect(ctx)
     assert report.installed
 
 
 def test_nothing_on_disk_is_not_installed(tmp_path: Path):
     ctx = context(tmp_path)
-    assert not opencode.detect(ctx).installed
-    assert not opencode.collect(ctx)[0].installed
+    assert not OPENCODE.detect(ctx).installed
+    assert not OPENCODE.collect(ctx).installed
 
 
-def test_snapshots_are_not_conversations_but_prompt_history_is(tmp_path: Path):
-    roots = opencode._roots(context(tmp_path))
-    by_label = {s.label: s.category for s in opencode._artifact_specs(roots)}
+def test_snapshots_are_not_conversations_but_prompt_history_is():
+    by_label = {a.label: a.category for a in opencode.PROFILE.artifacts}
     assert by_label["Snapshots"] is Category.CACHE
     assert by_label["Prompt history"] is Category.SESSION
     assert by_label["Server registration"] is Category.CREDENTIAL

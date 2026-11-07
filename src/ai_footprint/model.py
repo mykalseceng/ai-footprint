@@ -270,6 +270,11 @@ class Endpoint:
     count: int = 0
 
 
+RUNNING_BYPASS = "running with --dangerously-skip-permissions"
+"""Setting key that lists sessions started with approval prompts turned off."""
+THREADS_WITHOUT_APPROVAL = "threads with approval_mode=never"
+"""Setting key that counts recorded threads that ran with approval off."""
+
 BARE_SECURITY = 'spawns "security" by bare name (PATH lookup)'
 """Fingerprint value for a binary that runs ``security`` through a PATH lookup."""
 

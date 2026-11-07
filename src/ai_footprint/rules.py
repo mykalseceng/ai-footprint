@@ -9,16 +9,20 @@ exists, and binary markers that prove a recommended config key is real.
 
 import re
 import shlex
-from collections.abc import Callable
-from dataclasses import dataclass, field
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import NamedTuple
 
-from ai_footprint import daemons
+from ai_footprint import daemons, harnesses
 from ai_footprint.fsinfo import tilde
+from ai_footprint.harnesses.base import RemedyContext
+from ai_footprint.harnesses.profile import Capability, Remedy
 from ai_footprint.host import first_system_index
 from ai_footprint.model import (
     BARE_SECURITY,
+    RUNNING_BYPASS,
+    THREADS_WITHOUT_APPROVAL,
     Artifact,
     AuditReport,
     BinaryInfo,
@@ -45,11 +49,27 @@ class RuleContext:
     host: HostReport
     platform: str
     home: Path
-    facts: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def display(self, path: str) -> str:
         """Path with home shown as ~."""
         return tilde(path, str(self.home))
+
+    def remedy(self, report: ToolReport, action: Remedy, **args: str) -> Fix | None:
+        """The audited tool's own fix for ``action``, or None when it has none."""
+        harness = harnesses.get(report.name)
+        if harness is None:
+            return None
+        return harness.remedy(action, RemedyContext(self.platform, self.home), **args)
+
+    def approval_off(self, report: ToolReport) -> Mapping[str, str]:
+        """Setting values that turn approval off for the audited tool."""
+        harness = harnesses.get(report.name)
+        return harness.profile.approval_off if harness else {}
+
+    def can_signal(self, report: ToolReport) -> bool:
+        """The tool's harness marks signs of credential use elsewhere as concerns."""
+        harness = harnesses.get(report.name)
+        return harness is not None and Capability.ACCOUNT_SIGNALS in harness.profile.capabilities
 
 
 ToolRuleFn = Callable[[ToolReport, RuleContext], list[Exposure]]
@@ -162,22 +182,17 @@ def _exposure(
 
 # --- through the model --------------------------------------------------------------------------
 
-NO_APPROVAL = {
-    "permissions.defaultMode": "bypassPermissions",
-    "approval_policy": "never",
-    "sandbox_mode": "danger-full-access",
-}
-RUNNING_BYPASS = "running with --dangerously-skip-permissions"
-THREADS_WITHOUT_APPROVAL = "threads with approval_mode=never"
-"""Setting values that turn approval off, the setting that lists sessions started that way, and
-the setting that counts recorded threads that ran with approval off."""
-APPROVAL_KEYS = frozenset({*NO_APPROVAL, RUNNING_BYPASS, THREADS_WITHOUT_APPROVAL})
-"""Every setting the no-approval check reads."""
+
+def approval_keys() -> frozenset[str]:
+    """Every setting the no-approval check reads, across all harnesses."""
+    keys = {key for h in harnesses.registry().values() for key in h.profile.approval_off}
+    return frozenset({*keys, RUNNING_BYPASS, THREADS_WITHOUT_APPROVAL})
 
 
 def rule_no_approval(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     """Commands run without approval or sandbox: a config value, or sessions started that way."""
-    configured = [s for s in report.settings if NO_APPROVAL.get(s.key) == s.value]
+    off = ctx.approval_off(report)
+    configured = [s for s in report.settings if off.get(s.key) == s.value]
     running = [s for s in report.settings if s.key == RUNNING_BYPASS]
     threads = [s for s in report.settings if s.key == THREADS_WITHOUT_APPROVAL and s.concern]
     if not configured and not running and not threads:
@@ -205,54 +220,9 @@ def rule_no_approval(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
 
 
 def _no_approval_fix(report: ToolReport, ctx: RuleContext) -> Fix:
-    if report.name == "claude":
-        policy = (
-            "/Library/Application Support/ClaudeCode"
-            if ctx.platform == "darwin"
-            else "/etc/claude-code"
-        )
-        target = _q(f"{policy}/managed-settings.json")
-        payload = '{"permissions":{"disableBypassPermissionsMode":"disable"}}'
-        return Fix(
-            "Block bypass mode with a root-owned managed policy, then drop the alias",
-            [
-                FixCommand(f"sudo mkdir -p {_q(policy)}"),
-                FixCommand(
-                    f"echo {_q(payload)} | sudo tee {target}",
-                    markers=("disableBypassPermissionsMode", "managed-settings.json"),
-                    marker_tool="claude",
-                ),
-                FixCommand(
-                    "Remove shell aliases that add --dangerously-skip-permissions", manual=True
-                ),
-            ],
-        )
-    if report.name == "codex":
-        return Fix(
-            "Require approval and restore the sandbox in ~/.codex/config.toml",
-            [
-                FixCommand(
-                    'Set approval_policy = "on-request" and sandbox_mode = "workspace-write"',
-                    manual=True,
-                    markers=("on-request", "workspace-write"),
-                    marker_tool="codex",
-                ),
-                FixCommand(
-                    "Remove shell aliases that add --dangerously-bypass-approvals-and-sandbox",
-                    manual=True,
-                ),
-            ],
-        )
-    return Fix(
+    return ctx.remedy(report, Remedy.REQUIRE_APPROVAL) or Fix(
         "Require approval for shell and edit tools",
-        [
-            FixCommand(
-                'Add "permission": {"bash": "ask", "edit": "ask"} to the opencode config',
-                manual=True,
-                markers=('"ask"',),
-                marker_tool=report.name,
-            )
-        ],
+        [FixCommand("Turn approval prompts back on in the tool's settings", manual=True)],
     )
 
 
@@ -339,7 +309,6 @@ def rule_token_reach(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
 
 def rule_shared_sessions(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     """Sessions published to share links."""
-    del ctx
     shared = [s for s in report.settings if s.key == "shared sessions" and s.value not in {"0", ""}]
     auto = [s for s in report.settings if s.key == "share" and s.value == "auto"]
     if not shared and not auto:
@@ -351,16 +320,10 @@ def rule_shared_sessions(report: ToolReport, ctx: RuleContext) -> list[Exposure]
             Lens.REMOTE,
             "Sessions are published to share links; anyone with a link can read them.",
             evidence=[f"{s.key} = {s.value}" for s in shared + auto],
-            fix=Fix(
+            fix=ctx.remedy(report, Remedy.DISABLE_SHARE)
+            or Fix(
                 "Unshare and turn off auto-share",
-                [
-                    FixCommand(
-                        'Set "share": "disabled" in the opencode config',
-                        manual=True,
-                        markers=("disabled",),
-                        marker_tool="opencode",
-                    )
-                ],
+                [FixCommand("Turn session sharing off in the tool's settings", manual=True)],
             ),
         )
     ]
@@ -421,51 +384,17 @@ def rule_plaintext_credentials(report: ToolReport, ctx: RuleContext) -> list[Exp
             f"{report.display_name} keeps credentials for {', '.join(providers)} in plaintext "
             f"({', '.join(stores)}). Any program running as you can copy them.",
             evidence=[f"{c.provider}: {ctx.display(c.location)} [{c.store}]" for c in plain],
-            fix=_plaintext_fix(report),
+            fix=ctx.remedy(report, Remedy.PROTECT_CREDENTIALS)
+            or Fix(
+                "Keep credentials in the OS credential store",
+                [
+                    FixCommand(
+                        "Prefer OAuth login stored in the Keychain over keys in files", manual=True
+                    )
+                ],
+            ),
         )
     ]
-
-
-def _plaintext_fix(report: ToolReport) -> Fix:
-    if report.name == "codex":
-        return Fix(
-            "Move Codex tokens into the OS keyring",
-            [
-                FixCommand(
-                    'Add cli_auth_credentials_store = "keyring" to ~/.codex/config.toml',
-                    manual=True,
-                    markers=("cli_auth_credentials_store", "keyring"),
-                    marker_tool="codex",
-                ),
-                FixCommand("codex logout", help_probe=("codex", "logout")),
-                FixCommand("codex login", help_probe=("codex", "login")),
-            ],
-        )
-    if report.name == "opencode":
-        return Fix(
-            "Remove provider credentials you no longer use",
-            [
-                FixCommand("opencode auth list", help_probe=("opencode", "auth", "list")),
-                FixCommand("opencode auth logout", help_probe=("opencode", "auth", "logout")),
-            ],
-        )
-    if report.name == "pi":
-        return Fix(
-            "Remove provider credentials you no longer use",
-            [
-                FixCommand(
-                    "Run /logout for the provider in pi, or delete its entry from "
-                    "~/.pi/agent/auth.json",
-                    manual=True,
-                    markers=('"auth.json"',),
-                    marker_tool="pi",
-                )
-            ],
-        )
-    return Fix(
-        "Keep credentials in the OS credential store",
-        [FixCommand("Prefer OAuth login stored in the Keychain over keys in files", manual=True)],
-    )
 
 
 def rule_secrets(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
@@ -576,26 +505,11 @@ def _daemon_line(daemon: Daemon, home: Path) -> str:
     return f"pid {daemon.pid} `{what}` ({'; '.join(facts)})"
 
 
-def _daemon_fix(report: ToolReport, daemons: list[Daemon]) -> Fix:
-    if report.name == "codex":
-        return Fix(
-            "Stop the managed daemon and its updater, and turn auto-start off",
-            [
-                FixCommand(
-                    "codex app-server daemon stop",
-                    help_probe=("codex", "app-server", "daemon", "stop"),
-                ),
-                FixCommand("pkill -f 'app-server daemon pid-update-loop'"),
-                FixCommand(
-                    "codex features disable daemon_auto_start",
-                    help_probe=("codex", "features", "disable"),
-                    markers=("daemon_auto_start",),
-                    marker_tool="codex",
-                ),
-            ],
-        )
+def _daemon_fix(report: ToolReport, ctx: RuleContext, daemons: list[Daemon]) -> Fix:
     pids = " ".join(str(d.pid) for d in daemons)
-    return Fix("Stop the processes you did not mean to leave running", [FixCommand(f"kill {pids}")])
+    return ctx.remedy(report, Remedy.STOP_DAEMONS) or Fix(
+        "Stop the processes you did not mean to leave running", [FixCommand(f"kill {pids}")]
+    )
 
 
 def _open_to_others(mode: str) -> bool:
@@ -626,7 +540,7 @@ def rule_daemons(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             f"{report.display_name} sessions accept connections: "
             f"{join([_server_line(d, ctx.home) for d in servers])}."
         )
-    fix = _daemon_fix(report, detached) if detached else Fix("Stop servers you no longer use")
+    fix = _daemon_fix(report, ctx, detached) if detached else Fix("Stop servers you no longer use")
     fix.commands += [
         FixCommand(
             f"Stop pid {d.pid} (started by session pid {d.ppid}) when you no longer need it",
@@ -665,9 +579,7 @@ def rule_dangling(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     for index, (target, entries) in enumerate(by_target.items()):
         scopes = join([source for _name, source in entries])
         commands = [
-            c
-            for name, source in entries
-            for c in _dangling_fix(report, name, source, ctx.home).commands
+            c for name, source in entries for c in _dangling_fix(report, ctx, name, source).commands
         ]
         out.append(
             _exposure(
@@ -683,68 +595,10 @@ def rule_dangling(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     return out
 
 
-def _claude_dangling_fix(name: str, source: str, home: Path) -> Fix:
-    if source.startswith("plugin "):
-        plugin = source.removeprefix("plugin ")
-        return Fix(
-            "Disable the plugin that ships the server",
-            [
-                FixCommand(
-                    f"claude plugin disable {_q(plugin)}",
-                    help_probe=("claude", "plugin", "disable"),
-                )
-            ],
-        )
-    if source == "user":
-        return Fix(
-            "Remove the server entry",
-            [
-                FixCommand(
-                    f"claude mcp remove {_q(name)} -s user",
-                    help_probe=("claude", "mcp", "remove"),
-                )
-            ],
-        )
-    project = source.removeprefix("project ")
-    project = str(home) + project[1:] if project.startswith("~") else project
-    if not Path(project).is_dir():
-        return Fix(
-            "Remove the server entry",
-            [
-                FixCommand(
-                    f'Delete projects["{project}"].mcpServers.{name} from ~/.claude.json '
-                    "(the project folder is gone, so `claude mcp remove` cannot target it)",
-                    manual=True,
-                )
-            ],
-        )
-    return Fix(
+def _dangling_fix(report: ToolReport, ctx: RuleContext, name: str, source: str) -> Fix:
+    return ctx.remedy(report, Remedy.REMOVE_MCP, name=name, source=source) or Fix(
         "Remove the server entry",
-        [
-            FixCommand(
-                f"cd {_q(project)} && claude mcp remove {_q(name)} -s local",
-                help_probe=("claude", "mcp", "remove"),
-            )
-        ],
-    )
-
-
-def _dangling_fix(report: ToolReport, name: str, source: str, home: Path) -> Fix:
-    if report.name == "claude":
-        return _claude_dangling_fix(name, source, home)
-    if report.name == "codex":
-        return Fix(
-            "Remove the server entry",
-            [FixCommand(f"codex mcp remove {_q(name)}", help_probe=("codex", "mcp", "remove"))],
-        )
-    if report.name == "pi":
-        return Fix(
-            "Remove the server entry",
-            [FixCommand(f"pi mcp remove {_q(name)}", help_probe=("pi", "mcp", "remove"))],
-        )
-    return Fix(
-        "Remove the server entry",
-        [FixCommand(f"Delete mcp.{name} from the opencode config", manual=True)],
+        [FixCommand(f"Delete the {name} server entry from the tool's config", manual=True)],
     )
 
 
@@ -951,41 +805,21 @@ def rule_trust(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             Lens.MODEL,
             statement,
             evidence=[ctx.display(p) for f in carriers for p in carried[f]][:10],
-            fix=Fix(
+            fix=ctx.remedy(report, Remedy.WITHDRAW_TRUST)
+            or Fix(
                 "Withdraw trust from folders you do not own or no longer use",
-                [_trust_fix(report)],
+                [
+                    FixCommand(
+                        "Withdraw trust from those folders in the tool's settings", manual=True
+                    )
+                ],
             ),
         )
     ]
 
 
-def _trust_fix(report: ToolReport) -> FixCommand:
-    if report.name == "pi":
-        return FixCommand(
-            "Set those projects' decision to false in ~/.pi/agent/trust.json, or delete the entry",
-            manual=True,
-            markers=("trust.json",),
-            marker_tool="pi",
-        )
-    if report.name == "codex":
-        return FixCommand(
-            'Set trust_level = "untrusted" for those [projects."…"] entries in '
-            "~/.codex/config.toml",
-            manual=True,
-            markers=("trust_level",),
-            marker_tool="codex",
-        )
-    return FixCommand(
-        "Set hasTrustDialogAccepted to false for those projects in ~/.claude.json",
-        manual=True,
-        markers=("hasTrustDialogAccepted",),
-        marker_tool="claude",
-    )
-
-
 def rule_account_data(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     """Copies of your work kept by the provider: training, cloud tasks, connectors."""
-    del ctx
     notes = [n for n in report.account if n.topic == "data" and n.concern]
     if not notes:
         return []
@@ -996,22 +830,13 @@ def rule_account_data(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
             Lens.COPIES,
             " ".join(n.text for n in notes),
             evidence=[n.source for n in notes],
-            fix=Fix(
+            fix=ctx.remedy(report, Remedy.DATA_CONTROLS)
+            or Fix(
                 "Review the provider's data settings",
-                [FixCommand(_settings_page(report), manual=True)],
+                [FixCommand("Review the provider's data settings", manual=True)],
             ),
         )
     ]
-
-
-def _settings_page(report: ToolReport) -> str:
-    return {
-        "claude": "Turn off model training at claude.ai/settings/data-privacy-controls and "
-        "disconnect unused connectors",
-        "codex": "Review Data controls at platform.openai.com and chatgpt.com, and remove cloud "
-        "repos you do not need",
-        "opencode": 'Set "share": "disabled" and review each provider\'s data settings',
-    }.get(report.name, "Review the provider's data settings")
 
 
 def rule_account_signals(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
@@ -1046,13 +871,10 @@ def rule_account_signals(report: ToolReport, ctx: RuleContext) -> list[Exposure]
 # the check could not run. A check that ran and found nothing is clear; one that could not
 # run says so.
 
-SIGNAL_SOURCES = frozenset({"codex", "opencode", "pi"})
-"""Tools whose collectors can mark a sign of use elsewhere as a concern (accounts.py)."""
-
 
 def _needs_approval_setting(report: ToolReport, ctx: RuleContext) -> str:
     del ctx
-    if any(s.key in APPROVAL_KEYS for s in report.settings):
+    if any(s.key in approval_keys() for s in report.settings):
         return ""
     return f"this audit records no approval setting for {report.display_name}"
 
@@ -1122,8 +944,7 @@ def _needs_data_notes(report: ToolReport, ctx: RuleContext) -> str:
 
 
 def _needs_signal_source(report: ToolReport, ctx: RuleContext) -> str:
-    del ctx
-    if report.name in SIGNAL_SOURCES:
+    if ctx.can_signal(report):
         return ""
     return f"nothing on disk records where else the {report.display_name} token is used"
 

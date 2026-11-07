@@ -1,0 +1,290 @@
+# codex: what ai-footprint knows about this harness. Schema: harnesses/profile.py.
+name = "codex"
+display_name = "Codex CLI"
+binaries = ["codex"]
+process = "(^|/)codex(\\s|$)|codex-darwin"
+presence = ["{home}"]
+process_words = ["codex"]
+capabilities = ["account-signals"]
+settings = ["approval_policy", "sandbox_mode", "notify", "cli_auth_credentials_store", "persistence", "trust_level", "project_doc_fallback_filenames", "daemon_auto_start"]
+
+[roots]
+home = { env = "CODEX_HOME", default = "~/.codex" }
+
+[[artifacts]]
+label = "Credentials"
+path = "{home}/auth.json"
+category = "credential"
+description = "ChatGPT OAuth JWTs and refresh token, or an API key, in plaintext"
+
+[[artifacts]]
+label = "Config"
+path = "{home}/config.toml"
+category = "config"
+description = "Approval policy, sandbox, MCP servers, plugins, trusted projects"
+
+[[artifacts]]
+label = "Hooks"
+path = "{home}/hooks.json"
+category = "extension"
+description = "Commands run on tool events"
+
+[[artifacts]]
+label = "Command rules"
+path = "{home}/rules"
+category = "config"
+description = "Pre-approved command prefixes"
+
+[[artifacts]]
+label = "Global instructions"
+path = "{home}/AGENTS.md"
+category = "instructions"
+description = "Loaded into every session"
+
+[[artifacts]]
+label = "Global override"
+path = "{home}/AGENTS.override.md"
+category = "instructions"
+description = "Replaces AGENTS.md when present"
+
+[[artifacts]]
+label = "Sessions"
+path = "{home}/sessions"
+category = "session"
+description = "Rollout files: full conversations and tool output"
+
+[[artifacts]]
+label = "Archived sessions"
+path = "{home}/archived_sessions"
+category = "session"
+description = "Older rollouts"
+
+[[artifacts]]
+label = "Prompt history"
+path = "{home}/history.jsonl"
+category = "session"
+description = "Every prompt typed"
+
+[[artifacts]]
+label = "Thread history DB"
+path = "{home}/thread_history_1.sqlite"
+category = "session"
+description = "Thread contents"
+
+[[artifacts]]
+label = "State DB"
+path = "{home}/state_5.sqlite"
+category = "session"
+description = "Threads, projects, app state"
+
+[[artifacts]]
+label = "Memories DB"
+path = "{home}/memories_1.sqlite"
+category = "session"
+description = "Saved memories"
+
+[[artifacts]]
+label = "Memories"
+path = "{home}/memories"
+category = "session"
+description = "Memory files"
+
+[[artifacts]]
+label = "Goals DB"
+path = "{home}/goals_1.sqlite"
+category = "session"
+description = "Goals"
+
+[[artifacts]]
+label = "Queue DB"
+path = "{home}/queue_1.sqlite"
+category = "session"
+description = "Queued work"
+
+[[artifacts]]
+label = "Browser sessions"
+path = "{home}/browser"
+category = "session"
+description = "Browser session data"
+
+[[artifacts]]
+label = "Dictation history"
+path = "{home}/dictation-history"
+category = "session"
+description = "Dictation history"
+
+[[artifacts]]
+label = "Transcription history"
+path = "{home}/transcription-history.jsonl"
+category = "session"
+description = "Voice transcriptions"
+
+[[artifacts]]
+label = "Session index"
+path = "{home}/session_index.jsonl"
+category = "session"
+description = "Session titles and paths"
+
+[[artifacts]]
+label = "Attachments"
+path = "{home}/attachments"
+category = "session"
+description = "Files attached to prompts"
+
+[[artifacts]]
+label = "Logs DB"
+path = "{home}/logs_2.sqlite"
+category = "log"
+description = "Structured client logs"
+
+[[artifacts]]
+label = "Logs"
+path = "{home}/log"
+category = "log"
+description = "Login and TUI logs"
+
+[[artifacts]]
+label = "Shell snapshots"
+path = "{home}/shell_snapshots"
+category = "log"
+description = "Your shell environment"
+
+[[artifacts]]
+label = "Global state"
+path = "{home}/.codex-global-state.json"
+category = "config"
+description = "Desktop/app state"
+
+[[artifacts]]
+label = "Installation ID"
+path = "{home}/installation_id"
+category = "config"
+description = "Stable per-install identifier"
+
+[[artifacts]]
+label = "Skills"
+path = "{home}/skills"
+category = "extension"
+description = "Codex skills"
+
+[[artifacts]]
+label = "Plugins"
+path = "{home}/plugins"
+category = "extension"
+description = "Bundled and curated plugins"
+
+[[artifacts]]
+label = "Computer use"
+path = "{home}/computer-use"
+category = "extension"
+description = "Screen and input control helper"
+
+[[artifacts]]
+label = "Cache"
+path = "{home}/cache"
+category = "cache"
+description = "Downloaded assets"
+
+[[endpoints]]
+host = "chatgpt.com"
+purpose = "Codex responses API on your ChatGPT plan (backend-api)"
+
+[[endpoints]]
+host = "auth.openai.com"
+purpose = "OAuth login and token refresh"
+
+[[endpoints]]
+host = "api.openai.com"
+purpose = "OpenAI API (API-key mode)"
+
+[[fingerprint]]
+label = "Originator header"
+value = "originator: codex_cli_rs"
+marker = "codex_cli_rs"
+
+[[fingerprint]]
+label = "User-Agent"
+value = "codex_cli_rs/{version} (…)"
+marker = "codex_cli_rs"
+
+[[fingerprint]]
+label = "Responses endpoint"
+value = "https://chatgpt.com/backend-api/codex/…"
+marker = "chatgpt.com/backend-api"
+
+[[fingerprint]]
+label = "Auth endpoint"
+value = "https://auth.openai.com (token refresh)"
+marker = "auth.openai.com"
+
+[[fingerprint]]
+label = "Credential store option"
+value = "cli_auth_credentials_store = file | keyring | auto"
+marker = "cli_auth_credentials_store"
+
+[[fingerprint]]
+label = "Instruction files"
+value = "AGENTS.md, AGENTS.override.md, project_doc_fallback_filenames"
+marker = "AGENTS.override.md"
+
+[signals]
+approval_off = { approval_policy = "never", sandbox_mode = "danger-full-access" }
+
+[[host_control]]
+glob = "{home}/computer-use/*.app"
+detail = "helper app in Codex's computer-use folder"
+
+[remedies.require-approval]
+summary = "Require approval and restore the sandbox in ~/.codex/config.toml"
+commands = [
+  { manual = "Set approval_policy = \"on-request\" and sandbox_mode = \"workspace-write\"", markers = ["on-request", "workspace-write"] },
+  { manual = "Remove shell aliases that add --dangerously-bypass-approvals-and-sandbox" },
+]
+
+[remedies.protect-credentials]
+summary = "Move Codex tokens into the OS keyring"
+commands = [
+  { manual = "Add cli_auth_credentials_store = \"keyring\" to ~/.codex/config.toml", markers = ["cli_auth_credentials_store", "keyring"] },
+  { run = "codex logout", help = ["logout"] },
+  { run = "codex login", help = ["login"] },
+]
+
+[remedies.stop-daemons]
+summary = "Stop the managed daemon and its updater, and turn auto-start off"
+commands = [
+  { run = "codex app-server daemon stop", help = ["app-server", "daemon", "stop"] },
+  { run = "pkill -f 'app-server daemon pid-update-loop'" },
+  { run = "codex features disable daemon_auto_start", help = ["features", "disable"], markers = ["daemon_auto_start"] },
+]
+
+[remedies.remove-mcp]
+summary = "Remove the server entry"
+commands = [{ run = "codex mcp remove $name", help = ["mcp", "remove"] }]
+
+[remedies.withdraw-trust]
+summary = "Withdraw trust from folders you do not own or no longer use"
+commands = [
+  { manual = "Set trust_level = \"untrusted\" for those [projects.\"…\"] entries in ~/.codex/config.toml", markers = ["trust_level"] },
+]
+
+[remedies.data-controls]
+summary = "Review the provider's data settings"
+commands = [
+  { manual = "Review Data controls at platform.openai.com and chatgpt.com, and remove cloud repos you do not need" },
+]
+
+[[docs]]
+url = "https://developers.openai.com/codex/config-reference"
+topic = "config.toml keys"
+
+[[docs]]
+url = "https://developers.openai.com/codex/cli/reference"
+topic = "subcommands and flags"
+
+[[docs]]
+url = "https://developers.openai.com/codex/security"
+topic = "approvals, sandbox, credential storage"
+
+[[docs]]
+url = "https://developers.openai.com/codex/mcp"
+topic = "MCP servers"

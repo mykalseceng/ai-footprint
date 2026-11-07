@@ -1,0 +1,321 @@
+# claude: what ai-footprint knows about this harness. Schema: harnesses/profile.py.
+name = "claude"
+display_name = "Claude Code"
+binaries = ["claude"]
+process = "(^|/)claude(\\s|$)"
+presence = ["{home}/.claude", "{home}/.claude.json"]
+process_words = ["claude"]
+settings = ["defaultMode", "skipDangerousModePermissionPrompt", "disableBypassPermissionsMode", "enableAllProjectMcpServers", "cleanupPeriodDays", "DISABLE_TELEMETRY", "DISABLE_ERROR_REPORTING", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "claudeInChromeDefaultEnabled"]
+
+[roots]
+home = { default = "~" }
+
+[[artifacts]]
+label = "Global config"
+path = "{home}/.claude.json"
+category = "config"
+description = "Account profile, project paths and trust, MCP servers"
+
+[[artifacts]]
+label = "Config backup"
+path = "{home}/.claude.json.backup"
+category = "config"
+description = "Older copy of .claude.json"
+
+[[artifacts]]
+label = "Config backups"
+path = "{home}/.claude/backups"
+category = "config"
+description = "Timestamped .claude.json copies"
+
+[[artifacts]]
+label = "Settings"
+path = "{home}/.claude/settings.json"
+category = "config"
+description = "Permissions, hooks, plugins, env vars"
+
+[[artifacts]]
+label = "Local settings"
+path = "{home}/.claude/settings.local.json"
+category = "config"
+description = "Per-machine settings"
+
+[[artifacts]]
+label = "Plaintext credentials"
+path = "{home}/.claude/.credentials.json"
+category = "credential"
+description = "OAuth tokens as JSON"
+
+[[artifacts]]
+label = "Transcripts"
+path = "{home}/.claude/projects"
+category = "session"
+description = "Full conversations including every tool input and output"
+
+[[artifacts]]
+label = "Prompt history"
+path = "{home}/.claude/history.jsonl"
+category = "session"
+description = "Every prompt typed"
+
+[[artifacts]]
+label = "File snapshots"
+path = "{home}/.claude/file-history"
+category = "session"
+description = "Before/after copies of edited files"
+
+[[artifacts]]
+label = "Paste cache"
+path = "{home}/.claude/paste-cache"
+category = "session"
+description = "Large pasted content"
+
+[[artifacts]]
+label = "Todos"
+path = "{home}/.claude/todos"
+category = "session"
+description = "Task lists"
+
+[[artifacts]]
+label = "Plans"
+path = "{home}/.claude/plans"
+category = "session"
+description = "Plan-mode plans"
+
+[[artifacts]]
+label = "Tasks"
+path = "{home}/.claude/tasks"
+category = "session"
+description = "Background task state"
+
+[[artifacts]]
+label = "Teams"
+path = "{home}/.claude/teams"
+category = "session"
+description = "Agent-team state"
+
+[[artifacts]]
+label = "Session registry"
+path = "{home}/.claude/sessions"
+category = "session"
+description = "Per-pid files (process start, peer token) and session key files"
+
+[[artifacts]]
+label = "Debug logs"
+path = "{home}/.claude/debug"
+category = "log"
+description = "Per-session debug logs"
+
+[[artifacts]]
+label = "Telemetry"
+path = "{home}/.claude/telemetry"
+category = "log"
+description = "Telemetry event batches"
+
+[[artifacts]]
+label = "Statsig cache"
+path = "{home}/.claude/statsig"
+category = "log"
+description = "Feature-flag cache"
+
+[[artifacts]]
+label = "Shell snapshots"
+path = "{home}/.claude/shell-snapshots"
+category = "log"
+description = "Your aliases, functions and PATH, sourced before each command"
+
+[[artifacts]]
+label = "Session env"
+path = "{home}/.claude/session-env"
+category = "log"
+description = "Per-session env files"
+
+[[artifacts]]
+label = "Global instructions"
+path = "{home}/.claude/CLAUDE.md"
+category = "instructions"
+description = "Loaded into every session"
+
+[[artifacts]]
+label = "Skills"
+path = "{home}/.claude/skills"
+category = "extension"
+description = "User skills"
+
+[[artifacts]]
+label = "Commands"
+path = "{home}/.claude/commands"
+category = "extension"
+description = "Custom slash commands"
+
+[[artifacts]]
+label = "Agents"
+path = "{home}/.claude/agents"
+category = "extension"
+description = "Custom subagents"
+
+[[artifacts]]
+label = "Plugins"
+path = "{home}/.claude/plugins"
+category = "extension"
+description = "Marketplaces and plugin cache"
+
+[[artifacts]]
+label = "Chrome bridge"
+path = "{home}/.claude/chrome"
+category = "extension"
+description = "Native-messaging host wrapper"
+
+[[artifacts]]
+label = "Status line"
+path = "{home}/.claude/statusline.sh"
+category = "extension"
+description = "Status line script"
+
+[[artifacts]]
+label = "MCP logs (macOS)"
+path = "{home}/Library/Caches/claude-cli-nodejs"
+category = "log"
+description = "Per-project MCP connection logs"
+
+[[artifacts]]
+label = "MCP logs"
+path = "{home}/.cache/claude-cli-nodejs"
+category = "log"
+description = "Per-project MCP connection logs"
+
+[[artifacts]]
+label = "Install"
+path = "{home}/.local/share/claude"
+category = "binary"
+description = "Native install and old versions"
+
+[[endpoints]]
+host = "api.anthropic.com"
+purpose = "Inference, OAuth profile and roles"
+
+[[endpoints]]
+host = "platform.claude.com"
+purpose = "OAuth authorize and token refresh"
+
+[[endpoints]]
+host = "claude.com"
+purpose = "OAuth authorize for claude.ai logins"
+marker = "https://claude.com/"
+
+[[endpoints]]
+host = "claude.ai"
+purpose = "OAuth client metadata, settings pages"
+
+[[endpoints]]
+host = "mcp-proxy.anthropic.com"
+purpose = "claude.ai connectors (Gmail, Drive, Calendar, ...)"
+
+[[endpoints]]
+host = "downloads.claude.ai"
+purpose = "Version checks and updates"
+
+[[endpoints]]
+host = "storage.googleapis.com"
+purpose = "Release artifacts"
+
+[[endpoints]]
+host = "http-intake.logs.us5.datadoghq.com"
+purpose = "Error and event logging"
+
+[[endpoints]]
+host = "cdn.growthbook.io"
+purpose = "Feature flags"
+
+[[endpoints]]
+host = "raw.githubusercontent.com"
+purpose = "Plugin marketplaces"
+
+[[endpoints]]
+host = "github.com"
+purpose = "Plugin marketplaces"
+
+[[fingerprint]]
+label = "User-Agent"
+value = "claude-cli/{version} (external, cli)"
+marker = "claude-cli/"
+
+[[fingerprint]]
+label = "App header"
+value = "x-app: cli"
+marker = "\"x-app\""
+
+[[fingerprint]]
+label = "Beta header"
+value = "anthropic-beta: claude-code-20250219,oauth-2025-04-20,…"
+marker = "claude-code-20250219"
+
+[[fingerprint]]
+label = "Auth header"
+value = "Authorization: Bearer sk-ant-oat01-…"
+marker = "oauth-2025-04-20"
+
+[[fingerprint]]
+label = "OAuth client"
+value = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+marker = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+
+[[fingerprint]]
+label = "Token endpoint"
+value = "https://platform.claude.com/v1/oauth/token"
+marker = "/v1/oauth/token"
+
+[[fingerprint]]
+label = "Keychain item"
+value = "Claude Code-credentials (name assembled at runtime)"
+marker = "-credentials"
+
+[[fingerprint]]
+label = "Child shell"
+value = "zsh -c source ~/.claude/shell-snapshots/snapshot-*.sh"
+marker = "shell-snapshots"
+
+[[fingerprint]]
+label = "Child env"
+value = "CLAUDECODE=1, CLAUDE_CODE_ENTRYPOINT, CLAUDE_CODE_SESSION_ID"
+marker = "CLAUDE_CODE_ENTRYPOINT"
+
+[[fingerprint]]
+label = "Keychain read"
+value = "spawns \"security\" by bare name (PATH lookup)"
+marker = "\"security\",[\"find-generic-password\""
+
+[signals]
+approval_off = { "permissions.defaultMode" = "bypassPermissions" }
+
+[remedies.withdraw-trust]
+summary = "Withdraw trust from folders you do not own or no longer use"
+commands = [
+  { manual = "Set hasTrustDialogAccepted to false for those projects in ~/.claude.json", markers = ["hasTrustDialogAccepted"] },
+]
+
+[remedies.data-controls]
+summary = "Review the provider's data settings"
+commands = [
+  { manual = "Turn off model training at claude.ai/settings/data-privacy-controls and disconnect unused connectors" },
+]
+
+[[docs]]
+url = "https://code.claude.com/docs/en/settings"
+topic = "settings, permissions, environment variables, file locations"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/cli-reference"
+topic = "subcommands and flags"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/hooks"
+topic = "hooks"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/mcp"
+topic = "MCP servers"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/iam"
+topic = "authentication and credential storage"

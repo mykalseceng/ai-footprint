@@ -5,9 +5,10 @@ import sqlite3
 import time
 from pathlib import Path
 
-from ai_footprint import accounts, extensions, figures, rules
-from ai_footprint.collectors import codex
-from ai_footprint.collectors.common import Context, shell_shortcuts, socket_endpoints
+from ai_footprint import extensions, figures, rules
+from ai_footprint.harnesses.codex import account as codex_account
+from ai_footprint.harnesses.codex import collector as codex
+from ai_footprint.harnesses.common import Context, shell_shortcuts, socket_endpoints
 from ai_footprint.host import Socket
 from ai_footprint.model import HostReport, ProcessInfo, ToolReport
 from ai_footprint.system import ProbeResult
@@ -139,7 +140,7 @@ def test_cloud_access_note_makes_no_claim_about_cloud_tasks(tmp_path: Path):
             }
         )
     )
-    [note] = accounts._codex_data(codex_report(), tmp_path, {})
+    [note] = codex_account.data_notes(codex_report(), tmp_path, {})
     assert note.text == "Codex cloud access: enabled; cloud-linked repos: none."
     assert not note.concern
 
@@ -148,7 +149,7 @@ def test_mobile_setup_flag_alone_is_stated_and_not_a_concern(tmp_path: Path):
     (tmp_path / ".codex-global-state.json").write_text(
         json.dumps({"codex-mobile-has-connected-device": True})
     )
-    [note] = accounts._codex_remote({}, tmp_path)
+    [note] = codex_account.remote_notes({}, tmp_path)
     assert "codex-mobile-has-connected-device = true" in note.text
     assert "can drive" not in note.text
     assert not note.concern
@@ -157,7 +158,7 @@ def test_mobile_setup_flag_alone_is_stated_and_not_a_concern(tmp_path: Path):
 def test_enabled_remote_control_enrollment_is_a_concern_with_its_record(tmp_path: Path):
     state_db(tmp_path, ENROLLMENTS, [("Codex Desktop", "Studio", 1, UPDATED)])
     config = {"desktop": {"keepRemoteControlAwakeWhilePluggedIn": True}}
-    enrolled, awake = accounts._codex_remote(config, tmp_path)
+    enrolled, awake = codex_account.remote_notes(config, tmp_path)
     assert enrolled.text == (
         "Codex state, shared with the desktop app, records remote control enabled for server "
         "Studio through client Codex Desktop "
@@ -169,9 +170,9 @@ def test_enabled_remote_control_enrollment_is_a_concern_with_its_record(tmp_path
 
 
 def test_disabled_enrollment_and_missing_table_raise_no_concern(tmp_path: Path):
-    assert accounts._codex_remote({}, tmp_path) == []
+    assert codex_account.remote_notes({}, tmp_path) == []
     state_db(tmp_path, ENROLLMENTS, [("Codex Desktop", "Studio", 0, UPDATED)])
-    [note] = accounts._codex_remote({}, tmp_path)
+    [note] = codex_account.remote_notes({}, tmp_path)
     assert "records remote control not enabled" in note.text
     assert not note.concern
 
@@ -183,10 +184,10 @@ def test_codex_log_markers_need_the_codex_binary_to_know_them(tmp_path: Path):
         "Your access token could not be refreshed. Please run /login\n"
     )
     ctx = Context(home=tmp_path, system=FakeSystem(), now=time.time())
-    assert accounts._codex_detect(ctx, codex_report(), root, "") == []
+    assert codex_account.detect_notes(ctx, codex_report(), root, "") == []
     binary = tmp_path / "codex"
     binary.write_bytes(b"\0".join(m.encode() for m in codex.LOG_MARKERS))
-    [note] = accounts._codex_detect(ctx, codex_report(), root, str(binary))
+    [note] = codex_account.detect_notes(ctx, codex_report(), root, str(binary))
     assert note.text.startswith("Auth events in local logs: token refresh failed: 1 times")
     assert "asked to log in again" not in note.text
 

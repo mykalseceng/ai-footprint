@@ -1,1 +1,0 @@
-"""Per-tool footprint collectors."""

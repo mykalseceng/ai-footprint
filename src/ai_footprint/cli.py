@@ -17,7 +17,8 @@ from ai_footprint import (
     report_html,
     reportcheck,
 )
-from ai_footprint.audit import TOOLS, detect_tools, run_audit
+from ai_footprint.audit import detect_tools, run_audit
+from ai_footprint.harnesses import registry
 from ai_footprint.model import NetworkCapture, ToolPresence
 from ai_footprint.report_text import (
     Style,
@@ -28,12 +29,15 @@ from ai_footprint.report_text import (
 )
 from ai_footprint.system import System
 
+HARNESSES = registry()
+DISPLAY_NAMES = ", ".join(h.display_name for h in HARNESSES.values())
+
 DESCRIPTION = f"""\
-Audit the local footprint of AI coding tools ({", ".join(s.display_name for s in TOOLS.values())}):
+Audit the local footprint of AI coding tools ({DISPLAY_NAMES}):
 where they store credentials, sessions and logs, who can read them, what runs automatically,
 where they connect, and what a stolen token or account unlocks.
 
-Pick tools by name ({", ".join(TOOLS)}) or "all". With no names, an interactive terminal asks
+Pick tools by name ({", ".join(HARNESSES)}) or "all". With no names, an interactive terminal asks
 which installed tools to audit; otherwise every installed tool is audited.
 
   ai-footprint --list              show supported tools and which are installed
@@ -63,7 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
         "tools",
         nargs="*",
         metavar="TOOL",
-        help=f"tools to audit: {', '.join(TOOLS)}, or all (default: installed tools)",
+        help=f"tools to audit: {', '.join(HARNESSES)}, or all (default: installed tools)",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--list", action="store_true", help="list supported tools and exit")
@@ -146,15 +150,15 @@ def select_tools(
         SelectionError: A name is unknown, a named tool is not installed, or nothing is installed.
     """
     installed = [p for p in presences if p.installed]
-    unknown = sorted(set(requested) - set(TOOLS) - {"all"})
+    unknown = sorted(set(requested) - set(HARNESSES) - {"all"})
     if unknown:
         raise SelectionError(
             f"ai-footprint: unknown tool(s) {', '.join(unknown)}; choose from "
-            f"{', '.join(TOOLS)} or all"
+            f"{', '.join(HARNESSES)} or all"
         )
     if not installed:
         raise SelectionError(
-            f"ai-footprint: none of the supported tools ({', '.join(TOOLS)}) are installed"
+            f"ai-footprint: none of the supported tools ({', '.join(HARNESSES)}) are installed"
         )
     if "all" in requested:
         return [p.name for p in installed]
@@ -165,7 +169,7 @@ def select_tools(
                 f"ai-footprint: {', '.join(missing)} not installed; installed: "
                 f"{', '.join(p.name for p in installed)}"
             )
-        return [name for name in TOOLS if name in requested]
+        return [name for name in HARNESSES if name in requested]
     if ask is None:
         return [p.name for p in installed]
     menu = "\n".join(
@@ -234,7 +238,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"ai-footprint: {exc}", file=sys.stderr)
         return 2
     if not quick:
-        names = ", ".join(TOOLS[name].display_name for name in tools)
+        names = ", ".join(HARNESSES[name].display_name for name in tools)
         print(f"Auditing {names} (full secret scan)…", file=sys.stderr)
     audit, checklist = run_audit(
         system=system,
@@ -252,7 +256,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             DESCRIPTION,
             presences,
             select=lambda names, found: select_tools(names, found, ask=None),
-            tool_names=list(TOOLS),
+            tool_names=list(HARNESSES),
         )
         data = document.build(audit, checklist)
         audit.report_validation = [

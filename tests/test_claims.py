@@ -4,10 +4,14 @@ import json
 import time
 from pathlib import Path
 
-from ai_footprint import accounts, rules
-from ai_footprint.audit import TOOLS
-from ai_footprint.collectors import claude, codex, opencode
-from ai_footprint.collectors.common import Claim, Context, confirmed_settings, fingerprint_items
+from ai_footprint import rules
+from ai_footprint.harnesses import registry
+from ai_footprint.harnesses.claude import account as claude_account
+from ai_footprint.harnesses.claude import collector as claude
+from ai_footprint.harnesses.codex import account as codex_account
+from ai_footprint.harnesses.codex import collector as codex
+from ai_footprint.harnesses.common import Claim, Context, confirmed_settings, fingerprint_items
+from ai_footprint.harnesses.opencode import collector as opencode
 from ai_footprint.model import (
     AuditReport,
     BinaryInfo,
@@ -20,6 +24,11 @@ from ai_footprint.model import (
 from ai_footprint.text import sentences, when
 from ai_footprint.validate import validate_claims
 from tests.conftest import FakeSystem, build_claude_home, build_codex_home
+
+CLAUDE = registry()["claude"]
+CODEX = registry()["codex"]
+OPENCODE = registry()["opencode"]
+
 
 HOME_MODE = "drwx------"
 
@@ -60,7 +69,7 @@ def host(home: Path) -> HostReport:
 
 
 def test_every_tool_registers_claims_with_non_empty_markers():
-    for name, spec in TOOLS.items():
+    for name, spec in registry().items():
         assert spec.claims, name
         for claim in spec.claims:
             assert isinstance(claim, Claim)
@@ -83,7 +92,7 @@ def test_claim_validation_fails_on_a_marker_the_binary_lacks(tmp_path: Path):
 def test_claim_validation_fails_when_the_tool_has_no_binary(tmp_path: Path):
     report = ToolReport(name="claude", display_name="Claude Code", installed=True)
     audit = AuditReport(generated_at="", auditor_version="0", host=host(tmp_path), tools=[report])
-    [validation] = validate_claims(audit, {"claude": claude.CLAIMS})
+    [validation] = validate_claims(audit, {"claude": CLAUDE.claims})
     assert not validation.ok
     assert validation.checks[0].name == "binary on PATH"
 
@@ -91,7 +100,9 @@ def test_claim_validation_fails_when_the_tool_has_no_binary(tmp_path: Path):
 def test_fingerprint_and_endpoints_only_list_what_the_binary_contains(tmp_path: Path):
     binary = fake_binary(tmp_path / "bin", "claude", ["api.anthropic.com", "claude-cli/"])
     ctx = context(tmp_path, tmp_path / "bin")
-    rows = fingerprint_items(ctx, str(binary), claude.FINGERPRINT)
+    rows = fingerprint_items(
+        ctx, str(binary), [(r.label, r.value, r.marker) for r in claude.PROFILE.fingerprint]
+    )
     assert [r.label for r in rows] == ["User-Agent"]
     report = claude_report(binary)
     hosts = [x.host for x in claude._endpoints(ctx, report) if x.source == "binary"]
@@ -131,18 +142,18 @@ def test_skipping_the_bypass_prompt_alone_is_not_running_without_approval(tmp_pa
 def test_logout_note_states_revocation_only_with_markers(tmp_path: Path):
     ctx = context(tmp_path, tmp_path / "bin")
     report = ToolReport(name="claude", display_name="Claude Code", installed=True)
-    [without] = accounts._claude_revoke(ctx, report, "")
+    [without] = claude_account.revoke_notes(ctx, report, "")
     assert without.text.startswith("No token-revocation marker was found")
     binary = fake_binary(tmp_path / "bin", "claude", [*claude.REVOKE_MARKERS, claude.OAUTH_URL])
-    [with_markers] = accounts._claude_revoke(ctx, report, str(binary))
+    [with_markers] = claude_account.revoke_notes(ctx, report, str(binary))
     assert with_markers.text.startswith(
         "`claude /logout` posts the refresh token to "
         "https://platform.claude.com/v1/oauth/token/revoke"
     )
-    codex_without = accounts._codex_revoke(ctx, report, "")
+    codex_without = codex_account.revoke_notes(ctx, report, "")
     assert codex_without[0].text.startswith("No token-revocation marker was found")
     binary = fake_binary(tmp_path / "bin", "codex", list(codex.REVOKE_MARKERS))
-    codex_with = accounts._codex_revoke(ctx, report, str(binary))
+    codex_with = codex_account.revoke_notes(ctx, report, str(binary))
     assert codex_with[0].text.startswith("The installed Codex revokes its auth tokens")
     assert codex_with[0].source == "markers in the installed codex binary"
     assert all(n.source != "markers in the installed codex binary" for n in codex_with[1:])
@@ -159,7 +170,7 @@ def test_memory_agents_and_commands_go_through_the_instruction_analysis(tmp_path
     (root / "commands").mkdir()
     (root / "commands" / "ship.md").write_text("Ship it.\n")
     ctx = context(tmp_path, tmp_path / "bin")
-    report, _facts = claude.collect(ctx)
+    report = CLAUDE.collect(ctx)
     by_scope = {f.scope: f for f in report.instructions}
     assert "authority or attestation claims" in by_scope["memory"].markers[0]
     assert any("download-and-execute" in m for m in by_scope["agent"].markers)
@@ -178,7 +189,7 @@ def test_codex_desktop_artifacts_are_inventoried(tmp_path: Path):
     for name in ("transcription-history.jsonl", "goals_1.sqlite", "queue_1.sqlite"):
         (root / name).write_bytes(b"")
     ctx = context(tmp_path, tmp_path / "bin")
-    report, _facts = codex.collect(ctx)
+    report = CODEX.collect(ctx)
     labels = {a.label for a in report.artifacts}
     assert {
         "Browser sessions",
@@ -206,7 +217,7 @@ def test_opencode_reads_claude_md_unless_disabled_by_env(tmp_path: Path):
 def test_credentials_report_scopes_not_glosses(tmp_path: Path):
     build_claude_home(tmp_path)
     ctx = context(tmp_path, tmp_path / "bin")
-    report, _facts = claude.collect(ctx)
+    report = CLAUDE.collect(ctx)
     cred = next(c for c in report.credentials if c.store == "plaintext file")
     access = next(t for t in cred.tokens if t.field == "accessToken")
     assert access.scopes == ["user:inference", "user:mcp_servers"]
@@ -220,8 +231,8 @@ def test_an_instruction_file_read_by_two_tools_is_a_shared_surface(tmp_path: Pat
     (tmp_path / ".config" / "opencode").mkdir(parents=True)
     (tmp_path / ".local" / "share" / "opencode").mkdir(parents=True)
     ctx = context(tmp_path, tmp_path / "bin")
-    claude_report, _f = claude.collect(ctx)
-    opencode_report, _f = opencode.collect(ctx)
+    claude_report = CLAUDE.collect(ctx)
+    opencode_report = OPENCODE.collect(ctx)
     audit = AuditReport(
         generated_at="",
         auditor_version="0",
@@ -249,7 +260,8 @@ def test_dates_and_sentences_are_normalised():
 
 def test_missing_plugin_server_fix_disables_the_plugin(tmp_path: Path):
     report = ToolReport(name="claude", display_name="Claude Code", installed=True)
-    fix = rules._dangling_fix(report, "guardian", "plugin semgrep@official", tmp_path)
+    ctx = rules.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
+    fix = rules._dangling_fix(report, ctx, "guardian", "plugin semgrep@official")
     [command] = fix.commands
     assert command.text == "claude plugin disable semgrep@official"
     assert command.help_probe == ("claude", "plugin", "disable")

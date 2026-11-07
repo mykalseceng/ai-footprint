@@ -10,7 +10,7 @@ command line names a self-update loop, or the version in the path differs.
 import datetime
 import re
 
-from ai_footprint.collectors.common import Context
+from ai_footprint.harnesses.common import Context
 from ai_footprint.host import listeners, started_at
 from ai_footprint.model import Daemon, ProcessInfo, ToolReport
 from ai_footprint.text import plural, short_path

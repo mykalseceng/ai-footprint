@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from ai_footprint import capture, cli, live, optioncheck
-from ai_footprint.audit import TOOLS
+from ai_footprint.harnesses import registry
 from ai_footprint.model import (
     BinaryInfo,
     CommandValidation,
@@ -139,7 +139,7 @@ def test_workers_reaches_the_scanner(home: Path, monkeypatch: pytest.MonkeyPatch
 
 def test_home_selects_the_audited_home(home: Path, capsys):
     assert cli.main(["--list", "--home", str(home / "empty")]) == 0
-    assert capsys.readouterr().out.count("not installed") == len(TOOLS)
+    assert capsys.readouterr().out.count("not installed") == len(registry())
 
 
 def test_version_prints_package_version(capsys):
@@ -261,7 +261,7 @@ def check(description: str) -> list[CommandValidation]:
         description,
         PRESENT,
         select=lambda names, found: cli.select_tools(names, found, ask=None),
-        tool_names=list(TOOLS),
+        tool_names=list(registry()),
     )
 
 

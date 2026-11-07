@@ -60,7 +60,7 @@ def _secret_total(tools: list[Doc]) -> int | None:
 def _approval(tool: Doc) -> str:
     if any(x["id"] == f"{tool['name']}:no-approval" for x in tool["exposures"]):
         return "found"
-    if any(s["key"] in rules.APPROVAL_KEYS for s in tool["settings"]):
+    if any(s["key"] in rules.approval_keys() for s in tool["settings"]):
         return "not found"
     return "not checked"
 

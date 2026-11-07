@@ -9,8 +9,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from ai_footprint import daemons
-from ai_footprint.collectors.common import AD_HOC
 from ai_footprint.fsinfo import human_size, tilde
+from ai_footprint.harnesses.common import AD_HOC
 from ai_footprint.model import Artifact, Category, HostReport, TokenInfo, ToolReport
 from ai_footprint.text import plural, sentences, when
 

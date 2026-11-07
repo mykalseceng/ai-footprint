@@ -8,27 +8,25 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from ai_footprint import extensions, instructions, live
-from ai_footprint.collectors.common import (
-    ArtifactSpec,
+from ai_footprint.fsinfo import mode_string, readable_by_others
+from ai_footprint.harnesses import profile
+from ai_footprint.harnesses.base import artifacts, fingerprint, known_endpoints, resolve_roots
+from ai_footprint.harnesses.common import (
     Claim,
     Context,
     binary_info,
     binary_path,
     confirmed_settings,
-    describe_all,
     endpoints,
-    fingerprint_items,
     load_json,
     load_toml,
-    presence,
     shell_shortcuts,
     value_or_unset,
 )
-from ai_footprint.fsinfo import mode_string, readable_by_others
 from ai_footprint.host import processes
 from ai_footprint.model import (
+    THREADS_WITHOUT_APPROVAL,
     BinaryInfo,
-    Category,
     Credential,
     Endpoint,
     Extension,
@@ -39,96 +37,14 @@ from ai_footprint.model import (
     ToolPresence,
     ToolReport,
 )
-from ai_footprint.rules import THREADS_WITHOUT_APPROVAL
 from ai_footprint.secrets import scan_paths
 from ai_footprint.text import plural, when
 from ai_footprint.tokens import inspect_token, iso_time, verify_rs256
 
-NAME = "codex"
-DISPLAY = "Codex CLI"
-C = Category
+PROFILE = profile.load_beside(__name__)
+NAME = PROFILE.name
+DISPLAY = PROFILE.display_name
 
-ARTIFACTS = (
-    ArtifactSpec(
-        "Credentials",
-        "auth.json",
-        C.CREDENTIAL,
-        "ChatGPT OAuth JWTs and refresh token, or an API key, in plaintext",
-    ),
-    ArtifactSpec(
-        "Config",
-        "config.toml",
-        C.CONFIG,
-        "Approval policy, sandbox, MCP servers, plugins, trusted projects",
-    ),
-    ArtifactSpec("Hooks", "hooks.json", C.EXTENSION, "Commands run on tool events"),
-    ArtifactSpec("Command rules", "rules", C.CONFIG, "Pre-approved command prefixes"),
-    ArtifactSpec("Global instructions", "AGENTS.md", C.INSTRUCTIONS, "Loaded into every session"),
-    ArtifactSpec(
-        "Global override", "AGENTS.override.md", C.INSTRUCTIONS, "Replaces AGENTS.md when present"
-    ),
-    ArtifactSpec(
-        "Sessions", "sessions", C.SESSION, "Rollout files: full conversations and tool output"
-    ),
-    ArtifactSpec("Archived sessions", "archived_sessions", C.SESSION, "Older rollouts"),
-    ArtifactSpec("Prompt history", "history.jsonl", C.SESSION, "Every prompt typed"),
-    ArtifactSpec("Thread history DB", "thread_history_1.sqlite", C.SESSION, "Thread contents"),
-    ArtifactSpec("State DB", "state_5.sqlite", C.SESSION, "Threads, projects, app state"),
-    ArtifactSpec("Memories DB", "memories_1.sqlite", C.SESSION, "Saved memories"),
-    ArtifactSpec("Memories", "memories", C.SESSION, "Memory files"),
-    ArtifactSpec("Goals DB", "goals_1.sqlite", C.SESSION, "Goals"),
-    ArtifactSpec("Queue DB", "queue_1.sqlite", C.SESSION, "Queued work"),
-    ArtifactSpec("Browser sessions", "browser", C.SESSION, "Browser session data"),
-    ArtifactSpec("Dictation history", "dictation-history", C.SESSION, "Dictation history"),
-    ArtifactSpec(
-        "Transcription history", "transcription-history.jsonl", C.SESSION, "Voice transcriptions"
-    ),
-    ArtifactSpec("Session index", "session_index.jsonl", C.SESSION, "Session titles and paths"),
-    ArtifactSpec("Attachments", "attachments", C.SESSION, "Files attached to prompts"),
-    ArtifactSpec("Logs DB", "logs_2.sqlite", C.LOG, "Structured client logs"),
-    ArtifactSpec("Logs", "log", C.LOG, "Login and TUI logs"),
-    ArtifactSpec("Shell snapshots", "shell_snapshots", C.LOG, "Your shell environment"),
-    ArtifactSpec("Global state", ".codex-global-state.json", C.CONFIG, "Desktop/app state"),
-    ArtifactSpec("Installation ID", "installation_id", C.CONFIG, "Stable per-install identifier"),
-    ArtifactSpec("Skills", "skills", C.EXTENSION, "Codex skills"),
-    ArtifactSpec("Plugins", "plugins", C.EXTENSION, "Bundled and curated plugins"),
-    ArtifactSpec("Computer use", "computer-use", C.EXTENSION, "Screen and input control helper"),
-    ArtifactSpec("Cache", "cache", C.CACHE, "Downloaded assets"),
-)
-
-ENDPOINTS = {
-    "chatgpt.com": "Codex responses API on your ChatGPT plan (backend-api)",
-    "auth.openai.com": "OAuth login and token refresh",
-    "api.openai.com": "OpenAI API (API-key mode)",
-}
-
-FINGERPRINT = (
-    ("Originator header", "originator: codex_cli_rs", "codex_cli_rs"),
-    ("User-Agent", "codex_cli_rs/{version} (…)", "codex_cli_rs"),
-    ("Responses endpoint", "https://chatgpt.com/backend-api/codex/…", "chatgpt.com/backend-api"),
-    ("Auth endpoint", "https://auth.openai.com (token refresh)", "auth.openai.com"),
-    (
-        "Credential store option",
-        "cli_auth_credentials_store = file | keyring | auto",
-        "cli_auth_credentials_store",
-    ),
-    (
-        "Instruction files",
-        "AGENTS.md, AGENTS.override.md, project_doc_fallback_filenames",
-        "AGENTS.override.md",
-    ),
-)
-
-SETTING_KEYS = (
-    "approval_policy",
-    "sandbox_mode",
-    "notify",
-    "cli_auth_credentials_store",
-    "persistence",
-    "trust_level",
-    "project_doc_fallback_filenames",
-    "daemon_auto_start",
-)
 DAEMON_MARKERS = ("managed-daemon", "pid-update-loop", "daemon stop")
 REVOKE_MARKERS = ("auth/revoke.rs", "failed to revoke auth tokens during logout")
 REMOTE_REVOKE_MARKER = "remoteControl/client/revoke"
@@ -138,10 +54,7 @@ LOG_MARKERS = {
 }
 NEVER = "never"
 BYPASS_FLAG = "--dangerously-bypass-approvals-and-sandbox"
-CLAIMS: tuple[Claim, ...] = (
-    *(Claim(f"endpoint {host}", host) for host in ENDPOINTS),
-    *(Claim(f"signature: {label}", marker) for label, _value, marker in FINGERPRINT),
-    *(Claim(f"setting {key}", key) for key in SETTING_KEYS),
+EXTRA_CLAIMS: tuple[Claim, ...] = (
     *(Claim("logout revokes tokens", marker) for marker in REVOKE_MARKERS),
     Claim("remote-control device revocation", REMOTE_REVOKE_MARKER),
     *(Claim("app-server daemon", marker) for marker in DAEMON_MARKERS),
@@ -164,28 +77,33 @@ class RemoteEnrollment(NamedTuple):
     updated: str
 
 
-def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport, dict[str, Any]]:
+class Collected(NamedTuple):
+    """What the account notes read besides the report."""
+
+    root: Path
+    config: dict[str, Any]
+
+
+def collect(ctx: Context, found: ToolPresence) -> tuple[ToolReport, Collected]:
     """Collect Codex CLI's footprint.
 
     Args:
         ctx: Collection context.
-        found: This tool's presence when already detected, so binaries are probed once.
+        found: This tool's presence from ``detect``.
 
     Returns:
-        The report and private facts for the rule engine.
+        The report, and the data folder and parsed config.toml for the account notes.
     """
     report = ToolReport(name=NAME, display_name=DISPLAY)
     root = home_dir(ctx)
     config = load_toml(root / "config.toml") or {}
-    found = found or detect(ctx, sized=False)
     report.binaries = found.binaries
     report.installed = found.installed
-    facts: dict[str, Any] = {"config": config, "root": root}
     if not report.installed:
-        return report, facts
-    report.artifacts = describe_all(root, ARTIFACTS)
-    report.credentials, facts["fingerprints"] = _credentials(ctx, root, config)
-    report.processes = _cli_processes(processes(ctx.system, r"(^|/)codex(\s|$)|codex-darwin"))
+        return report, Collected(root, config)
+    report.artifacts = artifacts(ctx, PROFILE)
+    report.credentials, known = _credentials(ctx, root, config)
+    report.processes = _cli_processes(processes(ctx.system, PROFILE.process))
     report.settings = _settings(ctx, config, root, binary_path(report))
     report.settings += shell_shortcuts(ctx, BYPASS_FLAG)
     threads = thread_approval(root)
@@ -197,35 +115,28 @@ def collect(ctx: Context, found: ToolPresence | None = None) -> tuple[ToolReport
     report.instructions = instructions.collect(_instruction_candidates(root, config))
     report.extensions = _extensions(ctx, root, config)
     report.endpoints = _endpoints(ctx, root, report)
-    binary = binary_path(report)
-    version = report.binaries[0].version if report.binaries else "?"
-    rows = [(label, value.format(version=version), marker) for label, value, marker in FINGERPRINT]
-    report.fingerprint = fingerprint_items(ctx, binary, rows)
+    report.fingerprint = fingerprint(ctx, PROFILE, report)
     report.stats = _stats(root)
     if ctx.scan:
         report.secret_scan = scan_paths(
             [root],
             workers=ctx.workers,
             display=ctx.display,
-            known=facts["fingerprints"],
+            known=known,
             stores=[root / "auth.json"],
             exclude=[root / "packages", root / "plugins"],
         )
     report.programs = [_tac_status(report)]
-    return report, facts
+    return report, Collected(root, config)
 
 
 def home_dir(ctx: Context) -> Path:
     """Codex's data folder, honouring CODEX_HOME."""
-    return Path(ctx.system.env.get("CODEX_HOME") or ctx.home / ".codex")
+    return resolve_roots(ctx, PROFILE)["home"]
 
 
-def detect(ctx: Context, *, sized: bool = True) -> ToolPresence:
-    """Is Codex CLI installed, and where?"""
-    return presence(NAME, DISPLAY, _binaries(ctx), [home_dir(ctx)], sized=sized)
-
-
-def _binaries(ctx: Context) -> list[BinaryInfo]:
+def binaries(ctx: Context) -> list[BinaryInfo]:
+    """Each codex on PATH, read through the npm launcher to the native binary it runs."""
     found = []
     for path in ctx.system.which_all("codex"):
         resolved = Path(path).resolve()
@@ -517,7 +428,7 @@ def _endpoints(ctx: Context, root: Path, report: ToolReport) -> list[Endpoint]:
         for host, server in report_mcp_urls(report)
     ]
     logs = [root / "log", root / "logs_2.sqlite"]
-    return endpoints(ctx, report, ENDPOINTS, logs, extra=remote)
+    return endpoints(ctx, report, known_endpoints(PROFILE), logs, extra=remote)
 
 
 def report_mcp_urls(report: ToolReport) -> list[tuple[str, str]]:
