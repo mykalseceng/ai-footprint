@@ -36,7 +36,7 @@ express (`collector.py`, `account.py`, `remedies.py`).
    - a setting, variable, subcommand, hook, endpoint or integration → `[[features]]` with
      `kind`, `name`, a one-line `summary`, `doc`, `marker`, and `checks` naming the central
      check ids that audit it (`check_ids` in the JSON lists them). Leave `checks` empty when
-     none does; that gap is a finding to report, not something to paper over;
+     none does; report that gap, do not paper over it;
    - an endpoint the binary names → `[[endpoints]]`; a variable → `env`;
    - a fix the tool offers for a check → `[remedies.<id>]` (ids in `Remedy`), with `help`
      only for CLIs and `markers` for config keys and UI labels.

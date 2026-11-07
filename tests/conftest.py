@@ -257,22 +257,17 @@ def build_pi_home(home: Path) -> None:
     )
 
 
-T3_MARKERS = (
-    "T3CODE_HOME",
-    "T3CODE_TELEMETRY_ENABLED",
-    "__clerk_client_jwt",
-    "cloud-link-ed25519-key-pair",
-    "com.t3tools.t3code.service",
-    "full-access",
-    "approval-required",
-    "Supervised",
-    "auth_sessions",
-    "t3 auth",
-    "Sharing & access",
-    "service uninstall",
-    "ingest.t3.codes",
-    "app.t3.codes",
-)
+def t3_markers() -> list[str]:
+    """Every string the T3 Code profile and collector expect in the app bundle."""
+    from ai_footprint.harnesses import registry  # noqa: PLC0415 - fixtures load harnesses lazily
+
+    harness = registry()["t3code"]
+    markers = [claim.marker for claim in harness.claims]
+    markers += [
+        m for fix in harness.profile.remedies.values() for c in fix.commands for m in c.markers
+    ]
+    markers += [f.marker for f in harness.profile.features if f.marker]
+    return sorted(set(markers))
 
 
 def _t3_db(path: Path, *, threads: list[str], sessions: list[tuple[str, str]]) -> None:
@@ -338,7 +333,7 @@ def build_t3code_home(
         plistlib.dumps({"CFBundleExecutable": "T3 Code", "CFBundleShortVersionString": "0.1.5"})
     )
     asar = app / "Resources" / "app.asar"
-    asar.write_bytes(b"\0".join(m.encode() for m in T3_MARKERS))
+    asar.write_bytes(b"\0".join(m.encode() for m in t3_markers()))
     agents = home / "Library" / "LaunchAgents"
     agents.mkdir(parents=True)
     (agents / "com.t3tools.t3code.service.plist").write_bytes(

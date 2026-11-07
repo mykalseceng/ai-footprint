@@ -20,6 +20,10 @@ env = [
   "T3CODE_TAILSCALE_SERVE",
   "T3CODE_RELAY_URL",
   "T3CODE_OTLP_TRACES_URL",
+  "T3CODE_OTLP_LOGS_URL",
+  "T3CODE_OTLP_METRICS_URL",
+  "T3CODE_OTEL_SDK_DISABLED",
+  "T3CODE_SERVER_BROWSER_SANDBOX",
   "T3CODE_DISABLE_AUTO_UPDATE",
 ]
 
@@ -43,7 +47,7 @@ approval_off_flagged = ["threads with runtime_mode=full-access"]
 label = "Account token"
 path = "{home}/userdata/clerk-tokens.json"
 category = "credential"
-description = "Clerk client JWT for the T3 account (T3 Connect sign-in), plaintext"
+description = "Clerk client JWT for the T3 account (T3 Connect sign-in); Electron safeStorage ciphertext (enc:) whose key is in the Keychain, or plaintext (raw:)"
 
 [[artifacts]]
 label = "Server keys"
@@ -56,6 +60,18 @@ label = "State DB"
 path = "{home}/userdata/statev2.sqlite"
 category = "session"
 description = "Threads, messages and tool output, paired client sessions, pairing links, scheduled tasks"
+
+[[artifacts]]
+label = "Legacy state DB"
+path = "{home}/userdata/state.sqlite"
+category = "session"
+description = "Database from versions before 0.1.0, kept after migration for rollback"
+
+[[artifacts]]
+label = "Server settings"
+path = "{home}/userdata/settings.json"
+category = "config"
+description = "Server-side settings: providers, permissions defaults, cleanup, observability"
 
 [[artifacts]]
 label = "Server owner DB"
@@ -118,6 +134,24 @@ category = "session"
 description = "Git worktrees threads work in"
 
 [[artifacts]]
+label = "Scratch folders"
+path = "{home}/scratch"
+category = "session"
+description = "Working folders of threads without a project; kept after the thread is deleted"
+
+[[artifacts]]
+label = "New projects"
+path = "{home}/projects"
+category = "session"
+description = "Git repositories created with New project"
+
+[[artifacts]]
+label = "ACP agents"
+path = "{home}/tools"
+category = "binary"
+description = "Agents installed from the ACP Registry, by agent id and version"
+
+[[artifacts]]
 label = "Service environment"
 path = "{home}/service.env"
 category = "config"
@@ -152,6 +186,10 @@ purpose = "T3 Connect relay (sets up remote connections)"
 [[endpoints]]
 host = "ingest.t3.codes"
 purpose = "Product usage events"
+
+[[endpoints]]
+host = "us-east-1.aws.edge.axiom.co"
+purpose = "T3 Connect relay connection traces (Axiom)"
 
 [[endpoints]]
 host = "clerk.com"
@@ -199,15 +237,18 @@ commands = [
 ]
 
 [remedies.protect-credentials]
-summary = "Sign out where you do not use T3 Connect"
+summary = "Keep T3 Code's keys private and sign out where you do not use T3 Connect"
 commands = [
-  { manual = "Sign out in Settings → Sharing & access if you do not use T3 Connect, then chmod 600 ~/.t3/userdata/clerk-tokens.json", markers = ["Sharing & access"] },
+  { manual = "Keep ~/.t3/userdata/secrets at mode 700 and its key files at 600", markers = ["server-signing-key"] },
+  { manual = "Sign out in Settings → Sharing & access if you do not use T3 Connect", markers = ["Sharing & access"] },
+  { manual = "chmod 600 ~/.t3/service.env if it holds credentials", markers = ["service.env"] },
 ]
 
 [remedies.data-controls]
-summary = "Turn off usage events"
+summary = "Turn off usage events and agent activity publishing"
 commands = [
   { manual = "Set T3CODE_TELEMETRY_ENABLED=false in your shell profile and in ~/.t3/service.env", markers = ["T3CODE_TELEMETRY_ENABLED"] },
+  { manual = "Turn off Publish agent activity in Settings → Sharing & access", markers = ["Publish agent activity"] },
 ]
 
 [[docs]]
@@ -229,6 +270,62 @@ topic = "launchd service, service.env"
 [[docs]]
 url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/faq.md"
 topic = "telemetry, where code and prompts go"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/telemetry.md"
+topic = "usage events, relay traces, agent activity publishing, OpenTelemetry export"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/source-control.md"
+topic = "GitHub, Bitbucket and GitCafe credentials, pull request sharing, new projects"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/project-settings.md"
+topic = "server settings, scheduled tasks, webhook automations, worktree location and cleanup"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/outside-agents.md"
+topic = "MCP server for outside agents, OAuth sign-in, t3 thread"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/guest-links.md"
+topic = "guest links to share a thread"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/secrets.md"
+topic = "secret providers, agent secret requests"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/managed-policy.md"
+topic = "managed policy, settings.json paths, agent browser access"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/browser-import.md"
+topic = "importing cookies from other browsers"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/snap-shot.md"
+topic = "window capture with accessibility data"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/devices.md"
+topic = "simulators and emulators agents control, SSH and Simlock device hosts"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/install.md"
+topic = "t3 CLI, desktop app, provider instances"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/thread-sidebar.md"
+topic = "scratch folders for threads without a project"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/thread-migration.md"
+topic = "state.sqlite to statev2.sqlite migration, userdata recovery copy"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/providers-acp.md"
+topic = "ACP Registry agents installed under T3 home"
 
 [[features]]
 kind = "setting"
@@ -304,5 +401,161 @@ marker = "t3 auth"
 kind = "integration"
 name = "scheduled tasks"
 summary = "Prompts that run on a schedule or from a webhook, without anyone at the keyboard"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/project-settings.md"
 marker = "scheduled_tasks"
 checks = ["autostart"]
+
+[[features]]
+kind = "integration"
+name = "webhook tasks"
+summary = "A public T3 Connect URL starts a run; without Require signature anyone with the URL can"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/project-settings.md"
+marker = "On webhook"
+checks = ["autostart"]
+
+[[features]]
+kind = "setting"
+name = "Hold webhooks while offline"
+summary = "T3 Connect stores webhook request bodies for up to 24 hours while the machine is offline"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/project-settings.md"
+marker = "Hold webhooks while offline"
+
+[[features]]
+kind = "setting"
+name = "Network access"
+summary = "Desktop server listens on the LAN and tailnet; a pairing code is all that keeps others out"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/remote-access.md"
+marker = "Network access"
+checks = ["daemons"]
+
+[[features]]
+kind = "subcommand"
+name = "up"
+summary = "Chooses T3 Connect and/or LAN access and installs the background service"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/remote-access.md"
+marker = "t3 up"
+checks = ["daemons", "autostart"]
+
+[[features]]
+kind = "integration"
+name = "linked environments"
+summary = "Agents on a linked machine launch and steer threads here, up to full access, for 30 days"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/remote-access.md"
+marker = "peer_environment_links"
+
+[[features]]
+kind = "integration"
+name = "outside agents"
+summary = "Agents T3 Code did not start sign in to its /mcp server with OAuth and run threads"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/outside-agents.md"
+marker = "Copy MCP URL"
+
+[[features]]
+kind = "integration"
+name = "guest links"
+summary = "A 24-hour link lets someone without an account watch a thread and queue messages"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/guest-links.md"
+marker = "Share with guest"
+
+[[features]]
+kind = "env"
+name = "T3CODE_SERVER_BROWSER_SANDBOX"
+summary = "0 turns off Chrome's sandbox for the browser agents drive"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/remote-access.md"
+marker = "T3CODE_SERVER_BROWSER_SANDBOX"
+
+[[features]]
+kind = "setting"
+name = "enableAgentBrowserAccess"
+summary = "Lets agents drive the environment's browser tabs"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/managed-policy.md"
+marker = "enableAgentBrowserAccess"
+
+[[features]]
+kind = "integration"
+name = "browser cookie import"
+summary = "Copies another browser's cookies into T3 Code's browser; Safari needs Full Disk Access"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/browser-import.md"
+marker = "importCookies"
+checks = ["computer-control"]
+
+[[features]]
+kind = "setting"
+name = "snapShotEnabled"
+summary = "Window capture into drafts; macOS Screen Recording, and Accessibility to include app text"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/snap-shot.md"
+marker = "snapShotEnabled"
+checks = ["computer-control"]
+
+[[features]]
+kind = "integration"
+name = "devices"
+summary = "Agents control simulators and emulators, here or on SSH and Simlock device hosts"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/devices.md"
+marker = "Agents can use devices"
+
+[[features]]
+kind = "integration"
+name = "secret requests"
+summary = "Agents ask for a secret in a card; a value a command needs sits in a file for about 24 hours"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/secrets.md"
+marker = "Save securely"
+
+[[features]]
+kind = "env"
+name = "GH_TOKEN"
+summary = "GitHub token from the server's environment, used when none is saved in Settings"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/source-control.md"
+marker = "GH_TOKEN"
+checks = ["inherited-creds"]
+
+[[features]]
+kind = "env"
+name = "T3CODE_BITBUCKET_ACCESS_TOKEN"
+summary = "Bitbucket access token from the server's environment or service.env"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/source-control.md"
+marker = "T3CODE_BITBUCKET_ACCESS_TOKEN"
+checks = ["inherited-creds"]
+
+[[features]]
+kind = "env"
+name = "T3CODE_BITBUCKET_API_TOKEN"
+summary = "Atlassian API token (with T3CODE_BITBUCKET_EMAIL) reaching every repository you can"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/source-control.md"
+marker = "T3CODE_BITBUCKET_API_TOKEN"
+checks = ["inherited-creds"]
+
+[[features]]
+kind = "setting"
+name = "Pull request sharing"
+summary = "Read and act lets another environment use this one's source control credentials"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/source-control.md"
+marker = "Pull request sharing"
+
+[[features]]
+kind = "setting"
+name = "Publish agent activity"
+summary = "Sends project and thread titles and status to the T3 Connect relay; telemetry opt-out ignores it"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/telemetry.md"
+marker = "Publish agent activity"
+
+[[features]]
+kind = "env"
+name = "T3CODE_OTEL_SDK_DISABLED"
+summary = "Turns off OpenTelemetry export, which also stops relay connection traces"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/telemetry.md"
+marker = "T3CODE_OTEL_SDK_DISABLED"
+
+[[features]]
+kind = "integration"
+name = "OpenTelemetry export"
+summary = "Sends traces, metrics and logs to receivers set in Settings or T3CODE_OTLP_*_URL"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/telemetry.md"
+marker = "OpenTelemetry export"
+
+[[features]]
+kind = "env"
+name = "T3CODE_OTLP_HEADERS"
+summary = "Authentication headers sent to the OpenTelemetry receivers"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/telemetry.md"
+marker = "T3CODE_OTLP_HEADERS"

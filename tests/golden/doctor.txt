@@ -275,8 +275,12 @@ T3 Code
              T3 Code keeps credentials for T3 Code server keys, T3 account (Clerk) in plaintext
              (~/.t3/userdata/clerk-tokens.json, ~/.t3/userdata/secrets). Any program running as you
              can copy them.
-             → Sign out where you do not use T3 Connect
-               Sign out in Settings → Sharing & access if you do not use T3 Connect, then chmod 600 ~/.t3/userdata/clerk-tokens.json
+             → Keep T3 Code's keys private and sign out where you do not use T3 Connect
+               Keep ~/.t3/userdata/secrets at mode 700 and its key files at 600
+                 ✓ config keys confirmed in installed binary
+               Sign out in Settings → Sharing & access if you do not use T3 Connect
+                 ✓ config keys confirmed in installed binary
+               chmod 600 ~/.t3/service.env if it holds credentials
                  ✓ config keys confirmed in installed binary
   clear    No secrets in history or logs (full audit only)
   not checked  No MCP server command points at a missing file (no local MCP server command to check)
@@ -310,8 +314,10 @@ T3 Code
              T3CODE_TELEMETRY_ENABLED is not set; the installed app reads it and names
              ingest.t3.codes. T3 Code's FAQ says usage events (provider, model, token totals) are
              sent unless it is false.
-             → Turn off usage events
+             → Turn off usage events and agent activity publishing
                Set T3CODE_TELEMETRY_ENABLED=false in your shell profile and in ~/.t3/service.env
+                 ✓ config keys confirmed in installed binary
+               Turn off Publish agent activity in Settings → Sharing & access
                  ✓ config keys confirmed in installed binary
   clear    No paired devices or unused stored logins
 Host
@@ -343,8 +349,8 @@ Host
   clear    No other AI tools keep data here
 
 Probe binaries: 0/0 verified (absolute path, not group/other-writable, Apple-signed on macOS)
-Fix commands:   18/50 validated (syntax, programs, targets, subcommands, config keys)
-Tool claims:    15/32 found in the installed binaries (endpoints, signature traits, config keys, log and behaviour markers)
+Fix commands:   21/53 validated (syntax, programs, targets, subcommands, config keys)
+Tool claims:    34/38 found in the installed binaries (endpoints, signature traits, config keys, log and behaviour markers)
 Commands run by this audit: 38 (probes and --version/--help runs)
   ✗ claude mcp remove ghost -s user → program 'claude': not found on PATH; claude installed: binary not found; cannot confirm
   ✗ Add cli_auth_credentials_store = "keyring" to ~/.codex/config.toml → codex binary: not installed; cannot confirm
@@ -382,6 +388,5 @@ Commands run by this audit: 38 (probes and --version/--help runs)
   ✗ claims about Codex CLI ? → binary on PATH: not found; claims unchecked
   ✗ claims about OpenCode ? → binary on PATH: not found; claims unchecked
   ✗ claims about pi ? → binary on PATH: not found; claims unchecked
-  ✗ claims about T3 Code 0.1.5 → endpoint relay.t3.codes: 'relay.t3.codes': absent from binary; endpoint clerk.com: 'clerk.com': absent from binary; endpoint clerk-telemetry.com: 'clerk-telemetry.com': absent from binary; setting runtime_mode: 'runtime_mode': absent from binary; setting auth_pairing_links: 'auth_pairing_links': absent from binary; setting peer_environment_links: 'peer_environment_links': absent from binary; setting scheduled_tasks: 'scheduled_tasks': absent from binary; env T3CODE_HOST: 'T3CODE_HOST': absent from binary; env T3CODE_PORT: 'T3CODE_PORT': absent from binary; env T3CODE_TAILSCALE_SERVE: 'T3CODE_TAILSCALE_SERVE': absent from binary; env T3CODE_RELAY_URL: 'T3CODE_RELAY_URL': absent from binary; env T3CODE_OTLP_TRACES_URL: 'T3CODE_OTLP_TRACES_URL': absent from binary; env T3CODE_DISABLE_AUTO_UPDATE: 'T3CODE_DISABLE_AUTO_UPDATE': absent from binary
 Result: 39 to review · 31 clear · 25 not checked  (exit 1)
 Secret scan skipped in doctor mode; run without --doctor for the full audit.

@@ -795,9 +795,9 @@
           "passed": true
         },
         {
-          "detail": "absent from binary",
+          "detail": "found in binary",
           "name": "endpoint relay.t3.codes: 'relay.t3.codes'",
-          "passed": false
+          "passed": true
         },
         {
           "detail": "found in binary",
@@ -805,14 +805,19 @@
           "passed": true
         },
         {
-          "detail": "absent from binary",
-          "name": "endpoint clerk.com: 'clerk.com'",
-          "passed": false
+          "detail": "found in binary",
+          "name": "endpoint us-east-1.aws.edge.axiom.co: 'us-east-1.aws.edge.axiom.co'",
+          "passed": true
         },
         {
-          "detail": "absent from binary",
+          "detail": "found in binary",
+          "name": "endpoint clerk.com: 'clerk.com'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
           "name": "endpoint clerk-telemetry.com: 'clerk-telemetry.com'",
-          "passed": false
+          "passed": true
         },
         {
           "detail": "found in binary",
@@ -840,9 +845,9 @@
           "passed": true
         },
         {
-          "detail": "absent from binary",
+          "detail": "found in binary",
           "name": "setting runtime_mode: 'runtime_mode'",
-          "passed": false
+          "passed": true
         },
         {
           "detail": "found in binary",
@@ -850,19 +855,19 @@
           "passed": true
         },
         {
-          "detail": "absent from binary",
+          "detail": "found in binary",
           "name": "setting auth_pairing_links: 'auth_pairing_links'",
-          "passed": false
+          "passed": true
         },
         {
-          "detail": "absent from binary",
+          "detail": "found in binary",
           "name": "setting peer_environment_links: 'peer_environment_links'",
-          "passed": false
+          "passed": true
         },
         {
-          "detail": "absent from binary",
+          "detail": "found in binary",
           "name": "setting scheduled_tasks: 'scheduled_tasks'",
-          "passed": false
+          "passed": true
         },
         {
           "detail": "found in binary",
@@ -875,34 +880,54 @@
           "passed": true
         },
         {
-          "detail": "absent from binary",
+          "detail": "found in binary",
           "name": "env T3CODE_HOST: 'T3CODE_HOST'",
-          "passed": false
+          "passed": true
         },
         {
-          "detail": "absent from binary",
+          "detail": "found in binary",
           "name": "env T3CODE_PORT: 'T3CODE_PORT'",
-          "passed": false
+          "passed": true
         },
         {
-          "detail": "absent from binary",
+          "detail": "found in binary",
           "name": "env T3CODE_TAILSCALE_SERVE: 'T3CODE_TAILSCALE_SERVE'",
-          "passed": false
+          "passed": true
         },
         {
-          "detail": "absent from binary",
+          "detail": "found in binary",
           "name": "env T3CODE_RELAY_URL: 'T3CODE_RELAY_URL'",
-          "passed": false
+          "passed": true
         },
         {
-          "detail": "absent from binary",
+          "detail": "found in binary",
           "name": "env T3CODE_OTLP_TRACES_URL: 'T3CODE_OTLP_TRACES_URL'",
-          "passed": false
+          "passed": true
         },
         {
-          "detail": "absent from binary",
+          "detail": "found in binary",
+          "name": "env T3CODE_OTLP_LOGS_URL: 'T3CODE_OTLP_LOGS_URL'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "env T3CODE_OTLP_METRICS_URL: 'T3CODE_OTLP_METRICS_URL'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "env T3CODE_OTEL_SDK_DISABLED: 'T3CODE_OTEL_SDK_DISABLED'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "env T3CODE_SERVER_BROWSER_SANDBOX: 'T3CODE_SERVER_BROWSER_SANDBOX'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
           "name": "env T3CODE_DISABLE_AUTO_UPDATE: 'T3CODE_DISABLE_AUTO_UPDATE'",
-          "passed": false
+          "passed": true
         },
         {
           "detail": "found in binary",
@@ -927,6 +952,11 @@
         {
           "detail": "found in binary",
           "name": "background service uninstall: 'service uninstall'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "safeStorage ciphertext prefix: 'ENCRYPTED_PREFIX = \"enc:\"'",
           "passed": true
         }
       ],
@@ -4378,7 +4408,7 @@
       "artifacts": [
         {
           "category": "credential",
-          "description": "Clerk client JWT for the T3 account (T3 Connect sign-in), plaintext",
+          "description": "Clerk client JWT for the T3 account (T3 Connect sign-in); Electron safeStorage ciphertext (enc:) whose key is in the Keychain, or plaintext (raw:)",
           "exists": true,
           "file_count": 1,
           "group_readable": "wheel",
@@ -4536,8 +4566,36 @@
         },
         {
           "count": 0,
+          "host": "relay.t3.codes",
+          "purpose": "T3 Connect relay (sets up remote connections)",
+          "source": "binary",
+          "tool": "t3code"
+        },
+        {
+          "count": 0,
           "host": "ingest.t3.codes",
           "purpose": "Product usage events",
+          "source": "binary",
+          "tool": "t3code"
+        },
+        {
+          "count": 0,
+          "host": "us-east-1.aws.edge.axiom.co",
+          "purpose": "T3 Connect relay connection traces (Axiom)",
+          "source": "binary",
+          "tool": "t3code"
+        },
+        {
+          "count": 0,
+          "host": "clerk.com",
+          "purpose": "T3 account sign-in (Clerk)",
+          "source": "binary",
+          "tool": "t3code"
+        },
+        {
+          "count": 0,
+          "host": "clerk-telemetry.com",
+          "purpose": "Clerk SDK telemetry",
           "source": "binary",
           "tool": "t3code"
         }
@@ -4602,13 +4660,46 @@
                 "manual": true,
                 "marker_tool": "t3code",
                 "markers": [
+                  "server-signing-key"
+                ],
+                "text": "Keep ~/.t3/userdata/secrets at mode 700 and its key files at 600"
+              },
+              {
+                "help_probe": [],
+                "manual": true,
+                "marker_tool": "t3code",
+                "markers": [
                   "Sharing & access"
                 ],
-                "text": "Sign out in Settings → Sharing & access if you do not use T3 Connect, then chmod 600 ~/.t3/userdata/clerk-tokens.json"
+                "text": "Sign out in Settings → Sharing & access if you do not use T3 Connect"
+              },
+              {
+                "help_probe": [],
+                "manual": true,
+                "marker_tool": "t3code",
+                "markers": [
+                  "service.env"
+                ],
+                "text": "chmod 600 ~/.t3/service.env if it holds credentials"
               }
             ],
-            "summary": "Sign out where you do not use T3 Connect",
+            "summary": "Keep T3 Code's keys private and sign out where you do not use T3 Connect",
             "validations": [
+              {
+                "checks": [
+                  {
+                    "detail": "instruction, not a command",
+                    "name": "manual step",
+                    "passed": true
+                  },
+                  {
+                    "detail": "found in binary",
+                    "name": "'server-signing-key' known to installed t3code",
+                    "passed": true
+                  }
+                ],
+                "command": "Keep ~/.t3/userdata/secrets at mode 700 and its key files at 600"
+              },
               {
                 "checks": [
                   {
@@ -4622,7 +4713,22 @@
                     "passed": true
                   }
                 ],
-                "command": "Sign out in Settings → Sharing & access if you do not use T3 Connect, then chmod 600 ~/.t3/userdata/clerk-tokens.json"
+                "command": "Sign out in Settings → Sharing & access if you do not use T3 Connect"
+              },
+              {
+                "checks": [
+                  {
+                    "detail": "instruction, not a command",
+                    "name": "manual step",
+                    "passed": true
+                  },
+                  {
+                    "detail": "found in binary",
+                    "name": "'service.env' known to installed t3code",
+                    "passed": true
+                  }
+                ],
+                "command": "chmod 600 ~/.t3/service.env if it holds credentials"
               }
             ]
           },
@@ -4812,9 +4918,18 @@
                   "T3CODE_TELEMETRY_ENABLED"
                 ],
                 "text": "Set T3CODE_TELEMETRY_ENABLED=false in your shell profile and in ~/.t3/service.env"
+              },
+              {
+                "help_probe": [],
+                "manual": true,
+                "marker_tool": "t3code",
+                "markers": [
+                  "Publish agent activity"
+                ],
+                "text": "Turn off Publish agent activity in Settings → Sharing & access"
               }
             ],
-            "summary": "Turn off usage events",
+            "summary": "Turn off usage events and agent activity publishing",
             "validations": [
               {
                 "checks": [
@@ -4830,6 +4945,21 @@
                   }
                 ],
                 "command": "Set T3CODE_TELEMETRY_ENABLED=false in your shell profile and in ~/.t3/service.env"
+              },
+              {
+                "checks": [
+                  {
+                    "detail": "instruction, not a command",
+                    "name": "manual step",
+                    "passed": true
+                  },
+                  {
+                    "detail": "found in binary",
+                    "name": "'Publish agent activity' known to installed t3code",
+                    "passed": true
+                  }
+                ],
+                "command": "Turn off Publish agent activity in Settings → Sharing & access"
               }
             ]
           },
@@ -4924,6 +5054,66 @@
         {
           "concern": false,
           "key": "env.T3CODE_TELEMETRY_ENABLED",
+          "note": "Read by the installed app",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "env.T3CODE_HOST",
+          "note": "Read by the installed app",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "env.T3CODE_PORT",
+          "note": "Read by the installed app",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "env.T3CODE_TAILSCALE_SERVE",
+          "note": "Read by the installed app",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "env.T3CODE_RELAY_URL",
+          "note": "Read by the installed app",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "env.T3CODE_OTLP_TRACES_URL",
+          "note": "Read by the installed app",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "env.T3CODE_OTLP_LOGS_URL",
+          "note": "Read by the installed app",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "env.T3CODE_OTLP_METRICS_URL",
+          "note": "Read by the installed app",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "env.T3CODE_OTEL_SDK_DISABLED",
+          "note": "Read by the installed app",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "env.T3CODE_SERVER_BROWSER_SANDBOX",
+          "note": "Read by the installed app",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "env.T3CODE_DISABLE_AUTO_UPDATE",
           "note": "Read by the installed app",
           "value": "not set"
         }
@@ -5899,6 +6089,11 @@
           "badge": "config keys confirmed in installed binary",
           "label": "✓ config keys confirmed in installed binary",
           "tone": "ok"
+        },
+        {
+          "badge": "config keys confirmed in installed binary",
+          "label": "✓ config keys confirmed in installed binary",
+          "tone": "ok"
         }
       ],
       "t3code:autostart": [
@@ -5909,6 +6104,16 @@
         }
       ],
       "t3code:creds-plaintext": [
+        {
+          "badge": "config keys confirmed in installed binary",
+          "label": "✓ config keys confirmed in installed binary",
+          "tone": "ok"
+        },
+        {
+          "badge": "config keys confirmed in installed binary",
+          "label": "✓ config keys confirmed in installed binary",
+          "tone": "ok"
+        },
         {
           "badge": "config keys confirmed in installed binary",
           "label": "✓ config keys confirmed in installed binary",
@@ -6486,8 +6691,24 @@
               "purpose": "Web app and hosted pairing page"
             },
             {
+              "host": "relay.t3.codes",
+              "purpose": "T3 Connect relay (sets up remote connections)"
+            },
+            {
               "host": "ingest.t3.codes",
               "purpose": "Product usage events"
+            },
+            {
+              "host": "us-east-1.aws.edge.axiom.co",
+              "purpose": "T3 Connect relay connection traces (Axiom)"
+            },
+            {
+              "host": "clerk.com",
+              "purpose": "T3 account sign-in (Clerk)"
+            },
+            {
+              "host": "clerk-telemetry.com",
+              "purpose": "Clerk SDK telemetry"
             }
           ]
         }
@@ -7997,7 +8218,27 @@
                 ""
               ],
               [
+                "relay.t3.codes",
+                "in the binary",
+                ""
+              ],
+              [
                 "ingest.t3.codes",
+                "in the binary",
+                ""
+              ],
+              [
+                "us-east-1.aws.edge.axiom.co",
+                "in the binary",
+                ""
+              ],
+              [
+                "clerk.com",
+                "in the binary",
+                ""
+              ],
+              [
+                "clerk-telemetry.com",
                 "in the binary",
                 ""
               ]

@@ -7,7 +7,7 @@ Three offline scans, each reading only names, never values:
 * environment variables the installed binary reads, by the profile's prefixes, that no
   ``env`` entry or feature lists.
 
-The results are candidates for the profile, not findings: the harness profiler researches
+The results are candidates for the profile, not signals: the harness profiler researches
 each one in the official docs before it is added.
 """
 

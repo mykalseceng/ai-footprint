@@ -3,11 +3,11 @@
 from pathlib import Path
 
 from ai_footprint import checks
-from ai_footprint.checks import steering, stolen_token
+from ai_footprint.checks import local_code, steering, stolen_token
 from ai_footprint.harnesses import registry
 from ai_footprint.harnesses.common import Context
 from ai_footprint.harnesses.t3code import collector as t3
-from ai_footprint.model import HostReport, ToolReport
+from ai_footprint.model import HostReport, StoreKind, ToolReport
 from tests.conftest import FakeSystem, build_t3code_home
 
 T3 = registry()["t3code"]
@@ -129,3 +129,28 @@ def test_an_unreadable_state_db_yields_no_settings_rows(tmp_path: Path):
     report = T3.collect(context(tmp_path))
     assert t3.THREADS_FULL_ACCESS not in settings(report)
     assert report.installed
+
+
+def test_a_safestorage_token_is_encrypted_not_plaintext(tmp_path: Path):
+    build_t3code_home(tmp_path)
+    token_file = tmp_path / ".t3" / "userdata" / "clerk-tokens.json"
+    token_file.write_text('{"__clerk_client_jwt": "enc:djEwAAAAciphertext"}')
+    report = T3.collect(context(tmp_path))
+    account = next(c for c in report.credentials if c.provider == "T3 account (Clerk)")
+    assert account.store is StoreKind.ENCRYPTED_FILE
+    assert account.tokens == []
+    assert "safeStorage" in account.protection
+    [plain] = local_code.rule_plaintext_credentials(report, rule_ctx(tmp_path))
+    assert "T3 account" not in plain.statement
+
+
+def test_a_raw_token_is_plaintext_and_inspected(tmp_path: Path):
+    build_t3code_home(tmp_path)
+    token_file = tmp_path / ".t3" / "userdata" / "clerk-tokens.json"
+    token_file.write_text('{"__clerk_client_jwt": "raw:opaque-value-123"}')
+    account = next(
+        c for c in T3.collect(context(tmp_path)).credentials if c.provider == "T3 account (Clerk)"
+    )
+    assert account.store is StoreKind.FILE
+    [token] = account.tokens
+    assert token.length == len("opaque-value-123")

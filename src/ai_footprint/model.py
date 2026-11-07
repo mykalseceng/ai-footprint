@@ -175,6 +175,7 @@ class StoreKind(StrEnum):
     """How a credential is stored; the value is the text the report shows."""
 
     KEYCHAIN = "macOS Keychain"
+    ENCRYPTED_FILE = "file encrypted with a Keychain key"
     FILE = "plaintext file"
     SQLITE = "SQLite table credential"
     ENV = "environment variable"

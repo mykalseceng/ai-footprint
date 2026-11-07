@@ -89,7 +89,7 @@ class HostRule:
 
 
 class Check(NamedTuple):
-    """One checklist line: a finding list, or why the check could not run."""
+    """One checklist line: the signals a check returned, or why it could not run."""
 
     scope: str
     check: str

@@ -14,6 +14,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from ai_footprint import keychain
 from ai_footprint.fsinfo import mode_string, readable_by_others
 from ai_footprint.harnesses import profile, registry
 from ai_footprint.harnesses.base import (
@@ -54,12 +55,16 @@ FULL_ACCESS = "full-access"
 THREADS_FULL_ACCESS = "threads with runtime_mode=full-access"
 TOKEN_FIELD = "__clerk_client_jwt"  # noqa: S105 - the JSON key holding the token, not a token
 LOCAL_CLIENT = "desktop"
+ENCRYPTED_PREFIX = "enc:"
+RAW_PREFIX = "raw:"
+SAFE_STORAGE = "t3code Safe Storage"
 EXTRA_CLAIMS: tuple[Claim, ...] = (
     Claim("permission mode value", FULL_ACCESS),
     Claim("paired client sessions table", "auth_sessions"),
     Claim("revoke command", "t3 auth"),
     Claim("settings page for access", "Sharing & access"),
     Claim("background service uninstall", "service uninstall"),
+    Claim("safeStorage ciphertext prefix", 'ENCRYPTED_PREFIX = "enc:"'),
 )
 
 
@@ -180,25 +185,42 @@ def _credentials(ctx: Context, home: Path) -> tuple[list[Credential], dict[str, 
     known: dict[str, str] = {}
     creds = []
     account = home / "userdata" / "clerk-tokens.json"
-    if account.is_file():
-        cred = Credential(
-            NAME,
-            "T3 account (Clerk)",
-            StoreKind.FILE,
-            str(account),
-            f"file mode {mode_string(account.stat().st_mode)}",
-            readable_by_others=readable_by_others(account),
-        )
-        value = (load_json(account) or {}).get(TOKEN_FIELD)
-        if isinstance(value, str) and value:
-            token = inspect_token(TOKEN_FIELD, value, now=ctx.now)
-            cred.tokens.append(token)
-            known.setdefault(token.fingerprint, "T3 Code account token")
-        creds.append(cred)
+    value = (load_json(account) or {}).get(TOKEN_FIELD) if account.is_file() else None
+    if isinstance(value, str) and value:
+        creds.append(_account_token(ctx, account, value, known))
     keys = _server_keys(home / "userdata" / "secrets")
     if keys is not None:
         creds.append(keys)
     return creds, known
+
+
+def _account_token(ctx: Context, path: Path, value: str, known: dict[str, str]) -> Credential:
+    """The T3 account token: Electron safeStorage ciphertext (``enc:``) or plaintext.
+
+    Ciphertext is not inspected: its key is in the Keychain, so the file alone does not
+    yield the token, and a fingerprint of ciphertext would match nothing else.
+    """
+    mode = f"file mode {mode_string(path.stat().st_mode)}"
+    cred = Credential(
+        NAME,
+        "T3 account (Clerk)",
+        StoreKind.FILE,
+        str(path),
+        mode,
+        readable_by_others=readable_by_others(path),
+    )
+    if value.startswith(ENCRYPTED_PREFIX):
+        cred.store = StoreKind.ENCRYPTED_FILE
+        item = keychain.find_item(ctx.system, SAFE_STORAGE)
+        where = (
+            f"Keychain item '{SAFE_STORAGE}'" if item else "a Keychain item this audit did not find"
+        )
+        cred.protection = f"Electron safeStorage ciphertext; key in {where}; {mode}"
+        return cred
+    token = inspect_token(TOKEN_FIELD, value.removeprefix(RAW_PREFIX), now=ctx.now)
+    cred.tokens.append(token)
+    known.setdefault(token.fingerprint, "T3 Code account token")
+    return cred
 
 
 def _server_keys(folder: Path) -> Credential | None:
