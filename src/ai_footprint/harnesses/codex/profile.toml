@@ -584,7 +584,7 @@ name = "remote-control"
 summary = "Starts the daemon with remote control so paired devices can run work on this machine"
 doc = "https://learn.chatgpt.com/docs/developer-commands?surface=cli"
 marker = "remote-control pair"
-checks = ["account-signals", "daemons"]
+checks = ["remote-control", "daemons"]
 
 [[features]]
 kind = "setting"
