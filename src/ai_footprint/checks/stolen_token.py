@@ -30,7 +30,7 @@ def rule_token_reach(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
         return []
     connectors = [e.name for e in report.extensions if e.kind == "connector"]
     used = (
-        f" This CLI has connected to {join(connectors)} (recorded in ~/.claude.json)."
+        f" This CLI has connected to {join(connectors)} (recorded in its config)."
         if connectors
         else ""
     )

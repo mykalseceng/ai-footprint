@@ -21,6 +21,7 @@ from ai_footprint.fsinfo import (
 )
 from ai_footprint.host import Socket, sockets
 from ai_footprint.model import (
+    AD_HOC,
     Artifact,
     BinaryInfo,
     Category,
@@ -35,7 +36,6 @@ from ai_footprint.model import (
 from ai_footprint.system import System
 from ai_footprint.tokens import inspect_token
 
-AD_HOC = "ad-hoc signed (no signing identity)"
 HOST_RE = re.compile(rb"https?://([a-z0-9][a-z0-9.-]*\.[a-z]{2,})(?=[/:\"'\s?)\\]|$)")
 INTERPRETERS = frozenset({"node", "python", "python3", "bun", "deno", "uv", "npx", "uvx"})
 SHELLS = frozenset({"bash", "sh", "zsh", "/bin/bash", "/bin/sh", "/bin/zsh"})

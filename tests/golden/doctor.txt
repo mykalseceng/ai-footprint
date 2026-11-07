@@ -21,7 +21,7 @@ Claude Code
                  manual step (not machine-checkable)
   REVIEW   Token carries no connector scopes
              The Claude Code token carries 1 connector scope: user:mcp_servers. This CLI has
-             connected to claude.ai Gmail (recorded in ~/.claude.json).
+             connected to claude.ai Gmail (recorded in its config).
              → Disconnect connectors you do not use (the token keeps its scopes)
                Remove unused connectors in the provider's web settings
                  manual step (not machine-checkable)

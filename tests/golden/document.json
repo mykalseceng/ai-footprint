@@ -1462,7 +1462,7 @@
           "id": "claude:token-reach",
           "label": "Token carries connector scopes",
           "lens": "remote",
-          "statement": "The Claude Code token carries 1 connector scope: user:mcp_servers. This CLI has connected to claude.ai Gmail (recorded in ~/.claude.json).",
+          "statement": "The Claude Code token carries 1 connector scope: user:mcp_servers. This CLI has connected to claude.ai Gmail (recorded in its config).",
           "tool": "claude"
         },
         {
@@ -5053,7 +5053,7 @@
             },
             {
               "exposure_id": "claude:token-reach",
-              "text": "The Claude Code token carries 1 connector scope: user:mcp_servers. This CLI has connected to claude.ai Gmail (recorded in ~/.claude.json).",
+              "text": "The Claude Code token carries 1 connector scope: user:mcp_servers. This CLI has connected to claude.ai Gmail (recorded in its config).",
               "tool": "Claude Code"
             },
             {
@@ -5641,7 +5641,7 @@
               },
               {
                 "exposure_id": "claude:token-reach",
-                "text": "The Claude Code token carries 1 connector scope: user:mcp_servers. This CLI has connected to claude.ai Gmail (recorded in ~/.claude.json).",
+                "text": "The Claude Code token carries 1 connector scope: user:mcp_servers. This CLI has connected to claude.ai Gmail (recorded in its config).",
                 "tool": "Claude Code"
               }
             ]

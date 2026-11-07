@@ -48,17 +48,16 @@ def rule_path_hijack(audit: AuditReport, ctx: RuleContext) -> list[Exposure]:
     ]
     if not risky:
         return []
-    bare = [
-        f"{t.display_name}: {f.value}"
-        for t in audit.tools
-        for f in t.fingerprint
-        if f.value == BARE_SECURITY
-    ]
+    readers = [t for t in audit.tools if any(f.value == BARE_SECURITY for f in t.fingerprint)]
+    bare = [f"{t.display_name}: {BARE_SECURITY}" for t in readers]
     folders = ", ".join(e.path for e in risky)
     consequence = (
-        " Claude Code looks up `security` through PATH when it reads its token, so a planted "
-        "`security` would receive it."
-        if bare
+        f" {join([t.display_name for t in readers])} "
+        f"{'looks' if len(readers) == 1 else 'look'} up `security` through PATH when "
+        f"{'it reads its token' if len(readers) == 1 else 'they read their tokens'}, so a "
+        "planted `security` would receive "
+        f"{'it' if len(readers) == 1 else 'them'}."
+        if readers
         else ""
     )
     return [

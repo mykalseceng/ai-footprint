@@ -7,10 +7,11 @@ import pytest
 
 from ai_footprint import checks
 from ai_footprint.checks import local_code
-from ai_footprint.harnesses.common import AD_HOC, Context, signer
+from ai_footprint.harnesses.common import Context, signer
 from ai_footprint.harnesses.opencode import account as opencode_account
 from ai_footprint.harnesses.pi import account as pi_account
 from ai_footprint.model import (
+    AD_HOC,
     BinaryInfo,
     Credential,
     HostReport,

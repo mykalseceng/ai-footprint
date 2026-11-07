@@ -275,6 +275,9 @@ RUNNING_BYPASS = "running with --dangerously-skip-permissions"
 THREADS_WITHOUT_APPROVAL = "threads with approval_mode=never"
 """Setting key that counts recorded threads that ran with approval off."""
 
+AD_HOC = "ad-hoc signed (no signing identity)"
+"""Signer recorded for a binary signed without a signing identity."""
+
 BARE_SECURITY = 'spawns "security" by bare name (PATH lookup)'
 """Fingerprint value for a binary that runs ``security`` through a PATH lookup."""
 

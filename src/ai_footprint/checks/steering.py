@@ -111,12 +111,17 @@ def _broad(folder: Path, home: Path) -> bool:
     return folder == home or any(f"/{name}/" in path for name in BROAD_TRUST)
 
 
+def _inside(parent: Path, folder: Path) -> bool:
+    """The folder itself, or a tool's dot-folder directly inside it (``.claude``, ``.pi``)."""
+    return parent == folder or (parent.parent == folder and parent.name.startswith("."))
+
+
 def _carried_instructions(report: ToolReport, folder: Path) -> list[str]:
     """Project instruction files this tool loads from inside a trusted folder."""
     return [
         i.path
         for i in report.instructions
-        if i.scope == "project" and Path(i.path).parent in {folder, folder / ".claude"}
+        if i.scope == "project" and _inside(Path(i.path).parent, folder)
     ]
 
 
