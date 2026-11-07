@@ -43,9 +43,9 @@ TOOL_RULES: tuple[Rule, ...] = (
         steering.rule_instructions,
     ),
     Rule(
-        "token-reach",
-        "Token carries no connector scopes",
-        stolen_token.rule_token_reach,
+        "connected-apps",
+        "Stored token cannot use connected apps",
+        stolen_token.rule_connected_apps,
         needs.needs_scopes,
     ),
     Rule(
@@ -116,10 +116,16 @@ TOOL_RULES: tuple[Rule, ...] = (
         needs.needs_data_notes,
     ),
     Rule(
-        "account-signals",
-        "No paired devices or unused stored logins",
-        stolen_token.rule_account_signals,
-        needs.needs_signal_source,
+        "remote-control",
+        "Remote control of this machine is off",
+        stolen_token.rule_remote_control,
+        needs.needs_remote_control_state,
+    ),
+    Rule(
+        "unused-logins",
+        "No stored login left unused",
+        stolen_token.rule_unused_logins,
+        needs.needs_login_expiry,
     ),
 )
 

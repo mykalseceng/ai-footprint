@@ -99,8 +99,16 @@ def needs_data_notes(report: ToolReport, ctx: RuleContext) -> str:
     return "no data-use setting is recorded"
 
 
-def needs_signal_source(report: ToolReport, ctx: RuleContext) -> str:
-    """Why the check cannot run without a recorded signal source, or ""."""
-    if ctx.can_signal(report):
+def needs_remote_control_state(report: ToolReport, ctx: RuleContext) -> str:
+    """Why the check cannot run without a recorded remote control state, or ""."""
+    if ctx.records_remote_control(report):
         return ""
-    return f"nothing on disk records where else the {report.display_name} token is used"
+    return f"{report.display_name} keeps no remote-control state on disk"
+
+
+def needs_login_expiry(report: ToolReport, ctx: RuleContext) -> str:
+    """Why the check cannot run without a recorded login expiry, or ""."""
+    del ctx
+    if any(t.expires_at for c in report.credentials for t in c.tokens):
+        return ""
+    return "no stored login records when it expires"

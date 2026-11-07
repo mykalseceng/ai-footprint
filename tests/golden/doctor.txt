@@ -19,11 +19,12 @@ Claude Code
              → Review and remove the flagged lines
                Edit ~/.claude/CLAUDE.md and delete what you did not write or no longer need
                  manual step (not machine-checkable)
-  REVIEW   Token carries no connector scopes
-             The Claude Code token carries 1 connector scope: user:mcp_servers. This CLI has
-             connected to claude.ai Gmail (recorded in its config).
-             → Disconnect connectors you do not use (the token keeps its scopes)
-               Remove unused connectors in the provider's web settings
+  REVIEW   Stored token cannot use connected apps
+             Anyone holding the Claude Code token can use the apps connected to your account,
+             because it carries user:mcp_servers. The apps recorded on this machine are claude.ai
+             Gmail.
+             → Disconnect apps you do not use (the token keeps its scopes)
+               Remove unused connected apps in the provider's settings
                  manual step (not machine-checkable)
   not checked  No sessions published to share links (this audit records no share setting for Claude Code)
   not checked  Keychain item requires a prompt (no credential is stored in the Keychain)
@@ -94,7 +95,8 @@ Claude Code
              → Review the provider's data settings
                Turn off model training at claude.ai/settings/data-privacy-controls and disconnect unused connectors
                  manual step (not machine-checkable)
-  not checked  No paired devices or unused stored logins (nothing on disk records where else the Claude Code token is used)
+  not checked  Remote control of this machine is off (Claude Code keeps no remote-control state on disk)
+  clear    No stored login left unused
 Codex CLI
   REVIEW   Approval not turned off by a recorded setting
              Codex CLI skips approval prompts in some sessions (approval_policy = never and
@@ -112,10 +114,12 @@ Codex CLI
              → Review and remove the flagged lines
                Edit ~/.codex/AGENTS.md and delete what you did not write or no longer need
                  manual step (not machine-checkable)
-  REVIEW   Token carries no connector scopes
-             The Codex CLI token carries 1 connector scope: api.connectors.read.
-             → Disconnect connectors you do not use (the token keeps its scopes)
-               Remove unused connectors in the provider's web settings
+  REVIEW   Stored token cannot use connected apps
+             Anyone holding the Codex CLI token can use the apps connected to your account, because
+             it carries api.connectors.read. Which apps are connected is not recorded on this
+             machine; the provider's connected-apps settings list them.
+             → Disconnect apps you do not use (the token keeps its scopes)
+               Remove unused connected apps in the provider's settings
                  manual step (not machine-checkable)
   not checked  No sessions published to share links (this audit records no share setting for Codex CLI)
   not checked  Keychain item requires a prompt (no credential is stored in the Keychain)
@@ -145,7 +149,8 @@ Codex CLI
   not checked  Local server requires authentication (this audit records no local server for Codex CLI)
   clear    No broad trusted folders and none holding instruction files
   not checked  Provider keeps no extra copies (training, cloud tasks) (no data-use setting is recorded)
-  clear    No paired devices or unused stored logins
+  clear    Remote control of this machine is off
+  clear    No stored login left unused
 OpenCode
   not checked  Approval not turned off by a recorded setting (this audit records no approval setting for OpenCode)
   REVIEW   Instruction files contain nothing that steers the model
@@ -154,7 +159,7 @@ OpenCode
              → Review and remove the flagged lines
                Edit ~/.claude/CLAUDE.md and delete what you did not write or no longer need
                  manual step (not machine-checkable)
-  not checked  Token carries no connector scopes (no stored token records its scopes)
+  not checked  Stored token cannot use connected apps (no stored token records its scopes)
   clear    No sessions published to share links
   not checked  Keychain item requires a prompt (no credential is stored in the Keychain)
   REVIEW   Credentials in an OS-protected store
@@ -189,7 +194,8 @@ OpenCode
   not checked  Local server requires authentication (this audit records no local server for OpenCode)
   not checked  No broad trusted folders and none holding instruction files (no trusted folders are recorded)
   clear    Provider keeps no extra copies (training, cloud tasks)
-  clear    No paired devices or unused stored logins
+  not checked  Remote control of this machine is off (OpenCode keeps no remote-control state on disk)
+  not checked  No stored login left unused (no stored login records when it expires)
 pi
   not checked  Approval not turned off by a recorded setting (this audit records no approval setting for pi)
   REVIEW   Instruction files contain nothing that steers the model
@@ -198,10 +204,12 @@ pi
              → Review and remove the flagged lines
                Edit ~/work/AGENTS.md and delete what you did not write or no longer need
                  manual step (not machine-checkable)
-  REVIEW   Token carries no connector scopes
-             The pi token carries 1 connector scope: api.connectors.read.
-             → Disconnect connectors you do not use (the token keeps its scopes)
-               Remove unused connectors in the provider's web settings
+  REVIEW   Stored token cannot use connected apps
+             Anyone holding the pi token can use the apps connected to your account, because it
+             carries api.connectors.read. Which apps are connected is not recorded on this machine;
+             the provider's connected-apps settings list them.
+             → Disconnect apps you do not use (the token keeps its scopes)
+               Remove unused connected apps in the provider's settings
                  manual step (not machine-checkable)
   not checked  No sessions published to share links (this audit records no share setting for pi)
   not checked  Keychain item requires a prompt (no credential is stored in the Keychain)
@@ -252,11 +260,12 @@ pi
              → Review the provider's data settings
                Review the provider's data settings
                  manual step (not machine-checkable)
-  REVIEW   No paired devices or unused stored logins
+  not checked  Remote control of this machine is off (pi keeps no remote-control state on disk)
+  REVIEW   No stored login left unused
              Stored pi logins whose access token expired and was not replaced: OpenAI access token
              issued <DATE>, expired <DATE>. Their refresh tokens have no recorded expiry.
-             → Check active sessions and devices, then revoke what you do not recognise
-               Review signed-in sessions and paired devices in the provider's security settings
+             → Log out of providers you no longer use with this tool
+               Remove the stored login, then revoke it at the provider
                  manual step (not machine-checkable)
 T3 Code
   REVIEW   Approval not turned off by a recorded setting
@@ -268,7 +277,7 @@ T3 Code
                Set Settings → Threads → New threads → Permissions to Supervised, and switch each full-access thread to Supervised in the composer
                  ✓ config keys confirmed in installed binary
   clear    Instruction files contain nothing that steers the model
-  not checked  Token carries no connector scopes (no stored token records its scopes)
+  not checked  Stored token cannot use connected apps (no stored token records its scopes)
   not checked  No sessions published to share links (this audit records no share setting for T3 Code)
   not checked  Keychain item requires a prompt (no credential is stored in the Keychain)
   REVIEW   Credentials in an OS-protected store
@@ -319,7 +328,8 @@ T3 Code
                  ✓ config keys confirmed in installed binary
                Turn off Publish agent activity in Settings → Sharing & access
                  ✓ config keys confirmed in installed binary
-  clear    No paired devices or unused stored logins
+  clear    Remote control of this machine is off
+  clear    No stored login left unused
 Host
   clear    PATH folders ahead of system dirs are not writable by others
   clear    Tool binaries are in folders only you can write
@@ -388,5 +398,5 @@ Commands run by this audit: 38 (probes and --version/--help runs)
   ✗ claims about Codex CLI ? → binary on PATH: not found; claims unchecked
   ✗ claims about OpenCode ? → binary on PATH: not found; claims unchecked
   ✗ claims about pi ? → binary on PATH: not found; claims unchecked
-Result: 39 to review · 31 clear · 25 not checked  (exit 1)
+Result: 39 to review · 33 clear · 28 not checked  (exit 1)
 Secret scan skipped in doctor mode; run without --doctor for the full audit.

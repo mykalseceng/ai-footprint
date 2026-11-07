@@ -6,7 +6,7 @@ process = "(^|/)codex(\\s|$)|codex-darwin"
 presence = ["{home}"]
 process_words = ["codex"]
 env_prefixes = ["CODEX_"]
-capabilities = ["account-signals"]
+capabilities = ["remote-control"]
 settings = ["approval_policy", "sandbox_mode", "notify", "cli_auth_credentials_store", "persistence", "trust_level", "project_doc_fallback_filenames", "daemon_auto_start"]
 
 [roots]

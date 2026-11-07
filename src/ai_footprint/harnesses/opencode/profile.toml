@@ -6,7 +6,6 @@ process = "(^|/)opencode2?(\\.exe)?(\\s|$)"
 presence = ["{data}", "{config}", "{install}"]
 process_words = ["opencode"]
 env_prefixes = ["OPENCODE_"]
-capabilities = ["account-signals"]
 settings = ["\"permission\"", "\"share\"", "autoupdate:", "\"plugin\"", "\"instructions\""]
 
 [roots]

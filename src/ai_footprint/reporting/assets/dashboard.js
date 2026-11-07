@@ -376,7 +376,7 @@
     const tr = h(
       "tr",
       { class: "frow" },
-      h("td", { "data-label": "Signal", class: "c-label" }, h("a", { class: "row-link", href }, e.label), h("div", { class: "mono-sub" }, e.id)),
+      h("td", { "data-label": "Signal", class: "c-label" }, h("a", { class: "row-link", href }, e.label)),
       o.tool !== false ? h("td", { "data-label": "Tool" }, chip(toolName(e.tool))) : null,
       o.lens !== false ? h("td", { "data-label": "Position", class: "c-lens" }, lens) : null,
       h("td", { "data-label": "Evidence", class: "c-num num" }, String((e.evidence || []).length)),

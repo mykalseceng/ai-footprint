@@ -6,6 +6,7 @@ import sqlite3
 from collections import Counter
 from pathlib import Path
 from typing import Any, NamedTuple
+from urllib.parse import urlsplit
 
 from ai_footprint import extensions, instructions, live
 from ai_footprint.fsinfo import mode_string, readable_by_others
@@ -41,6 +42,8 @@ from ai_footprint.text import plural, when
 from ai_footprint.tokens import inspect_token, iso_time, verify_rs256
 
 PROFILE = profile.load_beside(__name__)
+APP_MANIFEST = ".app.json"
+REMOTE_PLUGIN_MARKER = ".codex-remote-plugin-install.json"
 THREADS_WITHOUT_APPROVAL = "threads with approval_mode=never"
 """Setting key counting recorded threads that ran with approval off (a profile signal)."""
 NAME = PROFILE.name
@@ -56,6 +59,8 @@ LOG_MARKERS = {
 NEVER = "never"
 BYPASS_FLAG = "--dangerously-bypass-approvals-and-sandbox"
 EXTRA_CLAIMS: tuple[Claim, ...] = (
+    Claim("plugin app manifest", APP_MANIFEST),
+    Claim("remote plugin install record", REMOTE_PLUGIN_MARKER),
     *(Claim("logout revokes tokens", marker) for marker in REVOKE_MARKERS),
     Claim("remote-control device revocation", REMOTE_REVOKE_MARKER),
     *(Claim("app-server daemon", marker) for marker in DAEMON_MARKERS),
@@ -76,6 +81,8 @@ class RemoteEnrollment(NamedTuple):
     server: str
     enabled: bool
     updated: str
+    relay: str = ""
+    """Host of the relay the enrollment connects through, when recorded."""
 
 
 class Collected(NamedTuple):
@@ -412,6 +419,41 @@ def _plugin_rows(ctx: Context, root: Path, config: dict[str, Any]) -> list[Exten
         if install is not None:
             out += extensions.plugin_mcp_rows(install, NAME, plugin)
             out += extensions.skill_rows(install / "skills", NAME, ctx, source=f"plugin {plugin}")
+            out += connected_apps(install, f"plugin {plugin}")
+    return out + _remote_plugin_apps(root)
+
+
+def connected_apps(install: Path, source: str) -> list[Extension]:
+    """ChatGPT connected apps a plugin calls, from its ``.app.json``."""
+    apps = (load_json(install / APP_MANIFEST) or {}).get("apps", {})
+    return [
+        Extension(
+            NAME,
+            "connector",
+            app,
+            source,
+            "Called through ChatGPT with your ChatGPT login",
+            description="ChatGPT connected app"
+            + (
+                ", required by the plugin"
+                if isinstance(spec, dict) and spec.get("required")
+                else ""
+            ),
+            access="ChatGPT connector",
+            identity=f"connector chatgpt {app}",
+        )
+        for app, spec in (apps.items() if isinstance(apps, dict) else [])
+    ]
+
+
+def _remote_plugin_apps(root: Path) -> list[Extension]:
+    """Apps of plugins the Codex app installed from a remote marketplace (not in config.toml)."""
+    out = []
+    for marker in sorted((root / "plugins" / "cache").glob(f"*/*/{REMOTE_PLUGIN_MARKER}")):
+        versions = sorted((p for p in marker.parent.iterdir() if p.is_dir()), key=lambda p: p.name)
+        if versions:
+            source = f"remote plugin {marker.parent.name} (installed by the Codex app)"
+            out += connected_apps(versions[-1], source)
     return out
 
 
@@ -551,12 +593,18 @@ def remote_control_enrollments(root: Path) -> list[RemoteEnrollment]:
     """Remote-control enrollments recorded in the state DB, newest first."""
     rows = _sqlite_rows(
         root / "state_5.sqlite",
-        "SELECT app_server_client_name, server_name, remote_control_enabled, updated_at "
-        "FROM remote_control_enrollments ORDER BY updated_at DESC",
+        "SELECT app_server_client_name, server_name, remote_control_enabled, updated_at, "
+        "websocket_url FROM remote_control_enrollments ORDER BY updated_at DESC",
     )
     return [
-        RemoteEnrollment(str(client), str(server), bool(enabled), iso_time(int(updated))[:10])
-        for client, server, enabled, updated in rows or []
+        RemoteEnrollment(
+            str(client),
+            str(server),
+            bool(enabled),
+            iso_time(int(updated))[:10],
+            urlsplit(str(url or "")).hostname or "",
+        )
+        for client, server, enabled, updated, url in rows or []
     ]
 
 

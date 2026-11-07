@@ -33,7 +33,7 @@ def state_db(root: Path, sql: str, rows: list[tuple] | None = None) -> None:
 THREADS = "CREATE TABLE threads (approval_mode TEXT, sandbox_policy TEXT, updated_at INTEGER)"
 ENROLLMENTS = (
     "CREATE TABLE remote_control_enrollments (app_server_client_name TEXT, server_name TEXT, "
-    "remote_control_enabled INTEGER, updated_at INTEGER)"
+    "remote_control_enabled INTEGER, updated_at INTEGER, websocket_url TEXT)"
 )
 
 
@@ -159,14 +159,19 @@ def test_mobile_setup_flag_alone_is_stated_and_not_a_concern(tmp_path: Path):
 
 
 def test_enabled_remote_control_enrollment_is_a_concern_with_its_record(tmp_path: Path):
-    state_db(tmp_path, ENROLLMENTS, [("Codex Desktop", "Studio", 1, UPDATED)])
+    state_db(
+        tmp_path,
+        ENROLLMENTS,
+        [("Codex Desktop", "Studio", 1, UPDATED, "wss://relay.example.com/v1")],
+    )
     config = {"desktop": {"keepRemoteControlAwakeWhilePluggedIn": True}}
     enrolled, awake = codex_account.remote_notes(config, tmp_path)
     assert enrolled.text == (
-        "Codex state, shared with the desktop app, records remote control enabled for server "
-        "Studio through client Codex Desktop "
-        "(updated 2026-10-17). Which devices are paired now is not recorded locally."
+        "Codex records remote control enabled for this machine (server Studio) through Codex "
+        "Desktop, relayed by relay.example.com (updated 2026-10-17). Which devices are paired "
+        "now is not recorded locally."
     )
+    assert enrolled.signal == "remote-control"
     assert enrolled.source == "~/.codex/state_5.sqlite remote_control_enrollments"
     assert enrolled.concern
     assert awake.text == "desktop.keepRemoteControlAwakeWhilePluggedIn = true."
@@ -174,7 +179,7 @@ def test_enabled_remote_control_enrollment_is_a_concern_with_its_record(tmp_path
 
 def test_disabled_enrollment_and_missing_table_raise_no_concern(tmp_path: Path):
     assert codex_account.remote_notes({}, tmp_path) == []
-    state_db(tmp_path, ENROLLMENTS, [("Codex Desktop", "Studio", 0, UPDATED)])
+    state_db(tmp_path, ENROLLMENTS, [("Codex Desktop", "Studio", 0, UPDATED, None)])
     [note] = codex_account.remote_notes({}, tmp_path)
     assert "records remote control not enabled" in note.text
     assert not note.concern

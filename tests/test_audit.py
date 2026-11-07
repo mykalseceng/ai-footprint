@@ -86,16 +86,16 @@ def test_expected_exposures_for_each_tool(audited):
         "claude:live-token-on-disk",
         "claude:secrets-at-rest",
         "claude:instructions",
-        "claude:token-reach",
+        "claude:connected-apps",
         "codex:no-approval",
         "codex:creds-plaintext",
         "codex:instructions",
-        "codex:token-reach",
+        "codex:connected-apps",
         "opencode:creds-readable",
         "opencode:creds-plaintext",
         "pi:creds-plaintext",
         "pi:instructions",
-        "pi:token-reach",
+        "pi:connected-apps",
         "pi:trust",
         "pi:dangling",
         "host:other-accounts",
@@ -170,14 +170,17 @@ def test_jwt_claims_and_connector_scopes_are_reported(audited):
     token = next(t for t in codex.credentials[0].tokens if t.field == "access_token")
     assert token.issuer == "https://auth.example.com"
     assert "api.connectors.read" in token.scopes
-    reach = next(x for x in codex.exposures if x.id == "codex:token-reach")
+    reach = next(x for x in codex.exposures if x.id == "codex:connected-apps")
     assert reach.statement == (
-        "The Codex CLI token carries 1 connector scope: api.connectors.read."
+        "Anyone holding the Codex CLI token can use the apps connected to your account, because "
+        "it carries api.connectors.read. Which apps are connected is not recorded on this "
+        "machine; the provider's connected-apps settings list them."
     )
     claude = next(t for t in audit.tools if t.name == "claude")
-    reach = next(x for x in claude.exposures if x.id == "claude:token-reach")
+    reach = next(x for x in claude.exposures if x.id == "claude:connected-apps")
     assert "user:mcp_servers" in reach.statement
-    assert "connected to claude.ai Gmail" in reach.statement
+    assert "recorded on this machine are" in reach.statement
+    assert "claude.ai Gmail" in reach.statement
 
 
 def test_no_secret_value_reaches_any_output(audited):

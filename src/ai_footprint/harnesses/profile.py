@@ -52,8 +52,8 @@ class Remedy(StrEnum):
 class Capability(StrEnum):
     """Facts a harness can record that some checks need before they can run."""
 
-    ACCOUNT_SIGNALS = "account-signals"
-    """The harness marks signs that a credential is used elsewhere as concerns."""
+    REMOTE_CONTROL = "remote-control"
+    """The harness records whether another device can drive the tool on this machine."""
 
 
 class FeatureKind(StrEnum):

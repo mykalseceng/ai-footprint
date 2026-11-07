@@ -10,16 +10,18 @@ import datetime
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from ai_footprint.model import AccountNote, ToolReport
+from ai_footprint.model import UNUSED_LOGIN, AccountNote, ToolReport
 from ai_footprint.text import join, when
 from ai_footprint.tokens import iso_time
 
 MAX_LOG_BYTES = 400 * 1024 * 1024
 
 
-def note(topic: str, text: str, source: str, *, concern: bool = False) -> AccountNote:
+def note(
+    topic: str, text: str, source: str, *, concern: bool = False, signal: str = ""
+) -> AccountNote:
     """An account note with its timestamps rewritten to read one way."""
-    return AccountNote(topic=topic, text=when(text), source=source, concern=concern)
+    return AccountNote(topic=topic, text=when(text), source=source, concern=concern, signal=signal)
 
 
 def _files(paths: Iterable[Path]) -> Iterable[Path]:
@@ -102,5 +104,6 @@ def unused_logins(report: ToolReport) -> list[AccountNote]:
             f"replaced: {'; '.join(stale)}. Their refresh tokens have no recorded expiry.",
             "access-token issue and expiry claims",
             concern=True,
+            signal=UNUSED_LOGIN,
         )
     ]

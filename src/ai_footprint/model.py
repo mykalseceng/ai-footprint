@@ -276,7 +276,7 @@ RUNNING_BYPASS = "running with --dangerously-skip-permissions"
 
 EXTENSION_KINDS: dict[str, tuple[str, str]] = {
     "mcp": ("MCP server", "MCP servers"),
-    "connector": ("claude.ai connector", "claude.ai connectors"),
+    "connector": ("connected app", "Connected apps"),
     "plugin": ("plugin", "Plugins"),
     "skill": ("skill", "Skills"),
     "hook": ("hook", "Hooks"),
@@ -384,6 +384,14 @@ class AccountNote:
     text: str
     source: str
     concern: bool = False
+    signal: str = ""
+    """Which check reads this note when it is a concern: ``REMOTE_CONTROL`` or ``UNUSED_LOGIN``."""
+
+
+REMOTE_CONTROL = "remote-control"
+"""Account-note signal: another device can drive this machine's agent."""
+UNUSED_LOGIN = "unused-login"
+"""Account-note signal: a stored login that is no longer refreshed."""
 
 
 class FactKind(StrEnum):

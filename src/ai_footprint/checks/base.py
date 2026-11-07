@@ -49,10 +49,10 @@ class RuleContext:
         harness = harnesses.get(report.name)
         return harness.profile.approval_off_flagged if harness else ()
 
-    def can_signal(self, report: ToolReport) -> bool:
-        """The tool's harness marks signs of credential use elsewhere as concerns."""
+    def records_remote_control(self, report: ToolReport) -> bool:
+        """The tool's harness records whether another device can drive it here."""
         harness = harnesses.get(report.name)
-        return harness is not None and Capability.ACCOUNT_SIGNALS in harness.profile.capabilities
+        return harness is not None and Capability.REMOTE_CONTROL in harness.profile.capabilities
 
 
 ToolRuleFn = Callable[[ToolReport, RuleContext], list[Exposure]]
@@ -102,7 +102,7 @@ Checklist = list[Check]
 LABELS = {
     "no-approval": "Approval prompts skipped",
     "instructions": "Instruction file steers the model",
-    "token-reach": "Token carries connector scopes",
+    "connected-apps": "Token can use your connected apps",
     "shared": "Sessions on public share links",
     "keychain-silent": "Keychain token readable without a prompt",
     "creds-plaintext": "Credentials in plaintext",
@@ -123,7 +123,8 @@ LABELS = {
     "duplicate-creds": "One provider's credentials in several places",
     "trust": "Trusted folders",
     "account-data": "Work shared with provider services",
-    "account-signals": "Paired devices and unused logins",
+    "remote-control": "Remote control is turned on",
+    "unused-logins": "Logins kept but no longer used",
     "inherited-creds": "Other credentials an agent inherits",
     "computer-control": "Software that can drive the computer",
     "backups": "History copied into backups",

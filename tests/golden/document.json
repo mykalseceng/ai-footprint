@@ -20,10 +20,10 @@
       "unchecked": ""
     },
     {
-      "check": "Token carries no connector scopes",
+      "check": "Stored token cannot use connected apps",
       "exposed": true,
       "exposures": [
-        "claude:token-reach"
+        "claude:connected-apps"
       ],
       "scope": "Claude Code",
       "unchecked": ""
@@ -137,11 +137,18 @@
       "unchecked": ""
     },
     {
-      "check": "No paired devices or unused stored logins",
+      "check": "Remote control of this machine is off",
       "exposed": false,
       "exposures": [],
       "scope": "Claude Code",
-      "unchecked": "nothing on disk records where else the Claude Code token is used"
+      "unchecked": "Claude Code keeps no remote-control state on disk"
+    },
+    {
+      "check": "No stored login left unused",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Code",
+      "unchecked": ""
     },
     {
       "check": "Approval not turned off by a recorded setting",
@@ -162,10 +169,10 @@
       "unchecked": ""
     },
     {
-      "check": "Token carries no connector scopes",
+      "check": "Stored token cannot use connected apps",
       "exposed": true,
       "exposures": [
-        "codex:token-reach"
+        "codex:connected-apps"
       ],
       "scope": "Codex CLI",
       "unchecked": ""
@@ -266,7 +273,14 @@
       "unchecked": "no data-use setting is recorded"
     },
     {
-      "check": "No paired devices or unused stored logins",
+      "check": "Remote control of this machine is off",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Codex CLI",
+      "unchecked": ""
+    },
+    {
+      "check": "No stored login left unused",
       "exposed": false,
       "exposures": [],
       "scope": "Codex CLI",
@@ -289,7 +303,7 @@
       "unchecked": ""
     },
     {
-      "check": "Token carries no connector scopes",
+      "check": "Stored token cannot use connected apps",
       "exposed": false,
       "exposures": [],
       "scope": "OpenCode",
@@ -393,11 +407,18 @@
       "unchecked": ""
     },
     {
-      "check": "No paired devices or unused stored logins",
+      "check": "Remote control of this machine is off",
       "exposed": false,
       "exposures": [],
       "scope": "OpenCode",
-      "unchecked": ""
+      "unchecked": "OpenCode keeps no remote-control state on disk"
+    },
+    {
+      "check": "No stored login left unused",
+      "exposed": false,
+      "exposures": [],
+      "scope": "OpenCode",
+      "unchecked": "no stored login records when it expires"
     },
     {
       "check": "Approval not turned off by a recorded setting",
@@ -416,10 +437,10 @@
       "unchecked": ""
     },
     {
-      "check": "Token carries no connector scopes",
+      "check": "Stored token cannot use connected apps",
       "exposed": true,
       "exposures": [
-        "pi:token-reach"
+        "pi:connected-apps"
       ],
       "scope": "pi",
       "unchecked": ""
@@ -528,10 +549,17 @@
       "unchecked": ""
     },
     {
-      "check": "No paired devices or unused stored logins",
+      "check": "Remote control of this machine is off",
+      "exposed": false,
+      "exposures": [],
+      "scope": "pi",
+      "unchecked": "pi keeps no remote-control state on disk"
+    },
+    {
+      "check": "No stored login left unused",
       "exposed": true,
       "exposures": [
-        "pi:account-signals"
+        "pi:unused-logins"
       ],
       "scope": "pi",
       "unchecked": ""
@@ -553,7 +581,7 @@
       "unchecked": ""
     },
     {
-      "check": "Token carries no connector scopes",
+      "check": "Stored token cannot use connected apps",
       "exposed": false,
       "exposures": [],
       "scope": "T3 Code",
@@ -661,7 +689,14 @@
       "unchecked": ""
     },
     {
-      "check": "No paired devices or unused stored logins",
+      "check": "Remote control of this machine is off",
+      "exposed": false,
+      "exposures": [],
+      "scope": "T3 Code",
+      "unchecked": ""
+    },
+    {
+      "check": "No stored login left unused",
       "exposed": false,
       "exposures": [],
       "scope": "T3 Code",
@@ -1504,18 +1539,21 @@
       "account": [
         {
           "concern": true,
+          "signal": "",
           "source": "~/.claude.json claudeAiMcpEverConnected",
           "text": "claude.ai connectors used from this CLI: claude.ai Gmail.",
           "topic": "data"
         },
         {
           "concern": false,
+          "signal": "",
           "source": "markers in the installed claude binary",
           "text": "No token-revocation marker was found in the installed Claude Code binary, so this audit cannot say whether `claude /logout` revokes the token at Anthropic.",
           "topic": "revoke"
         },
         {
           "concern": false,
+          "signal": "",
           "source": "manual check",
           "text": "Nothing on disk records where else the token is used. Check active sessions at claude.ai and treat an unexpected login prompt as a signal.",
           "topic": "detect"
@@ -1835,7 +1873,7 @@
         {
           "evidence": [
             "user:mcp_servers",
-            "claude.ai Gmail"
+            "claude.ai Gmail: claude.ai (server-side)"
           ],
           "fix": {
             "commands": [
@@ -1844,10 +1882,10 @@
                 "manual": true,
                 "marker_tool": "",
                 "markers": [],
-                "text": "Remove unused connectors in the provider's web settings"
+                "text": "Remove unused connected apps in the provider's settings"
               }
             ],
-            "summary": "Disconnect connectors you do not use (the token keeps its scopes)",
+            "summary": "Disconnect apps you do not use (the token keeps its scopes)",
             "validations": [
               {
                 "checks": [
@@ -1857,14 +1895,14 @@
                     "passed": true
                   }
                 ],
-                "command": "Remove unused connectors in the provider's web settings"
+                "command": "Remove unused connected apps in the provider's settings"
               }
             ]
           },
-          "id": "claude:token-reach",
-          "label": "Token carries connector scopes",
+          "id": "claude:connected-apps",
+          "label": "Token can use your connected apps",
           "lens": "remote",
-          "statement": "The Claude Code token carries 1 connector scope: user:mcp_servers. This CLI has connected to claude.ai Gmail (recorded in its config).",
+          "statement": "Anyone holding the Claude Code token can use the apps connected to your account, because it carries user:mcp_servers. The apps recorded on this machine are claude.ai Gmail.",
           "tool": "claude"
         },
         {
@@ -2559,18 +2597,21 @@
       "account": [
         {
           "concern": false,
+          "signal": "",
           "source": "markers in the installed codex binary",
           "text": "No token-revocation marker was found in the installed Codex binary, so this audit cannot say whether `codex logout` revokes anything at OpenAI.",
           "topic": "revoke"
         },
         {
           "concern": false,
+          "signal": "",
           "source": "~/.codex/auth.json access_token",
           "text": "The access token is a JWT whose exp claim is <TIME>.",
           "topic": "revoke"
         },
         {
           "concern": false,
+          "signal": "",
           "source": "manual check",
           "text": "To end sessions elsewhere, sign out of other devices in ChatGPT security settings.",
           "topic": "revoke"
@@ -2823,10 +2864,10 @@
                 "manual": true,
                 "marker_tool": "",
                 "markers": [],
-                "text": "Remove unused connectors in the provider's web settings"
+                "text": "Remove unused connected apps in the provider's settings"
               }
             ],
-            "summary": "Disconnect connectors you do not use (the token keeps its scopes)",
+            "summary": "Disconnect apps you do not use (the token keeps its scopes)",
             "validations": [
               {
                 "checks": [
@@ -2836,14 +2877,14 @@
                     "passed": true
                   }
                 ],
-                "command": "Remove unused connectors in the provider's web settings"
+                "command": "Remove unused connected apps in the provider's settings"
               }
             ]
           },
-          "id": "codex:token-reach",
-          "label": "Token carries connector scopes",
+          "id": "codex:connected-apps",
+          "label": "Token can use your connected apps",
           "lens": "remote",
-          "statement": "The Codex CLI token carries 1 connector scope: api.connectors.read.",
+          "statement": "Anyone holding the Codex CLI token can use the apps connected to your account, because it carries api.connectors.read. Which apps are connected is not recorded on this machine; the provider's connected-apps settings list them.",
           "tool": "codex"
         },
         {
@@ -3120,12 +3161,14 @@
       "account": [
         {
           "concern": false,
+          "signal": "",
           "source": "opencode config",
           "text": "Session sharing: share = not set. Each provider's own data policy applies to what OpenCode sends: DeepSeek.",
           "topic": "data"
         },
         {
           "concern": false,
+          "signal": "",
           "source": "OpenCode credential model",
           "text": "Whether `opencode auth logout` revokes anything at the provider is not something this audit can observe. Revoke at each provider: delete each API key in its provider's console (DeepSeek).",
           "topic": "revoke"
@@ -3564,18 +3607,21 @@
       "account": [
         {
           "concern": true,
+          "signal": "",
           "source": "~/.pi/agent/settings.json",
           "text": "enableAnalytics = True; enableInstallTelemetry = not set.",
           "topic": "data"
         },
         {
           "concern": false,
+          "signal": "",
           "source": "pi credential model",
           "text": "Whether pi's /logout revokes anything at the provider is not something this audit can observe. Revoke at each provider: sign out of all devices in ChatGPT security settings; delete each API key in its provider's console (DeepSeek).",
           "topic": "revoke"
         },
         {
           "concern": true,
+          "signal": "unused-login",
           "source": "access-token issue and expiry claims",
           "text": "Stored pi logins whose access token expired and was not replaced: OpenAI access token issued <DATE>, expired <DATE>. Their refresh tokens have no recorded expiry.",
           "topic": "detect"
@@ -3887,10 +3933,10 @@
                 "manual": true,
                 "marker_tool": "",
                 "markers": [],
-                "text": "Remove unused connectors in the provider's web settings"
+                "text": "Remove unused connected apps in the provider's settings"
               }
             ],
-            "summary": "Disconnect connectors you do not use (the token keeps its scopes)",
+            "summary": "Disconnect apps you do not use (the token keeps its scopes)",
             "validations": [
               {
                 "checks": [
@@ -3900,14 +3946,14 @@
                     "passed": true
                   }
                 ],
-                "command": "Remove unused connectors in the provider's web settings"
+                "command": "Remove unused connected apps in the provider's settings"
               }
             ]
           },
-          "id": "pi:token-reach",
-          "label": "Token carries connector scopes",
+          "id": "pi:connected-apps",
+          "label": "Token can use your connected apps",
           "lens": "remote",
-          "statement": "The pi token carries 1 connector scope: api.connectors.read.",
+          "statement": "Anyone holding the pi token can use the apps connected to your account, because it carries api.connectors.read. Which apps are connected is not recorded on this machine; the provider's connected-apps settings list them.",
           "tool": "pi"
         },
         {
@@ -4249,10 +4295,10 @@
                 "manual": true,
                 "marker_tool": "",
                 "markers": [],
-                "text": "Review signed-in sessions and paired devices in the provider's security settings"
+                "text": "Remove the stored login, then revoke it at the provider"
               }
             ],
-            "summary": "Check active sessions and devices, then revoke what you do not recognise",
+            "summary": "Log out of providers you no longer use with this tool",
             "validations": [
               {
                 "checks": [
@@ -4262,12 +4308,12 @@
                     "passed": true
                   }
                 ],
-                "command": "Review signed-in sessions and paired devices in the provider's security settings"
+                "command": "Remove the stored login, then revoke it at the provider"
               }
             ]
           },
-          "id": "pi:account-signals",
-          "label": "Paired devices and unused logins",
+          "id": "pi:unused-logins",
+          "label": "Logins kept but no longer used",
           "lens": "remote",
           "statement": "Stored pi logins whose access token expired and was not replaced: OpenAI access token issued <DATE>, expired <DATE>. Their refresh tokens have no recorded expiry.",
           "tool": "pi"
@@ -4388,24 +4434,28 @@
       "account": [
         {
           "concern": true,
+          "signal": "",
           "source": "markers in the installed app; environment and ~/.t3/service.env",
           "text": "T3CODE_TELEMETRY_ENABLED is not set; the installed app reads it and names ingest.t3.codes. T3 Code's FAQ says usage events (provider, model, token totals) are sent unless it is false.",
           "topic": "data"
         },
         {
           "concern": false,
+          "signal": "",
           "source": "markers in the installed app",
           "text": "Paired clients are revoked in Settings → Sharing & access or with `t3 auth`; revoking a client does not sign the T3 account out.",
           "topic": "revoke"
         },
         {
           "concern": false,
+          "signal": "",
           "source": "~/.t3/userdata/clerk-tokens.json",
           "text": "The stored T3 account token's exp claim is <TIME>.",
           "topic": "revoke"
         },
         {
           "concern": false,
+          "signal": "remote-control",
           "source": "~/.t3/userdata/statev2.sqlite auth_sessions",
           "text": "Paired desktop client (bearer-access-token) with 1 scope; last connected <TIME>.",
           "topic": "detect"
@@ -5440,8 +5490,8 @@
           "value": 40
         },
         {
-          "detail": "31 clear, 25 not checked because their input is not recorded for that tool (same checks as --doctor)",
-          "display": "39 of 95",
+          "detail": "33 clear, 28 not checked because their input is not recorded for that tool (same checks as --doctor)",
+          "display": "39 of 100",
           "id": "checks",
           "label": "Checks with a signal",
           "value": 39
@@ -5513,7 +5563,7 @@
             "value": 4
           },
           {
-            "detail": "11 of 17 checks returned a signal, 4 not checked",
+            "detail": "11 of 18 checks returned a signal, 4 not checked",
             "display": "12",
             "id": "signals",
             "label": "Signals to review",
@@ -5571,7 +5621,7 @@
             "value": 1
           },
           {
-            "detail": "5 of 17 checks returned a signal, 5 not checked",
+            "detail": "5 of 18 checks returned a signal, 5 not checked",
             "display": "5",
             "id": "signals",
             "label": "Signals to review",
@@ -5629,7 +5679,7 @@
             "value": 0
           },
           {
-            "detail": "4 of 17 checks returned a signal, 6 not checked",
+            "detail": "4 of 18 checks returned a signal, 8 not checked",
             "display": "4",
             "id": "signals",
             "label": "Signals to review",
@@ -5687,7 +5737,7 @@
             "value": 3
           },
           {
-            "detail": "9 of 17 checks returned a signal, 4 not checked",
+            "detail": "9 of 18 checks returned a signal, 5 not checked",
             "display": "9",
             "id": "signals",
             "label": "Signals to review",
@@ -5745,7 +5795,7 @@
             "value": 1
           },
           {
-            "detail": "6 of 17 checks returned a signal, 6 not checked",
+            "detail": "6 of 18 checks returned a signal, 6 not checked",
             "display": "6",
             "id": "signals",
             "label": "Signals to review",
@@ -5784,6 +5834,13 @@
         }
       ],
       "claude:autostart": [
+        {
+          "badge": "manual step (not machine-checkable)",
+          "label": "manual step (not machine-checkable)",
+          "tone": "neutral"
+        }
+      ],
+      "claude:connected-apps": [
         {
           "badge": "manual step (not machine-checkable)",
           "label": "manual step (not machine-checkable)",
@@ -5886,18 +5943,18 @@
           "tone": "neutral"
         }
       ],
-      "claude:token-reach": [
-        {
-          "badge": "manual step (not machine-checkable)",
-          "label": "manual step (not machine-checkable)",
-          "tone": "neutral"
-        }
-      ],
       "claude:trust": [
         {
           "badge": "claude binary",
           "label": "✗ claude binary: not installed; cannot confirm",
           "tone": "concern"
+        }
+      ],
+      "codex:connected-apps": [
+        {
+          "badge": "manual step (not machine-checkable)",
+          "label": "manual step (not machine-checkable)",
+          "tone": "neutral"
         }
       ],
       "codex:creds-plaintext": [
@@ -5942,13 +5999,6 @@
           "label": "✗ codex binary: not installed; cannot confirm",
           "tone": "concern"
         },
-        {
-          "badge": "manual step (not machine-checkable)",
-          "label": "manual step (not machine-checkable)",
-          "tone": "neutral"
-        }
-      ],
-      "codex:token-reach": [
         {
           "badge": "manual step (not machine-checkable)",
           "label": "manual step (not machine-checkable)",
@@ -6019,14 +6069,14 @@
           "tone": "neutral"
         }
       ],
-      "pi:account-signals": [
+      "pi:autostart": [
         {
           "badge": "manual step (not machine-checkable)",
           "label": "manual step (not machine-checkable)",
           "tone": "neutral"
         }
       ],
-      "pi:autostart": [
+      "pi:connected-apps": [
         {
           "badge": "manual step (not machine-checkable)",
           "label": "manual step (not machine-checkable)",
@@ -6076,18 +6126,18 @@
           "tone": "neutral"
         }
       ],
-      "pi:token-reach": [
-        {
-          "badge": "manual step (not machine-checkable)",
-          "label": "manual step (not machine-checkable)",
-          "tone": "neutral"
-        }
-      ],
       "pi:trust": [
         {
           "badge": "pi binary",
           "label": "✗ pi binary: not installed; cannot confirm",
           "tone": "concern"
+        }
+      ],
+      "pi:unused-logins": [
+        {
+          "badge": "manual step (not machine-checkable)",
+          "label": "manual step (not machine-checkable)",
+          "tone": "neutral"
         }
       ],
       "t3code:account-data": [
@@ -6407,22 +6457,22 @@
               "tool": "T3 Code"
             },
             {
-              "exposure_id": "claude:token-reach",
-              "text": "The Claude Code token carries 1 connector scope: user:mcp_servers. This CLI has connected to claude.ai Gmail (recorded in its config).",
+              "exposure_id": "claude:connected-apps",
+              "text": "Anyone holding the Claude Code token can use the apps connected to your account, because it carries user:mcp_servers. The apps recorded on this machine are claude.ai Gmail.",
               "tool": "Claude Code"
             },
             {
-              "exposure_id": "codex:token-reach",
-              "text": "The Codex CLI token carries 1 connector scope: api.connectors.read.",
+              "exposure_id": "codex:connected-apps",
+              "text": "Anyone holding the Codex CLI token can use the apps connected to your account, because it carries api.connectors.read. Which apps are connected is not recorded on this machine; the provider's connected-apps settings list them.",
               "tool": "Codex CLI"
             },
             {
-              "exposure_id": "pi:token-reach",
-              "text": "The pi token carries 1 connector scope: api.connectors.read.",
+              "exposure_id": "pi:connected-apps",
+              "text": "Anyone holding the pi token can use the apps connected to your account, because it carries api.connectors.read. Which apps are connected is not recorded on this machine; the provider's connected-apps settings list them.",
               "tool": "pi"
             },
             {
-              "exposure_id": "pi:account-signals",
+              "exposure_id": "pi:unused-logins",
               "text": "Stored pi logins whose access token expired and was not replaced: OpenAI access token issued <DATE>, expired <DATE>. Their refresh tokens have no recorded expiry.",
               "tool": "pi"
             }
@@ -6723,7 +6773,7 @@
       "unattributed_note": ""
     },
     "pages": {
-      "mcp": "3 servers run as local processes with your permissions, 2 are remote servers that receive what the model sends and 1 are claude.ai connectors reached with the OAuth token. 3 start automatically, project-scoped ones only in their project folder and 2 point at a missing file, so whoever creates it runs code.",
+      "mcp": "3 servers run as local processes with your permissions, 2 are remote servers that receive what the model sends and 1 are connected apps reached with the account token. 3 start automatically, project-scoped ones only in their project folder and 2 point at a missing file, so whoever creates it runs code.",
       "plugins": "Plugins come from 1 source: demo/pi-tool. Whoever can change a source or its cache folder changes what runs next session.",
       "skills": "No skills are installed."
     },
@@ -7071,8 +7121,8 @@
                 "tool": "Claude Code"
               },
               {
-                "exposure_id": "claude:token-reach",
-                "text": "The Claude Code token carries 1 connector scope: user:mcp_servers. This CLI has connected to claude.ai Gmail (recorded in its config).",
+                "exposure_id": "claude:connected-apps",
+                "text": "Anyone holding the Claude Code token can use the apps connected to your account, because it carries user:mcp_servers. The apps recorded on this machine are claude.ai Gmail.",
                 "tool": "Claude Code"
               }
             ]
@@ -7404,8 +7454,8 @@
                 "tool": "Codex CLI"
               },
               {
-                "exposure_id": "codex:token-reach",
-                "text": "The Codex CLI token carries 1 connector scope: api.connectors.read.",
+                "exposure_id": "codex:connected-apps",
+                "text": "Anyone holding the Codex CLI token can use the apps connected to your account, because it carries api.connectors.read. Which apps are connected is not recorded on this machine; the provider's connected-apps settings list them.",
                 "tool": "Codex CLI"
               }
             ]
@@ -8040,12 +8090,12 @@
                 "tool": "pi"
               },
               {
-                "exposure_id": "pi:token-reach",
-                "text": "The pi token carries 1 connector scope: api.connectors.read.",
+                "exposure_id": "pi:connected-apps",
+                "text": "Anyone holding the pi token can use the apps connected to your account, because it carries api.connectors.read. Which apps are connected is not recorded on this machine; the provider's connected-apps settings list them.",
                 "tool": "pi"
               },
               {
-                "exposure_id": "pi:account-signals",
+                "exposure_id": "pi:unused-logins",
                 "text": "Stored pi logins whose access token expired and was not replaced: OpenAI access token issued <DATE>, expired <DATE>. Their refresh tokens have no recorded expiry.",
                 "tool": "pi"
               }

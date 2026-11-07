@@ -10,7 +10,7 @@ process = "T3 Code|t3code|apps/server/dist/bin\\.mjs|/\\.t3/bin/t3"
 presence = ["{home}"]
 process_words = ["t3code", "t3 code", "/.t3/"]
 env_prefixes = ["T3CODE_"]
-capabilities = ["account-signals"]
+capabilities = ["remote-control"]
 settings = ["runtime_mode", "auth_sessions", "auth_pairing_links", "peer_environment_links", "scheduled_tasks"]
 env = [
   "T3CODE_HOME",
@@ -341,7 +341,7 @@ name = "pairing"
 summary = "One-time pairing links issue bearer sessions; without --scope they carry every permission"
 doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/remote-access.md"
 marker = "auth_pairing_links"
-checks = ["account-signals"]
+checks = ["remote-control"]
 
 [[features]]
 kind = "integration"
@@ -349,7 +349,7 @@ name = "T3 Connect"
 summary = "Links this machine to a T3 account so paired devices reach it through a Cloudflare tunnel"
 doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/remote-access.md"
 marker = "relay.t3.codes"
-checks = ["account-signals"]
+checks = ["remote-control"]
 
 [[features]]
 kind = "env"

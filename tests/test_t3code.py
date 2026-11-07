@@ -78,13 +78,13 @@ def test_supervised_threads_raise_nothing(tmp_path: Path):
 def test_a_paired_phone_is_a_signal_but_the_desktop_app_is_not(tmp_path: Path):
     build_t3code_home(tmp_path)
     report = T3.collect(context(tmp_path))
-    assert not stolen_token.rule_account_signals(report, rule_ctx(tmp_path))
+    assert not stolen_token.rule_remote_control(report, rule_ctx(tmp_path))
 
     phone = tmp_path / "phone"
     scopes = '["terminal:operate", "filesystem:write", "relay:read"]'
     build_t3code_home(phone, sessions=(("desktop", "[]"), ("mobile", scopes)))
     report = T3.collect(context(phone))
-    [signal] = stolen_token.rule_account_signals(report, rule_ctx(phone))
+    [signal] = stolen_token.rule_remote_control(report, rule_ctx(phone))
     assert "Paired mobile client" in signal.statement
     assert "terminal:operate and filesystem:write" in signal.statement
 

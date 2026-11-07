@@ -3,7 +3,7 @@
 from ai_footprint.harnesses.account_notes import note
 from ai_footprint.harnesses.common import Context, binary_path
 from ai_footprint.harnesses.t3code import collector as t3
-from ai_footprint.model import AccountNote, ToolReport
+from ai_footprint.model import REMOTE_CONTROL, AccountNote, ToolReport
 from ai_footprint.text import join, plural
 
 TELEMETRY_VAR = "T3CODE_TELEMETRY_ENABLED"
@@ -47,6 +47,7 @@ def detect_notes(report: ToolReport, collected: t3.Collected) -> list[AccountNot
                 + ".",
                 "~/.t3/userdata/statev2.sqlite auth_sessions",
                 concern=remote,
+                signal=REMOTE_CONTROL,
             )
         )
     del report

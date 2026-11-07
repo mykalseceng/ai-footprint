@@ -202,7 +202,7 @@ def _mcp_tldr(rows: Grouped) -> str:
     if remote:
         parts.append(f"{len(remote)} are remote servers that receive what the model sends")
     if connectors:
-        parts.append(f"{len(connectors)} are claude.ai connectors reached with the OAuth token")
+        parts.append(f"{len(connectors)} are connected apps reached with the account token")
     first = join(parts) + "." if parts else "No MCP servers are configured."
     auto = sum(1 for x, _t in rows if x.autostart and x.kind == "mcp")
     dangling = sum(1 for x, _t in rows if x.dangling)

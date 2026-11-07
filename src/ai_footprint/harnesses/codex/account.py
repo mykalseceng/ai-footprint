@@ -6,7 +6,7 @@ from typing import Any
 from ai_footprint.harnesses.account_notes import log_markers, marker_text, note, token_claims
 from ai_footprint.harnesses.codex import collector as codex_cli
 from ai_footprint.harnesses.common import Context, binary_path, load_json
-from ai_footprint.model import AccountNote, ToolReport
+from ai_footprint.model import REMOTE_CONTROL, AccountNote, ToolReport
 from ai_footprint.tokens import iso_time
 
 
@@ -102,14 +102,16 @@ def remote_notes(config: dict[str, Any], root: Path) -> list[AccountNote]:
         )
     for row in codex_cli.remote_control_enrollments(root):
         state_word = "enabled" if row.enabled else "not enabled"
+        relay = row.relay or "an unrecorded host"
         notes.append(
             note(
                 "detect",
-                f"Codex state, shared with the desktop app, records remote control "
-                f"{state_word} for server {row.server} through client {row.client} (updated "
+                f"Codex records remote control {state_word} for this machine (server "
+                f"{row.server}) through {row.client}, relayed by {relay} (updated "
                 f"{row.updated}). Which devices are paired now is not recorded locally.",
                 "~/.codex/state_5.sqlite remote_control_enrollments",
                 concern=row.enabled,
+                signal=REMOTE_CONTROL,
             )
         )
     desktop = config.get("desktop") or {}
