@@ -17,7 +17,7 @@ from ai_footprint.model import (
     Setting,
     ToolReport,
 )
-from ai_footprint.surface import sentences, when
+from ai_footprint.text import sentences, when
 from ai_footprint.validate import validate_claims
 from tests.conftest import FakeSystem, build_claude_home, build_codex_home
 

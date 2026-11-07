@@ -12,10 +12,11 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-from ai_footprint import keys, rules, surface, tokens
+from ai_footprint import keys, rules, tokens
 from ai_footprint.fsinfo import disk_bytes, human_size, outermost
 from ai_footprint.model import Artifact, AuditReport, Category, Lens, ToolCapture, ToolReport
 from ai_footprint.rules import Checklist
+from ai_footprint.text import plural
 
 TOOL_RUN_PURPOSES = ("Confirm tool version", "Confirm subcommand exists")
 KIND_NAMES = {
@@ -79,13 +80,13 @@ def _keys_figure(audit: AuditReport) -> Figure:
         "API keys",
         len(api),
         str(len(api)),
-        f"{detail}; {surface.plural(logins, 'OAuth login')} also stored",
+        f"{detail}; {plural(logins, 'OAuth login')} also stored",
     )
 
 
 def _autostart_figure(rows: list[tuple[str, bool]]) -> Figure:
     auto = Counter(kind for kind, autostart in rows if autostart)
-    parts = [surface.plural(n, KIND_NAMES.get(kind, kind)) for kind, n in auto.most_common()]
+    parts = [plural(n, KIND_NAMES.get(kind, kind)) for kind, n in auto.most_common()]
     total = sum(auto.values())
     return Figure(
         "autostart",
@@ -108,7 +109,7 @@ def _disk_figure(artifacts: list[Artifact]) -> Figure:
         )
         if size
     ]
-    count = surface.plural(len(outermost(artifacts)), "listed location")
+    count = plural(len(outermost(artifacts)), "listed location")
     return Figure(
         "disk",
         "On disk",
@@ -163,7 +164,7 @@ def machine(
             "Stored credentials",
             len(creds),
             str(len(creds)),
-            f"provider entries in {surface.plural(len({c.location for c in creds}), 'location')}; "
+            f"provider entries in {plural(len({c.location for c in creds}), 'location')}; "
             f"{readable} marked readable by other local accounts",
         ),
         _keys_figure(audit),
@@ -243,7 +244,7 @@ def for_tool(
             "Conversations and history",
             sessions,
             human_size(sessions),
-            f"{surface.plural(session_count, 'session location')}",
+            f"{plural(session_count, 'session location')}",
         ),
         Figure(
             "credentials",
@@ -251,7 +252,7 @@ def for_tool(
             len(tool.credentials),
             str(len(tool.credentials)),
             "provider entries in "
-            f"{surface.plural(len({c.location for c in tool.credentials}), 'location')}; "
+            f"{plural(len({c.location for c in tool.credentials}), 'location')}; "
             f"{readable} marked readable by other local accounts",
         ),
         Figure(
@@ -313,7 +314,7 @@ def method_summary(audit: AuditReport) -> str:
     return (
         "The audit writes nothing but its own reports; a tool run with --version or --help may "
         "append to that tool's own log. "
-        f"It ran {surface.plural(len(audit.executed), 'command')}, each "
+        f"It ran {plural(len(audit.executed), 'command')}, each "
         f"by absolute path with a fixed PATH: {probe_runs} from its probe registry and "
         f"{tool_runs} of installed AI-tool binaries, limited to --version and --help."
         f"{signature} Secrets were read into memory only to derive metadata. {network}"

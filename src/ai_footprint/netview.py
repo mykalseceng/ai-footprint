@@ -8,9 +8,9 @@ connection.
 import dataclasses
 from typing import Any
 
-from ai_footprint import surface
 from ai_footprint.fsinfo import tilde
 from ai_footprint.model import AuditReport, Connection, ToolCapture, ToolReport
+from ai_footprint.text import join, plural
 
 HOW = (
     "Run ai-footprint --capture to record it: each tool starts idle, with no prompt, in an "
@@ -45,10 +45,10 @@ def _summary(tool: ToolReport, found: ToolCapture | None) -> str:
             f"Started idle for {found.seconds:g}s with no prompt, {found.display_name} "
             f"{found.version} exchanged no packets with any host off this machine."
         )
-    shown = surface.join(hosts[:6] + ([f"{len(hosts) - 6} more"] if len(hosts) > 6 else []))
+    shown = join(hosts[:6] + ([f"{len(hosts) - 6} more"] if len(hosts) > 6 else []))
     return (
         f"Started idle for {found.seconds:g}s with no prompt, {found.display_name} "
-        f"{found.version} reached {surface.plural(len(hosts), 'host')}: {shown}."
+        f"{found.version} reached {plural(len(hosts), 'host')}: {shown}."
     )
 
 

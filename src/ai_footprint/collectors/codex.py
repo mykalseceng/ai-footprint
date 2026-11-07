@@ -41,7 +41,7 @@ from ai_footprint.model import (
 )
 from ai_footprint.rules import THREADS_WITHOUT_APPROVAL
 from ai_footprint.secrets import scan_paths
-from ai_footprint.surface import plural, when
+from ai_footprint.text import plural, when
 from ai_footprint.tokens import inspect_token, iso_time, verify_rs256
 
 NAME = "codex"

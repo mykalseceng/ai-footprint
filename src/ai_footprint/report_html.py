@@ -12,7 +12,7 @@ import re
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from ai_footprint import document, surface, tokens
+from ai_footprint import document, text, tokens
 from ai_footprint.fsinfo import human_size, tilde
 from ai_footprint.model import (
     EXTENSION_PAGES,
@@ -24,6 +24,7 @@ from ai_footprint.model import (
     ToolReport,
 )
 from ai_footprint.rules import Check, Checklist
+from ai_footprint.text import join, plural, when
 
 Views = dict[str, Any]
 """The derived views of one run, ``document.build(...)["views"]``, exactly as the dashboard reads
@@ -118,9 +119,7 @@ def _lens_folds(narrative: Views, views: Views, *, show_tool: bool) -> str:
             for p in points
         )
         body = f'<p class="question">{e(lens["question"])}</p><ul class="points">{items}</ul>'
-        out.append(
-            fold(lens["title"], body, where=surface.plural(len(points), "path"), is_open=True)
-        )
+        out.append(fold(lens["title"], body, where=plural(len(points), "path"), is_open=True))
     return "".join(out) or '<p class="muted">Nothing found from any position.</p>'
 
 
@@ -192,8 +191,7 @@ def _credential_card(cred: Credential) -> str:
             t.field,
             t.description,
             f"{t.prefix}{t.last4} · {t.length} chars",
-            (surface.when(t.expires_at) if t.expires_at else "—")
-            + (" (expired)" if t.expired else ""),
+            (when(t.expires_at) if t.expires_at else "—") + (" (expired)" if t.expired else ""),
             ", ".join(t.scopes) or "—",
             t.signature,
         ]
@@ -201,7 +199,7 @@ def _credential_card(cred: Credential) -> str:
     ]
     claims = "".join(
         f"<p class='sub'>{e(t.field)} claims</p>"
-        + table(["Claim", "Value"], [[k, surface.when(v)] for k, v in sorted(t.claims.items())])
+        + table(["Claim", "Value"], [[k, when(v)] for k, v in sorted(t.claims.items())])
         for t in cred.tokens
         if t.claims
     )
@@ -346,7 +344,7 @@ def _install_table(tool: ToolReport) -> str:
 
 def _inventory(tool: ToolReport, home: str) -> str:
     creds = "".join(_credential_card(c) for c in tool.credentials)
-    plural = surface.plural
+    plural = text.plural
     return "<h2>Inventory</h2>" + "".join(
         [
             fold(
@@ -403,7 +401,7 @@ def _tool_rows(tools: list[ToolReport], views: Views) -> list[list[str]]:
         rows.append(
             [
                 _tool_link(t),
-                e(surface.join(t.versions()) or "?"),
+                e(join(t.versions()) or "?"),
                 e(_figure(views, t.name, "sessions")["display"]),
                 e(_figure(views, t.name, "credentials")["display"]),
                 pill(approval["display"], tone)
@@ -504,7 +502,7 @@ def _skill_folds(skills: list[Views]) -> str:
             fold(
                 key,
                 body,
-                where=surface.plural(len(rows), "skill"),
+                where=plural(len(rows), "skill"),
                 is_open=key == document.USER_SKILLS,
             )
         )
@@ -556,7 +554,7 @@ def _extension_pages(views: Views) -> str:
 
 def _tool_view(audit: AuditReport, tool: ToolReport, views: Views) -> str:
     story = views["tools"][tool.name]
-    version = surface.join(tool.versions()) or "?"
+    version = join(tool.versions()) or "?"
     roots = ", ".join((tool.secret_scan.roots if tool.secret_scan else [])[:2])
     eyebrow = f"Tool · v{version}" + (f" · {roots}" if roots else "")
     home = audit.host.home
@@ -574,7 +572,7 @@ def _host_tldr(scope: str, findings: list[Exposure]) -> str:
     if not findings:
         return f"{e(scope)} Nothing found."
     links = "".join(f'<li><a href="#{e(x.id)}">{e(x.label)}</a></li>' for x in findings)
-    return f"{e(scope)} {e(surface.plural(len(findings), 'signal'))} to review:<ul>{links}</ul>"
+    return f"{e(scope)} {e(plural(len(findings), 'signal'))} to review:<ul>{links}</ul>"
 
 
 def _facts_table(facts: list[HostFact], home: str) -> str:

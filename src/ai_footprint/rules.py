@@ -35,7 +35,7 @@ from ai_footprint.model import (
     StoreKind,
     ToolReport,
 )
-from ai_footprint.surface import join, plural
+from ai_footprint.text import join, plural
 
 
 @dataclass

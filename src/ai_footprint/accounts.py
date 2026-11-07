@@ -16,7 +16,7 @@ from ai_footprint.collectors import codex as codex_cli
 from ai_footprint.collectors import pi as pi_cli
 from ai_footprint.collectors.common import Context, binary_path, load_json
 from ai_footprint.model import AccountNote, StoreKind, ToolReport
-from ai_footprint.surface import join, when
+from ai_footprint.text import join, when
 from ai_footprint.tokens import iso_time
 
 MAX_LOG_BYTES = 400 * 1024 * 1024

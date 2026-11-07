@@ -37,7 +37,7 @@ from ai_footprint.model import (
     ToolReport,
 )
 from ai_footprint.secrets import scan_paths
-from ai_footprint.surface import plural
+from ai_footprint.text import plural
 from ai_footprint.tokens import inspect_token
 
 NAME = "claude"

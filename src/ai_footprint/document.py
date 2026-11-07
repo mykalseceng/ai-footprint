@@ -24,6 +24,7 @@ from ai_footprint.model import (
 )
 from ai_footprint.report_text import validation_label
 from ai_footprint.rules import Checklist
+from ai_footprint.text import join, plural
 
 HOST_SCOPE = (
     "What the rest of this Mac adds to the AI tools' exposure: other logins an agent can use, "
@@ -197,14 +198,12 @@ def _mcp_tldr(rows: Grouped) -> str:
     connectors = [x for x, _t in rows if x.kind == "connector"]
     parts = []
     if local:
-        parts.append(
-            f"{surface.plural(len(local), 'server')} run as local processes with your permissions"
-        )
+        parts.append(f"{plural(len(local), 'server')} run as local processes with your permissions")
     if remote:
         parts.append(f"{len(remote)} are remote servers that receive what the model sends")
     if connectors:
         parts.append(f"{len(connectors)} are claude.ai connectors reached with the OAuth token")
-    first = surface.join(parts) + "." if parts else "No MCP servers are configured."
+    first = join(parts) + "." if parts else "No MCP servers are configured."
     auto = sum(1 for x, _t in rows if x.autostart and x.kind == "mcp")
     dangling = sum(1 for x, _t in rows if x.dangling)
     env = sum(1 for x, _t in rows if "env:" in x.notes)
@@ -226,7 +225,7 @@ def _mcp_tldr(rows: Grouped) -> str:
         )
     if shared:
         facts.append(f"{shared} {_verb(shared, 'is', 'are')} configured in more than one tool")
-    return first + (f" {surface.join(facts)}." if facts else "")
+    return first + (f" {join(facts)}." if facts else "")
 
 
 def _links_outside_home(x: Extension) -> bool:
@@ -247,7 +246,7 @@ def _skills_tldr(rows: Grouped) -> str:
         where.append(f"{linked} of those are symlinks to a folder outside your home")
     text = (
         "Skills are Markdown instructions loaded into the model's context; whoever can write "
-        f"them steers every session that loads them. {surface.join(where)}."
+        f"them steers every session that loads them. {join(where)}."
     )
     if shared:
         text += (
@@ -282,14 +281,14 @@ def _plugins_tldr(rows: Grouped, audit: AuditReport) -> str:
     )
     ships = [
         f"{counts['skill']} skills" if counts["skill"] else "",
-        surface.plural(counts["mcp"], "MCP server") if counts["mcp"] else "",
-        f"{surface.plural(counts['hook'], 'hook')} that run shell commands automatically"
+        plural(counts["mcp"], "MCP server") if counts["mcp"] else "",
+        f"{plural(counts['hook'], 'hook')} that run shell commands automatically"
         if counts["hook"]
         else "",
     ]
-    text = f"Plugins come from {surface.plural(len(markets), 'source')}: {', '.join(markets)}."
+    text = f"Plugins come from {plural(len(markets), 'source')}: {', '.join(markets)}."
     if any(ships):
-        text += f" Together they ship {surface.join([s for s in ships if s])}."
+        text += f" Together they ship {join([s for s in ships if s])}."
     return text + " Whoever can change a source or its cache folder changes what runs next session."
 
 

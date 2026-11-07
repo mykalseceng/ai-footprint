@@ -32,6 +32,7 @@ from ai_footprint.model import (
     ToolReport,
 )
 from ai_footprint.report_text import Style, render_doctor, render_summary
+from ai_footprint.text import plural
 from tests.conftest import (
     FAKE_ANTHROPIC_ACCESS,
     FAKE_ANTHROPIC_REFRESH,
@@ -342,7 +343,7 @@ def test_summary_line_sizes_only_outermost_locations_and_says_how_many(audited):
     listed = sum(1 for a in figures.outermost(codex.artifacts) if a.exists)
     size = fsinfo.human_size(figures.disk_bytes(codex.artifacts))
     line = next(line for line in text.splitlines() if line.strip().startswith("Codex CLI"))
-    assert f"{size} in {surface.plural(listed, 'listed location')} · " in line
+    assert f"{size} in {plural(listed, 'listed location')} · " in line
 
 
 def test_headline_names_every_installed_version():
@@ -359,9 +360,9 @@ def test_headline_names_every_installed_version():
 
 
 def test_plural_handles_words_ending_in_y():
-    assert surface.plural(2, "entry") == "2 entries"
-    assert surface.plural(1, "entry") == "1 entry"
-    assert surface.plural(2, "key") == "2 keys"
+    assert plural(2, "entry") == "2 entries"
+    assert plural(1, "entry") == "1 entry"
+    assert plural(2, "key") == "2 keys"
 
 
 def test_readers_answer_says_how_many_files_the_group_can_read(tmp_path: Path):

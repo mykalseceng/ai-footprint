@@ -10,6 +10,7 @@ from ai_footprint import reportcheck, surface
 from ai_footprint.fsinfo import disk_bytes, human_size, outermost, tilde
 from ai_footprint.model import AuditReport, CommandValidation, Fix, ToolPresence
 from ai_footprint.rules import Check
+from ai_footprint.text import join, plural
 
 _COLORS = {
     "REVIEW": "31",
@@ -165,7 +166,7 @@ def render_summary(audit: AuditReport, style: Style, outputs: list[tuple[str, st
         if not tool.installed:
             out.append(f"  {tool.display_name:<12} not installed")
             continue
-        version = surface.join(tool.versions()) or "?"
+        version = join(tool.versions()) or "?"
         scan = tool.secret_scan
         scanned = (
             f"scanned {scan.files_scanned:,} files / {human_size(scan.bytes_scanned)} in "
@@ -177,7 +178,7 @@ def render_summary(audit: AuditReport, style: Style, outputs: list[tuple[str, st
         size = human_size(disk_bytes(tool.artifacts))
         out.append(
             f"  {tool.display_name:<12} v{version:<10} {size:>9} in "
-            f"{surface.plural(listed, 'listed location')} · {scanned}"
+            f"{plural(listed, 'listed location')} · {scanned}"
         )
     out.append("")
     out.extend(render_narrative(audit, style))
