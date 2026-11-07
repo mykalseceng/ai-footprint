@@ -20,6 +20,7 @@ from ai_footprint.reporting import document, report_html
 from ai_footprint.reporting.report_text import Style, render_doctor
 from tests.conftest import (
     FakeSystem,
+    build_claude_desktop_home,
     build_claude_home,
     build_codex_home,
     build_opencode_home,
@@ -68,6 +69,7 @@ def normalise(text: str, home: Path) -> str:
 
 def outputs(home: Path) -> dict[str, str]:
     build_claude_home(home)
+    build_claude_desktop_home(home)
     build_codex_home(home)
     build_opencode_home(home)
     build_pi_home(home)

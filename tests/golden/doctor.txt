@@ -95,6 +95,51 @@ Claude Code
                Turn off model training at claude.ai/settings/data-privacy-controls and disconnect unused connectors
                  manual step (not machine-checkable)
   not checked  No paired devices or unused stored logins (nothing on disk records where else the Claude Code token is used)
+Claude Desktop
+  REVIEW   Approval not turned off by a recorded setting
+             Claude Desktop skips approval prompts in some sessions (sessions with
+             permissionMode=bypassPermissions: 1 of 3 sessions (1 Code) and sessions with
+             chromePermissionMode=skip_all_permission_checks: 1 of 3 sessions (1 Code)). In those
+             sessions, text that reaches the model (a web page, a repo file, an MCP result, an
+             instruction file) can become commands running as you, limited only by the sandbox, deny
+             rules and hooks that still apply.
+             → Require approval in Code sessions, Claude in Chrome and scheduled tasks
+               Switch each Bypass permissions session to another mode with the selector under the prompt box, and turn off Allow bypass permissions mode in Settings > Code
+                 ✓ config keys confirmed in installed binary
+               Set Claude in Chrome to Manually approve or Automatically approve instead of Skip all approvals in each session and scheduled task
+                 ✓ config keys confirmed in installed binary
+  clear    Instruction files contain nothing that steers the model
+  not checked  Token carries no connector scopes (no stored token records its scopes)
+  not checked  No sessions published to share links (this audit records no share setting for Claude Desktop)
+  not checked  Keychain item requires a prompt (no credential is stored in the Keychain)
+  clear    Credentials in an OS-protected store
+  clear    No secrets in history or logs (full audit only)
+  REVIEW   No MCP server command points at a missing file
+             Claude Desktop starts `node <HOME>/missing/server.js` at launch
+             (claude_desktop_config.json), but that file is missing. Whoever creates it runs code
+             every time the tool starts.
+             → Remove the entries that point at the missing file
+               Delete mcpServers.gone from ~/Library/Application Support/Claude/claude_desktop_config.json, then quit and reopen Claude Desktop
+                 ✓ config keys confirmed in installed binary
+  REVIEW   No automatic code execution points
+             Claude Desktop is set up to run local code automatically from 4 places (3 MCP servers
+             and 1 scheduled task). Whoever can change those commands, or the files they run,
+             controls code that runs as you.
+             → Monitor these files for changes
+               Add the listed scripts and config files to file-integrity monitoring
+                 manual step (not machine-checkable)
+  clear    No process outlives its session or accepts connections from other accounts or the network
+  clear    One install per tool
+  clear    Credentials not readable by other accounts
+  REVIEW   Data stores not readable by other accounts
+             guest can read 1 Claude Desktop data stores, including logs.
+             → Restrict permissions (re-check after updates)
+               $ chmod 700 <HOME>/Library/Logs/Claude
+                 ✗ program 'chmod': not found on PATH
+  not checked  Local server requires authentication (this audit records no local server for Claude Desktop)
+  not checked  No broad trusted folders and none holding instruction files (no trusted folders are recorded)
+  not checked  Provider keeps no extra copies (training, cloud tasks) (no data-use setting is recorded)
+  clear    No paired devices or unused stored logins
 Codex CLI
   REVIEW   Approval not turned off by a recorded setting
              Codex CLI skips approval prompts in some sessions (approval_policy = never and
@@ -349,9 +394,9 @@ Host
   clear    No other AI tools keep data here
 
 Probe binaries: 0/0 verified (absolute path, not group/other-writable, Apple-signed on macOS)
-Fix commands:   21/53 validated (syntax, programs, targets, subcommands, config keys)
-Tool claims:    34/38 found in the installed binaries (endpoints, signature traits, config keys, log and behaviour markers)
-Commands run by this audit: 38 (probes and --version/--help runs)
+Fix commands:   24/57 validated (syntax, programs, targets, subcommands, config keys)
+Tool claims:    65/69 found in the installed binaries (endpoints, signature traits, config keys, log and behaviour markers)
+Commands run by this audit: 42 (probes and --version/--help runs)
   ✗ claude mcp remove ghost -s user → program 'claude': not found on PATH; claude installed: binary not found; cannot confirm
   ✗ Add cli_auth_credentials_store = "keyring" to ~/.codex/config.toml → codex binary: not installed; cannot confirm
   ✗ codex logout → program 'codex': not found on PATH; codex installed: binary not found; cannot confirm
@@ -372,6 +417,7 @@ Commands run by this audit: 38 (probes and --version/--help runs)
   ✗ chmod 700 <HOME>/.claude/projects → program 'chmod': not found on PATH
   ✗ chmod 600 <HOME>/.claude/history.jsonl → program 'chmod': not found on PATH
   ✗ chmod 600 <HOME>/.claude/CLAUDE.md → program 'chmod': not found on PATH
+  ✗ chmod 700 <HOME>/Library/Logs/Claude → program 'chmod': not found on PATH
   ✗ chmod 600 <HOME>/.codex/config.toml → program 'chmod': not found on PATH
   ✗ chmod 600 <HOME>/.codex/AGENTS.md → program 'chmod': not found on PATH
   ✗ chmod 600 <HOME>/.local/share/opencode/opencode.db → program 'chmod': not found on PATH
@@ -388,5 +434,5 @@ Commands run by this audit: 38 (probes and --version/--help runs)
   ✗ claims about Codex CLI ? → binary on PATH: not found; claims unchecked
   ✗ claims about OpenCode ? → binary on PATH: not found; claims unchecked
   ✗ claims about pi ? → binary on PATH: not found; claims unchecked
-Result: 39 to review · 31 clear · 25 not checked  (exit 1)
+Result: 43 to review · 38 clear · 31 not checked  (exit 1)
 Secret scan skipped in doctor mode; run without --doctor for the full audit.

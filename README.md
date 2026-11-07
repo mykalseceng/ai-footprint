@@ -1,6 +1,6 @@
 # ai-footprint
 
-Audits what Claude Code, Codex CLI, OpenCode, pi and T3 Code leave on your Mac and what that exposes:
+Audits what Claude Code, Claude Desktop, Codex CLI, OpenCode, pi and T3 Code leave on your Mac and what that exposes:
 stored credentials and who can read them, sessions and logs, secrets in history, instruction
 files, MCP servers and hooks that run automatically, and where each tool connects. Each run
 writes a single-file HTML dashboard.
@@ -22,7 +22,7 @@ uv run ai-footprint all --capture          # record where each tool connects whe
 uv run ai-footprint all --network ai-footprint-capture.json   # show that capture again later
 ```
 
-Tool names are `claude`, `codex`, `opencode`, `pi` and `t3code`. `--doctor` and `--validate` exit 1
+Tool names are `claude`, `claude_desktop`, `codex`, `opencode`, `pi` and `t3code`. `--doctor` and `--validate` exit 1
 when a check fails.
 
 `--capture` shows which hosts each tool reaches on its own. It runs `sudo tcpdump` on all
