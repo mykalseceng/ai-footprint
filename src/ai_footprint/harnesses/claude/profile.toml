@@ -5,6 +5,7 @@ binaries = ["claude"]
 process = "(^|/)claude(\\s|$)"
 presence = ["{home}/.claude", "{home}/.claude.json"]
 process_words = ["claude"]
+env_prefixes = ["CLAUDE_CODE_", "ANTHROPIC_"]
 settings = ["defaultMode", "skipDangerousModePermissionPrompt", "disableBypassPermissionsMode", "enableAllProjectMcpServers", "cleanupPeriodDays", "DISABLE_TELEMETRY", "DISABLE_ERROR_REPORTING", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "claudeInChromeDefaultEnabled"]
 
 [roots]

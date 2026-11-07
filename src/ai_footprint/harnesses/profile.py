@@ -12,7 +12,8 @@ to one file, which a person or an agent can make:
 * ``drives``: other harnesses this tool runs, by the tool's own provider id;
 * ``remedies``: tool-specific fix commands the central checks offer;
 * ``docs`` and ``features``: the documented feature inventory that ``--profile`` maps
-  against this machine.
+  against this machine, and ``env_prefixes``, which it uses to find variables the installed
+  binary reads that the inventory does not list yet.
 
 Loading fails fast, naming the file and the key, when the profile is malformed.
 """
@@ -187,6 +188,7 @@ class Profile:
     approval_off_flagged: tuple[str, ...] = ()
     capabilities: frozenset[Capability] = frozenset()
     process_words: tuple[str, ...] = ()
+    env_prefixes: tuple[str, ...] = ()
     drives: Mapping[str, str] = field(default_factory=dict)
     host_control: tuple[HostControl, ...] = ()
     remedies: Mapping[Remedy, FixTemplate] = field(default_factory=dict)
@@ -200,6 +202,7 @@ _TOP = {
     "binaries",
     "process",
     "process_words",
+    "env_prefixes",
     "drives",
     "roots",
     "presence",
@@ -415,6 +418,7 @@ def parse(where: str, raw: Mapping[str, Any]) -> Profile:
             _enum(f"{where}.capabilities", Capability, c) for c in raw.get("capabilities", [])
         ),
         process_words=_str_tuple(f"{where}.process_words", raw.get("process_words", [])),
+        env_prefixes=_str_tuple(f"{where}.env_prefixes", raw.get("env_prefixes", [])),
         drives=_drives(where, raw.get("drives", {})),
         host_control=_host_control(where, raw.get("host_control", []), roots),
         remedies=_remedies(where, raw.get("remedies", {})),

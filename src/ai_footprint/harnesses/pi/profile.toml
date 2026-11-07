@@ -5,6 +5,7 @@ binaries = ["pi"]
 process = "(^|/)pi(\\s|$)|pi-coding-agent"
 presence = ["{agent}"]
 process_words = ["pi-coding-agent"]
+env_prefixes = ["PI_"]
 capabilities = ["account-signals"]
 settings = ["defaultProjectTrust", "enableAnalytics", "enableInstallTelemetry", "shellCommandPrefix", "defaultProvider", "\"packages\""]
 env = ["PI_TELEMETRY", "PI_OFFLINE", "PI_SHARE_VIEWER_URL", { name = "PI_CODING_AGENT_SESSION_DIR", marker = "_CODING_AGENT_SESSION_DIR" }]

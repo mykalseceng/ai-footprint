@@ -9,6 +9,7 @@ binaries = []
 process = "T3 Code|t3code|apps/server/dist/bin\\.mjs|/\\.t3/bin/t3"
 presence = ["{home}"]
 process_words = ["t3code", "t3 code", "/.t3/"]
+env_prefixes = ["T3CODE_"]
 capabilities = ["account-signals"]
 settings = ["runtime_mode", "auth_sessions", "auth_pairing_links", "peer_environment_links", "scheduled_tasks"]
 env = [
