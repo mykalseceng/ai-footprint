@@ -71,6 +71,11 @@ def check_ids() -> set[str]:
     return {r.id for r in checks.TOOL_RULES} | {r.id for r in checks.HOST_RULES}
 
 
+def _same_setting(key: str, name: str) -> bool:
+    """A recorded setting key names the feature: equal, or ending in it (``env.X``, ``a.b``)."""
+    return key == name or key.endswith(f".{name}") or name.endswith(f".{key}")
+
+
 def _configured(ctx: Context, feature: Feature, report: ToolReport) -> str:
     if feature.kind is FeatureKind.ENV:
         return "set in this environment" if feature.name in ctx.system.env else ""
@@ -78,7 +83,7 @@ def _configured(ctx: Context, feature: Feature, report: ToolReport) -> str:
         path = Path(feature.name.replace("~", str(ctx.home), 1))
         return "exists" if path.exists() else ""
     if feature.kind is FeatureKind.SETTING:
-        hit = next((s for s in report.settings if s.key.rsplit(".", 1)[-1] == feature.name), None)
+        hit = next((s for s in report.settings if _same_setting(s.key, feature.name)), None)
         return f"{hit.key} = {hit.value}" if hit and hit.value != "not set" else ""
     if feature.kind is FeatureKind.ENDPOINT:
         seen = [e.source for e in report.endpoints if e.host == feature.name]
