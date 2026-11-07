@@ -29,9 +29,20 @@ CONFIG_SUFFIXES = {".json", ".jsonc", ".toml"}
 
 
 def artifact_paths(ctx: Context, harness: Harness) -> list[Path]:
-    """Where each profile artifact lives on this machine."""
+    """Where each profile artifact lives on this machine; a glob stays a pattern."""
     roots = resolve_roots(ctx, harness.profile)
     return [path_of(a.path, roots) for a in harness.profile.artifacts]
+
+
+def _covers(known: Path, entry: Path) -> bool:
+    """``entry`` is the artifact (or a glob match of it), or lies inside one."""
+    return any(candidate.full_match(str(known)) for candidate in (entry, *entry.parents))
+
+
+def _holds(entry: Path, known: Path) -> bool:
+    """``entry`` is a folder on the way to an artifact, so it is opened, not reported."""
+    depth = len(entry.parts)
+    return len(known.parts) > depth and entry.full_match(str(Path(*known.parts[:depth])))
 
 
 def unmapped_paths(ctx: Context, harness: Harness) -> list[Path]:
@@ -55,9 +66,9 @@ def _walk(folder: Path, known: list[Path], out: list[Path], *, depth: int) -> No
     except OSError:
         return
     for entry in entries:
-        if any(entry == k or k in entry.parents for k in known):
+        if any(_covers(k, entry) for k in known):
             continue
-        if entry.is_dir() and depth < MAX_DEPTH and any(entry in k.parents for k in known):
+        if entry.is_dir() and depth < MAX_DEPTH and any(_holds(entry, k) for k in known):
             _walk(entry, known, out, depth=depth + 1)
             continue
         out.append(entry)

@@ -47,6 +47,23 @@ def remove_mcp(name: str, source: str, home: Path) -> Fix:
                 )
             ],
         )
+    if source.startswith("repo "):
+        repo = source.removeprefix("repo ")
+        repo = str(home) + repo[1:] if repo.startswith("~") else repo
+        return Fix(
+            "Remove the server from the repo's .mcp.json",
+            [
+                FixCommand(
+                    f"cd {_q(repo)} && claude mcp remove {_q(name)} -s project",
+                    help_probe=("claude", "mcp", "remove"),
+                )
+            ],
+        )
+    if source == "managed":
+        return Fix(
+            "Ask whoever manages this Mac to remove the server from managed-mcp.json",
+            [FixCommand(f"Remove {name} from managed-mcp.json (needs admin rights)", manual=True)],
+        )
     if source == "user":
         return Fix(
             "Remove the server entry",

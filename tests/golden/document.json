@@ -2536,6 +2536,12 @@
           "key": "trusted folders",
           "note": "Instructions, hooks and settings in trusted folders apply automatically",
           "value": "1 of 1"
+        },
+        {
+          "concern": false,
+          "key": "managed policy",
+          "note": "No managed-settings.json in /nonexistent-root/Library/Application Support/ClaudeCode",
+          "value": "none"
         }
       ],
       "stats": {

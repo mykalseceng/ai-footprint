@@ -5,7 +5,9 @@ rather than logic, so a new harness or a new feature of an existing one is a rev
 to one file, which a person or an agent can make:
 
 * ``roots``: folders the tool writes to, with the environment variable that moves each one;
-* ``artifacts``: the files and folders inside those roots and what they hold;
+* ``artifacts``: the files and folders inside those roots and what they hold; a path with
+  ``*`` is a glob whose matches are reported as one artifact;
+* ``project_artifacts``: files the tool reads inside each project folder it knows;
 * ``endpoints``, ``fingerprint``, ``settings``, ``env``: names the installed binary must
   contain before the report states them (each becomes a ``Claim``);
 * ``signals`` and ``capabilities``: what the central checks read for this tool;
@@ -78,6 +80,16 @@ class Root:
 @dataclass(frozen=True)
 class ArtifactTemplate:
     """A known location, as ``{root}/relative/path``."""
+
+    label: str
+    path: str
+    category: Category
+    description: str
+
+
+@dataclass(frozen=True)
+class ProjectArtifact:
+    """A location inside each project folder the tool knows, as a path relative to it."""
 
     label: str
     path: str
@@ -180,6 +192,7 @@ class Profile:
     presence: tuple[str, ...]
     process: str
     artifacts: tuple[ArtifactTemplate, ...] = ()
+    project_artifacts: tuple[ProjectArtifact, ...] = ()
     endpoints: tuple[EndpointSpec, ...] = ()
     fingerprint: tuple[FingerprintRow, ...] = ()
     settings: tuple[Named, ...] = ()
@@ -207,6 +220,7 @@ _TOP = {
     "roots",
     "presence",
     "artifacts",
+    "project_artifacts",
     "endpoints",
     "fingerprint",
     "settings",
@@ -259,6 +273,24 @@ def _artifacts(where: str, raw: list[Mapping[str, Any]], roots: Mapping[str, Roo
         _check_root(at, spec["path"], roots)
         out.append(
             ArtifactTemplate(
+                spec["label"],
+                spec["path"],
+                _enum(at, Category, spec.get("category", "")),
+                spec.get("description", ""),
+            )
+        )
+    return tuple(out)
+
+
+def _project_artifacts(where: str, raw: list[Mapping[str, Any]]) -> tuple[ProjectArtifact, ...]:
+    out = []
+    for index, spec in enumerate(raw):
+        at = f"{where}.project_artifacts[{index}]"
+        _keys(at, spec, {"label", "path", "category", "description"}, {"label", "path"})
+        if spec["path"].startswith(("/", "{", "~")) or ".." in Path(spec["path"]).parts:
+            raise ProfileError(f"{at}: path {spec['path']!r} must be relative to the project")
+        out.append(
+            ProjectArtifact(
                 spec["label"],
                 spec["path"],
                 _enum(at, Category, spec.get("category", "")),
@@ -408,6 +440,7 @@ def parse(where: str, raw: Mapping[str, Any]) -> Profile:
         presence=_str_tuple(f"{where}.presence", raw["presence"]),
         process=raw["process"],
         artifacts=_artifacts(where, raw.get("artifacts", []), roots),
+        project_artifacts=_project_artifacts(where, raw.get("project_artifacts", [])),
         endpoints=_endpoints(where, raw.get("endpoints", [])),
         fingerprint=_fingerprint(where, raw.get("fingerprint", [])),
         settings=_named(f"{where}.settings", raw.get("settings", [])),

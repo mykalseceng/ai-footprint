@@ -8,7 +8,15 @@ from typing import Any
 from ai_footprint import extensions, instructions, keychain, live
 from ai_footprint.fsinfo import mode_string, readable_by_others
 from ai_footprint.harnesses import profile
-from ai_footprint.harnesses.base import artifacts, endpoint_markers, fingerprint, known_endpoints
+from ai_footprint.harnesses.base import (
+    artifacts,
+    endpoint_markers,
+    fingerprint,
+    known_endpoints,
+    project_artifacts,
+    resolve_roots,
+)
+from ai_footprint.harnesses.claude import scopes
 from ai_footprint.harnesses.common import (
     Claim,
     Context,
@@ -82,16 +90,26 @@ def collect(ctx: Context, found: ToolPresence) -> tuple[ToolReport, dict[str, An
     report.installed = found.installed
     if not report.installed:
         return report, config
-    report.artifacts = artifacts(ctx, PROFILE)
+    projects = scopes.known_projects(config, home)
+    managed_folder = resolve_roots(ctx, PROFILE)["managed"]
+    managed_settings, managed_extensions = scopes.managed(managed_folder)
+    report.artifacts = artifacts(ctx, PROFILE) + project_artifacts(ctx, PROFILE, projects)
     report.credentials, known = _credentials(ctx, report.binaries)
     _set_owner(report.credentials, config)
     report.processes = processes(ctx.system, PROFILE.process)
     report.settings = _settings(ctx, settings, config, report)
+    report.settings += scopes.project_settings(ctx, projects) + managed_settings
     report.trusted_folders = [
         p for p, v in config.get("projects", {}).items() if v.get("hasTrustDialogAccepted")
     ]
-    report.instructions = instructions.collect(_instruction_candidates(home, config))
-    report.extensions = _extensions(ctx, settings, config)
+    report.instructions = instructions.collect(
+        _instruction_candidates(home, config) + scopes.project_instructions(projects)
+    )
+    report.extensions = extensions.dedupe(
+        _extensions(ctx, settings, config)
+        + scopes.project_extensions(ctx, projects)
+        + managed_extensions
+    )
     report.endpoints = _endpoints(ctx, report)
     report.fingerprint = fingerprint(ctx, PROFILE, report)
     report.stats = _stats(ctx, config)
@@ -404,7 +422,7 @@ def _instruction_candidates(home: Path, config: dict[str, Any]) -> list[instruct
 
 def _extensions(ctx: Context, settings: dict[str, Any], config: dict[str, Any]) -> list[Extension]:
     out = _mcp_extensions(ctx, config)
-    out += _hook_extensions(settings)
+    out += scopes.hook_rows(settings, "settings.json")
     out += _plugin_extensions(ctx, settings)
     out += extensions.skill_rows(ctx.home / ".claude" / "skills", NAME, ctx)
     out += _chrome_extensions(ctx, config)
@@ -452,28 +470,6 @@ def _mcp_extensions(ctx: Context, config: dict[str, Any]) -> list[Extension]:
     return out
 
 
-def _hook_extensions(settings: dict[str, Any], source: str = "settings.json") -> list[Extension]:
-    commands = [
-        (event, group, hook)
-        for event, groups in (settings.get("hooks") or {}).items()
-        for group in (groups if isinstance(groups, list) else [])
-        for hook in group.get("hooks", [])
-        if hook.get("type") == "command"
-    ]
-    return [
-        Extension(
-            NAME,
-            "hook",
-            f"{event} [{group.get('matcher', '*')}]",
-            source,
-            str(hook.get("command", ""))[:200],
-            autostart=True,
-            notes="Runs automatically on this event",
-        )
-        for event, group, hook in commands
-    ]
-
-
 def _plugin_extensions(ctx: Context, settings: dict[str, Any]) -> list[Extension]:
     out = []
     plugins_dir = ctx.home / ".claude" / "plugins"
@@ -509,7 +505,7 @@ def _plugin_extensions(ctx: Context, settings: dict[str, Any]) -> list[Extension
             continue
         if (install / "hooks" / "hooks.json").is_file():
             hooks = load_json(install / "hooks" / "hooks.json") or {}
-            out += _hook_extensions(hooks, source=f"plugin {plugin_id}")
+            out += scopes.hook_rows(hooks, f"plugin {plugin_id}")
         out += extensions.plugin_mcp_rows(install, NAME, plugin_id)
         out += extensions.skill_rows(install / "skills", NAME, ctx, source=f"plugin {plugin_id}")
     return out

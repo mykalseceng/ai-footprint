@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
 
-from ai_footprint.fsinfo import describe
+from ai_footprint.fsinfo import describe, describe_matches
 from ai_footprint.harnesses.common import (
     Claim,
     Context,
@@ -84,14 +84,44 @@ def artifacts(ctx: Context, profile: Profile) -> list[Artifact]:
     roots = resolve_roots(ctx, profile)
     out = []
     for spec in profile.artifacts:
-        artifact = describe(
-            path_of(spec.path, roots),
-            label=spec.label,
-            category=spec.category,
-            description=spec.description,
-        )
+        path = path_of(spec.path, roots)
+        if "*" in spec.path:
+            artifact = describe_matches(
+                sorted(_glob(path)),
+                shown=str(path),
+                label=spec.label,
+                category=spec.category,
+                description=spec.description,
+            )
+        else:
+            artifact = describe(
+                path, label=spec.label, category=spec.category, description=spec.description
+            )
         if artifact.exists:
             out.append(artifact)
+    return out
+
+
+def _glob(pattern: Path) -> list[Path]:
+    """Matches of an absolute pattern whose wildcards are below its fixed prefix."""
+    parts = pattern.parts
+    fixed = next(i for i, part in enumerate(parts) if "*" in part)
+    return list(Path(*parts[:fixed]).glob(str(Path(*parts[fixed:]))))
+
+
+def project_artifacts(ctx: Context, profile: Profile, projects: list[str]) -> list[Artifact]:
+    """The profile's per-project files that exist, labelled with their project, in order."""
+    out = []
+    for project in projects:
+        for spec in profile.project_artifacts:
+            artifact = describe(
+                Path(project) / spec.path,
+                label=f"{spec.label} · {ctx.display(project)}",
+                category=spec.category,
+                description=spec.description,
+            )
+            if artifact.exists:
+                out.append(artifact)
     return out
 
 

@@ -10,6 +10,7 @@ settings = ["defaultMode", "skipDangerousModePermissionPrompt", "disableBypassPe
 
 [roots]
 home = { default = "~" }
+managed = { default = "/Library/Application Support/ClaudeCode" }
 
 [[artifacts]]
 label = "Global config"
@@ -52,6 +53,78 @@ label = "Transcripts"
 path = "{home}/.claude/projects"
 category = "session"
 description = "Full conversations including every tool input and output"
+
+[[artifacts]]
+label = "Tool results"
+path = "{home}/.claude/projects/*/*/tool-results"
+category = "session"
+description = "Tool output too large to keep inline: command output, fetched pages, files read"
+
+[[artifacts]]
+label = "Subagent transcripts"
+path = "{home}/.claude/projects/*/*/subagents"
+category = "session"
+description = "Conversations of subagents a session started"
+
+[[artifacts]]
+label = "Memory files"
+path = "{home}/.claude/projects/*/memory"
+category = "instructions"
+description = "Auto-memory notes written in a project and loaded into later sessions there"
+
+[[artifacts]]
+label = "Managed settings"
+path = "{managed}/managed-settings.json"
+category = "config"
+description = "Organization policy; overrides user and project settings"
+
+[[artifacts]]
+label = "Managed MCP servers"
+path = "{managed}/managed-mcp.json"
+category = "extension"
+description = "MCP servers set by organization policy"
+
+[[artifacts]]
+label = "Managed instructions"
+path = "{managed}/CLAUDE.md"
+category = "instructions"
+description = "Instructions set by organization policy, loaded into every session"
+
+[[project_artifacts]]
+label = "Project settings"
+path = ".claude/settings.json"
+category = "config"
+description = "Hooks, permission rules and MCP approvals for this repo, shared through git"
+
+[[project_artifacts]]
+label = "Project local settings"
+path = ".claude/settings.local.json"
+category = "config"
+description = "Personal hooks and permission rules for this repo"
+
+[[project_artifacts]]
+label = "Project MCP servers"
+path = ".mcp.json"
+category = "extension"
+description = "MCP servers the repo asks Claude Code to start"
+
+[[project_artifacts]]
+label = "Project agents"
+path = ".claude/agents"
+category = "extension"
+description = "Subagents defined in the repo"
+
+[[project_artifacts]]
+label = "Project commands"
+path = ".claude/commands"
+category = "extension"
+description = "Slash commands defined in the repo"
+
+[[project_artifacts]]
+label = "Project skills"
+path = ".claude/skills"
+category = "extension"
+description = "Skills defined in the repo"
 
 [[artifacts]]
 label = "Prompt history"
@@ -288,6 +361,7 @@ marker = "\"security\",[\"find-generic-password\""
 
 [signals]
 approval_off = { "permissions.defaultMode" = "bypassPermissions" }
+approval_off_flagged = ["projects with defaultMode=bypassPermissions"]
 
 [remedies.withdraw-trust]
 summary = "Withdraw trust from folders you do not own or no longer use"
