@@ -109,14 +109,14 @@ def _glob(pattern: Path) -> list[Path]:
     return list(Path(*parts[:fixed]).glob(str(Path(*parts[fixed:]))))
 
 
-def project_artifacts(ctx: Context, profile: Profile, projects: list[str]) -> list[Artifact]:
-    """The profile's per-project files that exist, labelled with their project, in order."""
+def project_artifacts(profile: Profile, projects: list[str]) -> list[Artifact]:
+    """The profile's per-project files that exist, project by project; the path names it."""
     out = []
     for project in projects:
         for spec in profile.project_artifacts:
             artifact = describe(
                 Path(project) / spec.path,
-                label=f"{spec.label} · {ctx.display(project)}",
+                label=spec.label,
                 category=spec.category,
                 description=spec.description,
             )

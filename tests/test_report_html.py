@@ -134,7 +134,7 @@ def test_host_question_tabulates_facts_with_home_shortened_and_fix():
     section = block(page, "host:computer-control")
     assert "What can drive this computer besides the terminal?" in section
     assert "<th>File</th>" in section
-    assert "~/Library/Application Support/<wbr>Google/<wbr>Chrome/" in section
+    assert "~/Library/Application Support/Google/Chrome/" in section.replace("<wbr>", "")
     assert HOME not in section
     assert "Remove bridges and permissions you do not use" in section
     assert section.index("Chrome bridge") < section.index("could not read the TCC database")

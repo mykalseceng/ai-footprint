@@ -6,7 +6,7 @@ from pathlib import Path
 from ai_footprint import checks, daemons
 from ai_footprint.checks import local_code
 from ai_footprint.harnesses.common import Context
-from ai_footprint.host import listeners, processes
+from ai_footprint.host import listeners, processes, readable_command
 from ai_footprint.model import BinaryInfo, Daemon, HostReport, Listener, ProcessInfo, ToolReport
 from ai_footprint.system import ProbeResult
 from tests.conftest import FakeSystem
@@ -227,3 +227,14 @@ def test_a_helper_inside_the_installed_app_is_not_off_path():
     helper = "/Applications/Demo.app/Contents/Frameworks/Helper"
     assert not daemons._off_path(helper, report)
     assert daemons._off_path("/opt/other/demo", report)
+
+
+def test_long_arguments_are_shortened_and_cuts_are_marked():
+    blob = "--gpu-preferences=" + "WAAAA" * 40
+    shown = readable_command(f"/Apps/My App.app/Helper --type=gpu {blob}", 300)
+    assert shown.startswith("/Apps/My App.app/Helper --type=gpu --gpu-preferences=WAAAA")
+    assert shown.endswith("…") and len(shown) < 120
+    long_path = "/" + "a" * 100
+    assert readable_command(f"{long_path} run", 300) == f"{long_path} run"
+    cut = readable_command("/bin/tool " + " ".join(["arg"] * 100), 40)
+    assert cut.endswith(" …") and len(cut) <= 40

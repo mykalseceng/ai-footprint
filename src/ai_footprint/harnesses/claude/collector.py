@@ -93,7 +93,7 @@ def collect(ctx: Context, found: ToolPresence) -> tuple[ToolReport, dict[str, An
     projects = scopes.known_projects(config, home)
     managed_folder = resolve_roots(ctx, PROFILE)["managed"]
     managed_settings, managed_extensions = scopes.managed(managed_folder)
-    report.artifacts = artifacts(ctx, PROFILE) + project_artifacts(ctx, PROFILE, projects)
+    report.artifacts = artifacts(ctx, PROFILE) + project_artifacts(PROFILE, projects)
     report.credentials, known = _credentials(ctx, report.binaries)
     _set_owner(report.credentials, config)
     report.processes = processes(ctx.system, PROFILE.process)

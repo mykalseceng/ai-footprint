@@ -98,13 +98,12 @@ def test_a_repo_server_is_removed_from_the_project_scope(tmp_path: Path):
 
 def test_repo_files_are_listed_as_artifacts_of_that_repo(tmp_path: Path):
     build_repo(tmp_path)
-    labels = {a.label for a in collect(tmp_path).artifacts}
-    assert {
-        "Project local settings · ~/repo",
-        "Project MCP servers · ~/repo",
-        "Project skills · ~/repo",
-        "Project agents · ~/repo",
-    } <= labels
+    by_path = {a.path: a.label for a in collect(tmp_path).artifacts}
+    repo = tmp_path / "repo"
+    assert by_path[str(repo / ".claude" / "settings.local.json")] == "Project local settings"
+    assert by_path[str(repo / ".mcp.json")] == "Project MCP servers"
+    assert by_path[str(repo / ".claude" / "skills")] == "Project skills"
+    assert by_path[str(repo / ".claude" / "agents")] == "Project agents"
 
 
 def test_the_home_folder_is_user_scope_not_a_project(tmp_path: Path):

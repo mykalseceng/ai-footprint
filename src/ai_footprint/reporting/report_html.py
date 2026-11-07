@@ -31,8 +31,8 @@ from ai_footprint.text import join, plural, when
 Views = dict[str, Any]
 """The derived views of one run, ``document.build(...)["views"]``, exactly as the dashboard reads
 them, so the two outputs show the same sentences, answers and labels."""
-LONG_RUN = re.compile(r"\S{24,}")
-SEPARATOR = re.compile(r"([/._:=|,@])")
+LONG_RUN = re.compile(r"\S{16,}")
+SEPARATOR = re.compile(r"([/._:=|,@-])")
 
 
 def e(value: object) -> str:
@@ -257,7 +257,7 @@ def _extensions_table(tool: ToolReport) -> str:
 def _files_table(tool: ToolReport, home: str) -> str:
     rows = [
         [
-            e(a.label),
+            breakable(a.label),
             f"<code>{breakable(tilde(a.path, home))}</code>",
             e(human_size(a.size_bytes)),
             e(f"{a.file_count:,}"),
@@ -265,7 +265,7 @@ def _files_table(tool: ToolReport, home: str) -> str:
             pill("readable", "concern") if a.other_readable else "no",
             e(a.oldest),
             e(a.newest),
-            e(a.description),
+            breakable(a.description),
         ]
         for a in tool.artifacts
     ]

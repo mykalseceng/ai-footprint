@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 
 from ai_footprint.harnesses.common import Context
-from ai_footprint.host import listeners, started_at
+from ai_footprint.host import listeners, readable_command, started_at
 from ai_footprint.model import Daemon, ProcessInfo, ToolReport
 from ai_footprint.text import plural, short_path
 
@@ -102,7 +102,7 @@ def collect(ctx: Context, report: ToolReport) -> list[Daemon]:
                 pid=proc.pid,
                 ppid=proc.ppid,
                 started=proc.started,
-                command=proc.command[:MAX_COMMAND],
+                command=readable_command(proc.command, MAX_COMMAND),
                 binary=binary,
                 detached=detached,
                 days=(now - started).days if started else 0,
