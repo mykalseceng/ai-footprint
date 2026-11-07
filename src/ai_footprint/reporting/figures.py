@@ -15,20 +15,19 @@ from typing import Any
 from ai_footprint import checks, tokens
 from ai_footprint.checks import Checklist
 from ai_footprint.fsinfo import disk_bytes, human_size, outermost
-from ai_footprint.model import Artifact, AuditReport, Category, Lens, ToolCapture, ToolReport
+from ai_footprint.model import (
+    Artifact,
+    AuditReport,
+    Category,
+    Lens,
+    ToolCapture,
+    ToolReport,
+    kind_noun,
+)
 from ai_footprint.reporting import keys
 from ai_footprint.text import plural
 
 TOOL_RUN_PURPOSES = ("Confirm tool version", "Confirm subcommand exists")
-KIND_NAMES = {
-    "mcp": "MCP server",
-    "connector": "claude.ai connector",
-    "plugin": "plugin",
-    "skill": "skill",
-    "hook": "hook",
-    "native-host": "browser native host",
-    "statusline": "status line",
-}
 
 
 @dataclass
@@ -87,7 +86,7 @@ def _keys_figure(audit: AuditReport) -> Figure:
 
 def _autostart_figure(rows: list[tuple[str, bool]]) -> Figure:
     auto = Counter(kind for kind, autostart in rows if autostart)
-    parts = [plural(n, KIND_NAMES.get(kind, kind)) for kind, n in auto.most_common()]
+    parts = [plural(n, kind_noun(kind)) for kind, n in auto.most_common()]
     total = sum(auto.values())
     return Figure(
         "autostart",

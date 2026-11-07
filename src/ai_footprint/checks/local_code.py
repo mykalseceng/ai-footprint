@@ -16,6 +16,7 @@ from ai_footprint.model import (
     Lens,
     StoreKind,
     ToolReport,
+    kind_noun,
 )
 from ai_footprint.text import join, plural
 
@@ -174,17 +175,10 @@ def rule_autostart(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
 
 
 def _kind_counts(extensions: list[Extension]) -> list[str]:
-    names = {
-        "mcp": "MCP server",
-        "hook": "hook",
-        "native-host": "browser native host",
-        "statusline": "status line",
-        "plugin": "plugin",
-    }
     counts: dict[str, int] = {}
     for ext in extensions:
         counts[ext.kind] = counts.get(ext.kind, 0) + 1
-    return [f"{n} {names.get(k, k)}{'s' if n > 1 else ''}" for k, n in counts.items()]
+    return [f"{n} {kind_noun(k)}{'s' if n > 1 else ''}" for k, n in counts.items()]
 
 
 def _daemon_line(daemon: Daemon, home: Path) -> str:

@@ -275,6 +275,25 @@ RUNNING_BYPASS = "running with --dangerously-skip-permissions"
 THREADS_WITHOUT_APPROVAL = "threads with approval_mode=never"
 """Setting key that counts recorded threads that ran with approval off."""
 
+EXTENSION_KINDS: dict[str, tuple[str, str]] = {
+    "mcp": ("MCP server", "MCP servers"),
+    "connector": ("claude.ai connector", "claude.ai connectors"),
+    "plugin": ("plugin", "Plugins"),
+    "skill": ("skill", "Skills"),
+    "hook": ("hook", "Hooks"),
+    "native-host": ("browser native host", "Browser native hosts"),
+    "statusline": ("status line", "Status line"),
+    "service": ("background service", "Background services"),
+    "scheduled-task": ("scheduled task", "Scheduled tasks"),
+}
+"""``Extension.kind`` -> (singular noun, table title). A kind missing here is shown as is."""
+
+
+def kind_noun(kind: str) -> str:
+    """Singular noun for an extension kind, e.g. ``MCP server``."""
+    return EXTENSION_KINDS.get(kind, (kind, kind))[0]
+
+
 AD_HOC = "ad-hoc signed (no signing identity)"
 """Signer recorded for a binary signed without a signing identity."""
 

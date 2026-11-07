@@ -16,6 +16,7 @@ from ai_footprint import text, tokens
 from ai_footprint.checks import Check, Checklist
 from ai_footprint.fsinfo import human_size, tilde
 from ai_footprint.model import (
+    EXTENSION_KINDS,
     EXTENSION_PAGES,
     AuditReport,
     Credential,
@@ -228,21 +229,13 @@ def _settings_table(tool: ToolReport) -> str:
     return table(["Setting", "Value", "Why it matters", ""], rows, raw=True)
 
 
-KIND_TITLES = (
-    ("mcp", "MCP servers"),
-    ("connector", "claude.ai connectors"),
-    ("plugin", "Plugins"),
-    ("skill", "Skills"),
-    ("hook", "Hooks"),
-    ("native-host", "Browser native hosts"),
-    ("statusline", "Status line"),
-)
-
-
 def _extensions_table(tool: ToolReport) -> str:
     """One table per kind, so no single table runs to a hundred rows."""
     out = []
-    for kind, title in KIND_TITLES:
+    known = list(EXTENSION_KINDS)
+    kinds = known + sorted({x.kind for x in tool.extensions} - set(known))
+    for kind in kinds:
+        title = EXTENSION_KINDS.get(kind, (kind, kind))[1]
         rows = [
             [
                 breakable(x.name),
