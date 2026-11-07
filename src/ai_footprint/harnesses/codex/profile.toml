@@ -79,6 +79,18 @@ category = "session"
 description = "Threads, projects, app state"
 
 [[artifacts]]
+label = "State DB write-ahead log"
+path = "{home}/state_5.sqlite-wal"
+category = "session"
+description = "Recent State DB writes not yet merged into state_5.sqlite"
+
+[[artifacts]]
+label = "State DB shared memory"
+path = "{home}/state_5.sqlite-shm"
+category = "session"
+description = "Index into the State DB write-ahead log"
+
+[[artifacts]]
 label = "Memories DB"
 path = "{home}/memories_1.sqlite"
 category = "session"
@@ -101,6 +113,30 @@ label = "Queue DB"
 path = "{home}/queue_1.sqlite"
 category = "session"
 description = "Queued work"
+
+[[artifacts]]
+label = "Queue DB write-ahead log"
+path = "{home}/queue_1.sqlite-wal"
+category = "session"
+description = "Recent Queue DB writes not yet merged into queue_1.sqlite"
+
+[[artifacts]]
+label = "Queue DB shared memory"
+path = "{home}/queue_1.sqlite-shm"
+category = "session"
+description = "Index into the Queue DB write-ahead log"
+
+[[artifacts]]
+label = "Desktop app databases"
+path = "{home}/sqlite"
+category = "session"
+description = "The desktop app's own SQLite databases (codex.db, codex-thread-summaries.db)"
+
+[[artifacts]]
+label = "Visualizations"
+path = "{home}/visualizations"
+category = "session"
+description = "Visualization files agents create, one folder per thread by date"
 
 [[artifacts]]
 label = "Browser sessions"
@@ -139,6 +175,18 @@ category = "log"
 description = "Structured client logs"
 
 [[artifacts]]
+label = "Logs DB write-ahead log"
+path = "{home}/logs_2.sqlite-wal"
+category = "log"
+description = "Recent log rows not yet merged into logs_2.sqlite; can grow to gigabytes"
+
+[[artifacts]]
+label = "Logs DB shared memory"
+path = "{home}/logs_2.sqlite-shm"
+category = "log"
+description = "Index into the Logs DB write-ahead log"
+
+[[artifacts]]
 label = "Logs"
 path = "{home}/log"
 category = "log"
@@ -155,6 +203,30 @@ label = "Global state"
 path = "{home}/.codex-global-state.json"
 category = "config"
 description = "Desktop/app state"
+
+[[artifacts]]
+label = "Global state backup"
+path = "{home}/.codex-global-state.json.bak"
+category = "config"
+description = "Copy of the desktop app state, rewritten on every save"
+
+[[artifacts]]
+label = "App-server daemon state"
+path = "{home}/app-server-daemon"
+category = "config"
+description = "Managed daemon settings (remote control, auto-update), pid files, stderr logs, loaded threads"
+
+[[artifacts]]
+label = "App-server control socket"
+path = "{home}/app-server-control"
+category = "session"
+description = "Link to the Unix socket clients use to drive the app-server daemon's threads"
+
+[[artifacts]]
+label = "IDE context socket"
+path = "{home}/ipc"
+category = "session"
+description = "Unix socket the TUI uses to fetch IDE context (open files, selection) for /ide"
 
 [[artifacts]]
 label = "Installation ID"
@@ -181,10 +253,40 @@ category = "extension"
 description = "Screen and input control helper"
 
 [[artifacts]]
+label = "Plugin staging"
+path = "{home}/.tmp"
+category = "extension"
+description = "Plugin marketplaces Codex loads (openai/plugins clone, installed marketplaces), Git staging, plugin backups"
+
+[[artifacts]]
+label = "Imported skills"
+path = "{home}/vendor_imports"
+category = "extension"
+description = "Skills repository the desktop app imports, and its curated-skills cache"
+
+[[artifacts]]
+label = "Managed packages"
+path = "{home}/packages"
+category = "binary"
+description = "Codex releases installed for the app-server daemon and the standalone CLI"
+
+[[artifacts]]
 label = "Cache"
 path = "{home}/cache"
 category = "cache"
 description = "Downloaded assets"
+
+[[artifacts]]
+label = "Model catalog cache"
+path = "{home}/models_cache.json"
+category = "cache"
+description = "Models the account can use, as last fetched"
+
+[[artifacts]]
+label = "Update check"
+path = "{home}/version.json"
+category = "cache"
+description = "Latest Codex version seen and when it was checked"
 
 [[endpoints]]
 host = "chatgpt.com"
@@ -276,17 +378,282 @@ commands = [
 ]
 
 [[docs]]
-url = "https://developers.openai.com/codex/config-reference"
-topic = "config.toml keys"
+url = "https://learn.chatgpt.com/docs/config-file/config-reference"
+topic = "config.toml and requirements.toml keys"
 
 [[docs]]
-url = "https://developers.openai.com/codex/cli/reference"
-topic = "subcommands and flags"
+url = "https://learn.chatgpt.com/docs/config-file/config-advanced"
+topic = "state locations, hooks, OpenTelemetry, notify, history persistence, shell environment policy"
 
 [[docs]]
-url = "https://developers.openai.com/codex/security"
-topic = "approvals, sandbox, credential storage"
+url = "https://learn.chatgpt.com/docs/config-file/environment-variables"
+topic = "CODEX_HOME, CODEX_SQLITE_HOME, credential variables, packages folder"
 
 [[docs]]
-url = "https://developers.openai.com/codex/mcp"
+url = "https://learn.chatgpt.com/docs/developer-commands?surface=cli"
+topic = "subcommands and flags, remote-control, app-server, /daemon"
+
+[[docs]]
+url = "https://learn.chatgpt.com/docs/agent-approvals-security"
+topic = "approvals, sandbox modes, --dangerously-bypass-approvals-and-sandbox"
+
+[[docs]]
+url = "https://learn.chatgpt.com/docs/auth"
+topic = "credential storage, auth.json, keyring"
+
+[[docs]]
+url = "https://learn.chatgpt.com/docs/extend/mcp"
 topic = "MCP servers"
+
+[[docs]]
+url = "https://learn.chatgpt.com/docs/hooks"
+topic = "hooks.json and inline [hooks]"
+
+[[docs]]
+url = "https://learn.chatgpt.com/docs/app-server"
+topic = "app-server transports, control socket, WebSocket auth"
+
+[[docs]]
+url = "https://learn.chatgpt.com/docs/remote-connections"
+topic = "remote control from other devices, SSH hosts"
+
+[[docs]]
+url = "https://learn.chatgpt.com/docs/enterprise/managed-configuration"
+topic = "requirements.toml, managed_config.toml, MDM, allow_remote_control"
+
+[[docs]]
+url = "https://learn.chatgpt.com/docs/environments/network-file-systems"
+topic = "SQLite WAL files, app-server daemon, daemon_auto_start, log_dir"
+
+[[docs]]
+url = "https://learn.chatgpt.com/docs/visualizations"
+topic = "Visualizations"
+
+[[docs]]
+url = "https://github.com/openai/codex/tree/main/codex-rs"
+topic = "source: file names under CODEX_HOME (daemon state, control and IPC sockets, packages, plugin staging, caches, visualizations)"
+
+[[features]]
+kind = "setting"
+name = "approval_policy"
+summary = "When Codex pauses for approval; never runs every command without asking"
+doc = "https://learn.chatgpt.com/docs/config-file/config-reference"
+marker = "approval_policy"
+checks = ["no-approval"]
+
+[[features]]
+kind = "setting"
+name = "sandbox_mode"
+summary = "Filesystem and network sandbox for commands; danger-full-access removes it"
+doc = "https://learn.chatgpt.com/docs/config-file/config-reference"
+marker = "sandbox_mode"
+checks = ["no-approval"]
+
+[[features]]
+kind = "subcommand"
+name = "--dangerously-bypass-approvals-and-sandbox"
+summary = "Flag (alias --yolo) that turns off both approval prompts and the sandbox"
+doc = "https://learn.chatgpt.com/docs/agent-approvals-security"
+marker = "dangerously-bypass-approvals-and-sandbox"
+checks = ["no-approval"]
+
+[[features]]
+kind = "setting"
+name = "approvals_reviewer"
+summary = "auto_review lets a reviewer subagent answer approval prompts instead of you"
+doc = "https://learn.chatgpt.com/docs/config-file/config-reference"
+marker = "approvals_reviewer"
+
+[[features]]
+kind = "setting"
+name = "sandbox_workspace_write.network_access"
+summary = "Allows outbound network access inside the workspace-write sandbox"
+doc = "https://learn.chatgpt.com/docs/config-file/config-reference"
+marker = "network_access"
+
+[[features]]
+kind = "setting"
+name = "mcp_servers"
+summary = "MCP servers Codex starts (stdio command) or connects to (URL) in every session"
+doc = "https://learn.chatgpt.com/docs/extend/mcp"
+marker = "mcp_servers"
+checks = ["autostart"]
+
+[[features]]
+kind = "setting"
+name = "mcp_oauth_credentials_store"
+summary = "Where MCP OAuth tokens are kept: auto, file or keyring"
+doc = "https://learn.chatgpt.com/docs/config-file/config-reference"
+marker = "mcp_oauth_credentials_store"
+
+[[features]]
+kind = "setting"
+name = "cli_auth_credentials_store"
+summary = "Where the CLI keeps its login: file (plaintext auth.json), keyring, auto or ephemeral"
+doc = "https://learn.chatgpt.com/docs/auth"
+marker = "cli_auth_credentials_store"
+checks = ["creds-plaintext"]
+
+[[features]]
+kind = "hook"
+name = "hooks.json"
+summary = "Commands run on lifecycle events such as PreToolUse and SessionStart"
+doc = "https://learn.chatgpt.com/docs/hooks"
+marker = "hooks.json"
+checks = ["autostart"]
+
+[[features]]
+kind = "setting"
+name = "hooks"
+summary = "Inline [hooks] tables in config.toml, loaded alongside hooks.json"
+doc = "https://learn.chatgpt.com/docs/hooks"
+marker = "PreToolUse"
+
+[[features]]
+kind = "setting"
+name = "notify"
+summary = "External program run with a JSON payload when a turn completes"
+doc = "https://learn.chatgpt.com/docs/config-file/config-advanced"
+marker = "notify"
+checks = ["autostart"]
+
+[[features]]
+kind = "setting"
+name = "history.persistence"
+summary = "save-all writes every prompt to history.jsonl; none turns it off"
+doc = "https://learn.chatgpt.com/docs/config-file/config-advanced"
+marker = "save-all"
+checks = ["secrets"]
+
+[[features]]
+kind = "setting"
+name = "otel.exporter"
+summary = "Exports run logs (API requests, tool approvals and results) over OTLP to a collector"
+doc = "https://learn.chatgpt.com/docs/config-file/config-advanced"
+marker = "otlp-http"
+
+[[features]]
+kind = "setting"
+name = "otel.log_user_prompt"
+summary = "Includes raw prompt text in exported OpenTelemetry logs"
+doc = "https://learn.chatgpt.com/docs/config-file/config-reference"
+marker = "log_user_prompt"
+
+[[features]]
+kind = "setting"
+name = "shell_environment_policy"
+summary = "Which environment variables, secrets included, spawned commands inherit"
+doc = "https://learn.chatgpt.com/docs/config-file/config-advanced"
+marker = "shell_environment_policy"
+
+[[features]]
+kind = "setting"
+name = "projects.<path>.trust_level"
+summary = "Trusted projects load their .codex/ config, hooks and rules"
+doc = "https://learn.chatgpt.com/docs/config-file/config-reference"
+marker = "trust_level"
+checks = ["trust"]
+
+[[features]]
+kind = "setting"
+name = "features.daemon_auto_start"
+summary = "The CLI starts the managed app-server daemon, which keeps running between sessions"
+doc = "https://learn.chatgpt.com/docs/environments/network-file-systems"
+marker = "daemon_auto_start"
+checks = ["daemons"]
+
+[[features]]
+kind = "subcommand"
+name = "app-server daemon"
+summary = "Manages the background app-server daemon and its auto-updater"
+doc = "https://learn.chatgpt.com/docs/environments/network-file-systems"
+marker = "app-server daemon"
+checks = ["daemons"]
+
+[[features]]
+kind = "subcommand"
+name = "app-server"
+summary = "--listen ws://IP:PORT serves the agent over WebSocket; non-loopback listeners accept unauthenticated clients unless --ws-auth is set"
+doc = "https://learn.chatgpt.com/docs/app-server"
+marker = "ws-auth"
+checks = ["daemons"]
+
+[[features]]
+kind = "subcommand"
+name = "remote-control"
+summary = "Starts the daemon with remote control so paired devices can run work on this machine"
+doc = "https://learn.chatgpt.com/docs/developer-commands?surface=cli"
+marker = "remote-control pair"
+checks = ["account-signals", "daemons"]
+
+[[features]]
+kind = "setting"
+name = "allow_remote_control"
+summary = "Requirement that, set to false, turns off device remote control"
+doc = "https://learn.chatgpt.com/docs/enterprise/managed-configuration"
+marker = "allow_remote_control"
+
+[[features]]
+kind = "path"
+name = "/etc/codex/requirements.toml"
+summary = "Admin-enforced requirements (allowed approval policies, sandbox modes, hooks) users cannot override"
+doc = "https://learn.chatgpt.com/docs/enterprise/managed-configuration"
+marker = "requirements.toml"
+
+[[features]]
+kind = "path"
+name = "/etc/codex/managed_config.toml"
+summary = "Legacy managed defaults reapplied at each launch; some fields act as requirements"
+doc = "https://learn.chatgpt.com/docs/enterprise/managed-configuration"
+marker = "managed_config.toml"
+
+[[features]]
+kind = "integration"
+name = "MDM requirements"
+summary = "macOS managed preferences deliver requirements via com.openai.codex:requirements_toml_base64"
+doc = "https://learn.chatgpt.com/docs/enterprise/managed-configuration"
+marker = "requirements_toml_base64"
+
+[[features]]
+kind = "env"
+name = "CODEX_API_KEY"
+summary = "API key for non-interactive runs, inherited by every child process"
+doc = "https://learn.chatgpt.com/docs/config-file/environment-variables"
+marker = "CODEX_API_KEY"
+checks = ["inherited-creds"]
+
+[[features]]
+kind = "env"
+name = "CODEX_ACCESS_TOKEN"
+summary = "ChatGPT or Codex access token for trusted automation"
+doc = "https://learn.chatgpt.com/docs/config-file/environment-variables"
+marker = "CODEX_ACCESS_TOKEN"
+checks = ["inherited-creds"]
+
+[[features]]
+kind = "env"
+name = "CODEX_HOME"
+summary = "Moves all Codex state: config, auth, logs, sessions, skills, packages"
+doc = "https://learn.chatgpt.com/docs/config-file/environment-variables"
+marker = "CODEX_HOME"
+
+[[features]]
+kind = "env"
+name = "CODEX_SQLITE_HOME"
+summary = "Moves the SQLite state databases out of CODEX_HOME; sqlite_home takes precedence"
+doc = "https://learn.chatgpt.com/docs/config-file/environment-variables"
+marker = "CODEX_SQLITE_HOME"
+
+[[features]]
+kind = "setting"
+name = "sqlite_home"
+summary = "Directory for the SQLite state databases"
+doc = "https://learn.chatgpt.com/docs/config-file/config-reference"
+marker = "sqlite_home"
+
+[[features]]
+kind = "setting"
+name = "log_dir"
+summary = "Moves logs out of CODEX_HOME/log and turns on the plaintext codex-tui.log"
+doc = "https://learn.chatgpt.com/docs/config-file/config-reference"
+marker = "log_dir"
