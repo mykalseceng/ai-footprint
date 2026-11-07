@@ -12,7 +12,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from ai_footprint import rules
+from ai_footprint import checks
 from ai_footprint.fsinfo import human_size
 from ai_footprint.model import CheckResult, CommandValidation
 
@@ -60,7 +60,7 @@ def _secret_total(tools: list[Doc]) -> int | None:
 def _approval(tool: Doc) -> str:
     if any(x["id"] == f"{tool['name']}:no-approval" for x in tool["exposures"]):
         return "found"
-    if any(s["key"] in rules.approval_keys() for s in tool["settings"]):
+    if any(s["key"] in checks.approval_keys() for s in tool["settings"]):
         return "not found"
     return "not checked"
 

@@ -5,12 +5,12 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 
-from ai_footprint import __version__, daemons, hostscan, rules, validate
+from ai_footprint import __version__, checks, daemons, hostscan, validate
+from ai_footprint.checks import Checklist
 from ai_footprint.harnesses import registry
 from ai_footprint.harnesses.common import Context
 from ai_footprint.host import collect_host
 from ai_footprint.model import AuditReport, ToolPresence, ToolReport
-from ai_footprint.rules import Checklist
 from ai_footprint.system import System
 
 
@@ -63,8 +63,8 @@ def run_audit(
         live=live,
         scanned=scan,
     )
-    checklist = rules.evaluate(
-        audit, rules.RuleContext(host=host, platform=system.platform, home=home)
+    checklist = checks.evaluate(
+        audit, checks.RuleContext(host=host, platform=system.platform, home=home)
     )
     audit.probe_validation = system.validate_probes()
     validate.validate_all(audit, system)

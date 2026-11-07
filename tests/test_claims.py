@@ -4,7 +4,8 @@ import json
 import time
 from pathlib import Path
 
-from ai_footprint import rules
+from ai_footprint import checks
+from ai_footprint.checks import local_code, machine, steering
 from ai_footprint.harnesses import registry
 from ai_footprint.harnesses.claude import account as claude_account
 from ai_footprint.harnesses.claude import collector as claude
@@ -123,15 +124,15 @@ def test_unset_settings_need_a_key_the_binary_knows(tmp_path: Path):
 
 
 def test_skipping_the_bypass_prompt_alone_is_not_running_without_approval(tmp_path: Path):
-    ctx = rules.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
+    ctx = checks.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
     report = ToolReport(name="claude", display_name="Claude Code", installed=True)
     report.settings = [
         Setting("skipDangerousModePermissionPrompt", "True", "", concern=True),
         Setting("~/.zshrc:6", "alias yolo='claude --dangerously-skip-permissions'", "", True),
     ]
-    assert rules.rule_no_approval(report, ctx) == []
+    assert steering.rule_no_approval(report, ctx) == []
     report.settings.append(Setting("running with --dangerously-skip-permissions", "11, 12", ""))
-    [found] = rules.rule_no_approval(report, ctx)
+    [found] = steering.rule_no_approval(report, ctx)
     assert found.statement.startswith(
         "Claude Code skips approval prompts in some sessions "
         "(2 running sessions started with --dangerously-skip-permissions)."
@@ -175,8 +176,8 @@ def test_memory_agents_and_commands_go_through_the_instruction_analysis(tmp_path
     assert "authority or attestation claims" in by_scope["memory"].markers[0]
     assert any("download-and-execute" in m for m in by_scope["agent"].markers)
     assert by_scope["command"].markers == []
-    rule_ctx = rules.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
-    statements = [x.statement for x in rules.rule_instructions(report, rule_ctx)]
+    rule_ctx = checks.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
+    statements = [x.statement for x in steering.rule_instructions(report, rule_ctx)]
     assert any("is the auto-memory index loaded every session" in s for s in statements)
     assert any("defines a subagent" in s for s in statements)
 
@@ -239,8 +240,8 @@ def test_an_instruction_file_read_by_two_tools_is_a_shared_surface(tmp_path: Pat
         host=host(tmp_path),
         tools=[claude_report, opencode_report],
     )
-    rule_ctx = rules.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
-    [shared] = rules.rule_shared_surfaces(audit, rule_ctx)
+    rule_ctx = checks.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
+    [shared] = machine.rule_shared_surfaces(audit, rule_ctx)
     assert "~/.claude/CLAUDE.md: Claude Code, OpenCode" in shared.evidence
 
 
@@ -260,15 +261,15 @@ def test_dates_and_sentences_are_normalised():
 
 def test_missing_plugin_server_fix_disables_the_plugin(tmp_path: Path):
     report = ToolReport(name="claude", display_name="Claude Code", installed=True)
-    ctx = rules.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
-    fix = rules._dangling_fix(report, ctx, "guardian", "plugin semgrep@official")
+    ctx = checks.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
+    fix = local_code._dangling_fix(report, ctx, "guardian", "plugin semgrep@official")
     [command] = fix.commands
     assert command.text == "claude plugin disable semgrep@official"
     assert command.help_probe == ("claude", "plugin", "disable")
 
 
 def test_trust_counts_only_instruction_files_the_tool_itself_loads(tmp_path: Path):
-    ctx = rules.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
+    ctx = checks.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
     project, other, downloads = tmp_path / "app", tmp_path / "lib", tmp_path / "Downloads" / "x"
     report = ToolReport(name="codex", display_name="Codex CLI", installed=True)
     report.trusted_folders = [str(project), str(other), str(downloads)]
@@ -276,11 +277,11 @@ def test_trust_counts_only_instruction_files_the_tool_itself_loads(tmp_path: Pat
         InstructionFile(str(project / "AGENTS.md"), "project", ["codex"]),
         InstructionFile(str(tmp_path / "AGENTS.md"), "global", ["codex"]),
     ]
-    [found] = rules.rule_trust(report, ctx)
+    [found] = steering.rule_trust(report, ctx)
     assert found.statement == (
         "Codex CLI trusts 3 folders. 1 of them holds instruction files Codex CLI loads. "
         "Broad folders on the list: ~/Downloads/x."
     )
     assert found.evidence == ["~/app/AGENTS.md"]
     report.trusted_folders = [str(other)]
-    assert rules.rule_trust(report, ctx) == []
+    assert steering.rule_trust(report, ctx) == []

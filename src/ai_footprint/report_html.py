@@ -13,6 +13,7 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from ai_footprint import document, text, tokens
+from ai_footprint.checks import Check, Checklist
 from ai_footprint.fsinfo import human_size, tilde
 from ai_footprint.model import (
     EXTENSION_PAGES,
@@ -23,7 +24,6 @@ from ai_footprint.model import (
     HostFact,
     ToolReport,
 )
-from ai_footprint.rules import Check, Checklist
 from ai_footprint.text import join, plural, when
 
 Views = dict[str, Any]

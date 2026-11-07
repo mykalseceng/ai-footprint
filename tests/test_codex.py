@@ -5,12 +5,13 @@ import sqlite3
 import time
 from pathlib import Path
 
-from ai_footprint import extensions, figures, rules
+from ai_footprint import checks, extensions, figures
+from ai_footprint.checks import needs, steering
 from ai_footprint.harnesses.codex import account as codex_account
 from ai_footprint.harnesses.codex import collector as codex
 from ai_footprint.harnesses.common import Context, shell_shortcuts, socket_endpoints
 from ai_footprint.host import Socket
-from ai_footprint.model import HostReport, ProcessInfo, ToolReport
+from ai_footprint.model import THREADS_WITHOUT_APPROVAL, HostReport, ProcessInfo, ToolReport
 from ai_footprint.system import ProbeResult
 from tests.conftest import FakeSystem
 
@@ -39,7 +40,7 @@ def codex_report(**fields) -> ToolReport:
     return ToolReport(name="codex", display_name="Codex CLI", installed=True, **fields)
 
 
-def rule_context(home: Path) -> rules.RuleContext:
+def rule_context(home: Path) -> checks.RuleContext:
     host = HostReport(
         os="macOS",
         kernel="",
@@ -50,7 +51,7 @@ def rule_context(home: Path) -> rules.RuleContext:
         home=str(home),
         home_mode="drwx------",
     )
-    return rules.RuleContext(host=host, platform="darwin", home=home)
+    return checks.RuleContext(host=host, platform="darwin", home=home)
 
 
 def test_thread_approval_is_absent_without_a_state_db_or_threads_table(tmp_path: Path):
@@ -80,7 +81,7 @@ def test_threads_that_ran_with_approval_off_are_counted_by_sandbox(tmp_path: Pat
     )
     setting = codex.thread_approval(tmp_path)
     assert setting is not None
-    assert setting.key == rules.THREADS_WITHOUT_APPROVAL
+    assert setting.key == THREADS_WITHOUT_APPROVAL
     assert setting.value == (
         "3 of 4 CLI threads (sandbox 2 danger-full-access, 1 disabled; latest 2026-10-17)"
     )
@@ -113,7 +114,7 @@ def test_recorded_threads_drive_the_no_approval_signal_and_figure(tmp_path: Path
     setting = codex.thread_approval(tmp_path)
     assert setting is not None
     report = codex_report(settings=[setting])
-    [found] = rules.rule_no_approval(report, rule_context(tmp_path))
+    [found] = steering.rule_no_approval(report, rule_context(tmp_path))
     assert "threads with approval_mode=never: 1 of 1 CLI threads" in found.statement
     report.exposures = [found]
     figure = figures.approval(report)
@@ -126,9 +127,9 @@ def test_threads_that_all_asked_are_read_as_not_found(tmp_path: Path):
     setting = codex.thread_approval(tmp_path)
     assert setting is not None
     report = codex_report(settings=[setting])
-    assert rules.rule_no_approval(report, rule_context(tmp_path)) == []
+    assert steering.rule_no_approval(report, rule_context(tmp_path)) == []
     assert figures.approval(report).value == "not found"
-    assert rules._needs_approval_setting(report, rule_context(tmp_path)) == ""
+    assert needs.needs_approval_setting(report, rule_context(tmp_path)) == ""
 
 
 def test_cloud_access_note_makes_no_claim_about_cloud_tasks(tmp_path: Path):

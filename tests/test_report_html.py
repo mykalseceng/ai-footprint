@@ -5,7 +5,7 @@ from pathlib import Path
 from hypothesis import given
 from hypothesis import strategies as st
 
-from ai_footprint import document, report_html, rules
+from ai_footprint import checks, document, report_html
 from ai_footprint.model import (
     AuditReport,
     Exposure,
@@ -49,9 +49,9 @@ def make_audit(
 
 
 def host_exposures(audit: AuditReport) -> list[Exposure]:
-    ctx = rules.RuleContext(host=audit.host, platform="darwin", home=Path(HOME))
+    ctx = checks.RuleContext(host=audit.host, platform="darwin", home=Path(HOME))
     found = []
-    for rule in rules.HOST_RULES:
+    for rule in checks.HOST_RULES:
         found.extend(rule.fn(audit, ctx))
     return found
 

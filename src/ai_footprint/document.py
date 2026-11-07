@@ -12,6 +12,7 @@ import dataclasses
 from typing import Any
 
 from ai_footprint import answers, figures, keys, netview, surface
+from ai_footprint.checks import Checklist
 from ai_footprint.model import (
     EXTENSION_PAGES,
     AuditReport,
@@ -23,7 +24,6 @@ from ai_footprint.model import (
     ToolReport,
 )
 from ai_footprint.report_text import validation_label
-from ai_footprint.rules import Checklist
 from ai_footprint.text import join, plural
 
 HOST_SCOPE = (

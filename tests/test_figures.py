@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import document, figurecheck, figures, fsinfo, rules
+from ai_footprint import checks, document, figurecheck, figures, fsinfo
 from ai_footprint.audit import run_audit
 from ai_footprint.model import (
     Artifact,
@@ -223,8 +223,8 @@ def test_a_check_without_its_input_is_not_checked_and_one_with_a_signal_never_is
 
 def test_every_tool_rule_declares_why_it_could_not_run_or_always_can():
     tool = ToolReport("claude", "Claude Code", installed=True)
-    ctx = rules.RuleContext(host=_audit([]).host, platform="darwin", home=Path("/h"))
-    reasons = {rule.id: rule.needs(tool, ctx) for rule in rules.TOOL_RULES}
+    ctx = checks.RuleContext(host=_audit([]).host, platform="darwin", home=Path("/h"))
+    reasons = {rule.id: rule.needs(tool, ctx) for rule in checks.TOOL_RULES}
     always = {"instructions", "autostart", "daemons", "duplicate-installs"}
     assert {rule_id for rule_id, reason in reasons.items() if not reason} == always
 

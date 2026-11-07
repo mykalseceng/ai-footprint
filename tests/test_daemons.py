@@ -3,7 +3,8 @@
 import time
 from pathlib import Path
 
-from ai_footprint import daemons, rules
+from ai_footprint import checks, daemons
+from ai_footprint.checks import local_code
 from ai_footprint.harnesses.common import Context
 from ai_footprint.host import listeners, processes
 from ai_footprint.model import BinaryInfo, Daemon, HostReport, Listener, ProcessInfo, ToolReport
@@ -120,8 +121,8 @@ def test_rule_names_each_daemon_and_offers_validated_codex_fixes(tmp_path: Path)
             days=0,
         ),
     ]
-    ctx = rules.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
-    [found] = rules.rule_daemons(report, ctx)
+    ctx = checks.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
+    [found] = local_code.rule_daemons(report, ctx)
     assert found.statement == (
         "Codex CLI keeps 1 background process running outside any session (started by "
         "launchd): pid 47165 "
@@ -152,8 +153,8 @@ def test_a_session_child_that_listens_is_named_with_its_session_and_never_killed
             listeners=[Listener("tcp", "127.0.0.1:49374")],
         )
     ]
-    ctx = rules.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
-    [found] = rules.rule_daemons(report, ctx)
+    ctx = checks.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
+    [found] = local_code.rule_daemons(report, ctx)
     assert found.statement == (
         "OpenCode sessions accept connections: pid 50615 `serve --service`, started by "
         "session pid 50614, on tcp 127.0.0.1:49374."
@@ -179,10 +180,10 @@ def test_session_sockets_readable_only_by_the_user_are_not_an_exposure(tmp_path:
             listeners=[Listener("unix", "/tmp/cc-socks/3977.sock", "600")],
         )
     ]
-    ctx = rules.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
-    assert rules.rule_daemons(report, ctx) == []
+    ctx = checks.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
+    assert local_code.rule_daemons(report, ctx) == []
     report.daemons[0].listeners = [Listener("tcp", "127.0.0.1:5000")]
-    assert len(rules.rule_daemons(report, ctx)) == 1
+    assert len(local_code.rule_daemons(report, ctx)) == 1
 
 
 def test_version_note_ignores_the_node_version_in_a_launcher_path():

@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import rules
+from ai_footprint import checks
+from ai_footprint.checks import needs, other_accounts
 from ai_footprint.harnesses import registry
 from ai_footprint.harnesses.common import Context
 from ai_footprint.harnesses.opencode import collector as opencode
@@ -56,7 +57,7 @@ def register(home: Path, record: dict) -> Path:
     return path
 
 
-def rule_ctx(home: Path) -> rules.RuleContext:
+def rule_ctx(home: Path) -> checks.RuleContext:
     host = HostReport(
         os="macOS",
         kernel="",
@@ -67,7 +68,7 @@ def rule_ctx(home: Path) -> rules.RuleContext:
         home=str(home),
         home_mode="drwx------",
     )
-    return rules.RuleContext(host=host, platform="darwin", home=home)
+    return checks.RuleContext(host=host, platform="darwin", home=home)
 
 
 def server_setting(home: Path):
@@ -82,8 +83,8 @@ def test_a_registration_with_a_password_clears_the_server_check(tmp_path: Path):
     assert setting.key == "local server 127.0.0.1:49374"
     assert setting.value == "password set (~/.local/state/opencode/service.json)"
     assert not setting.concern
-    assert rules.rule_open_server(report, rule_ctx(tmp_path)) == []
-    assert rules._needs_local_server(report, rule_ctx(tmp_path)) == ""
+    assert other_accounts.rule_open_server(report, rule_ctx(tmp_path)) == []
+    assert needs.needs_local_server(report, rule_ctx(tmp_path)) == ""
 
 
 def test_a_registration_without_a_password_is_an_open_server(tmp_path: Path):
@@ -91,7 +92,7 @@ def test_a_registration_without_a_password_is_an_open_server(tmp_path: Path):
     register(tmp_path, {"url": "http://127.0.0.1:49374", "pid": 50615})
     [setting], report = server_setting(tmp_path)
     assert setting.concern
-    [found] = rules.rule_open_server(report, rule_ctx(tmp_path))
+    [found] = other_accounts.rule_open_server(report, rule_ctx(tmp_path))
     assert "registration records no password" in found.statement
 
 
@@ -105,7 +106,7 @@ def test_without_a_registration_for_the_port_the_password_is_not_checked(
     [setting], report = server_setting(tmp_path)
     assert setting.key == "listening server 127.0.0.1:49374"
     assert not setting.concern
-    reason = rules._needs_local_server(report, rule_ctx(tmp_path))
+    reason = needs.needs_local_server(report, rule_ctx(tmp_path))
     assert reason == "no registration on disk records the listening server's password"
 
 

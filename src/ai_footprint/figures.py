@@ -12,10 +12,10 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-from ai_footprint import keys, rules, tokens
+from ai_footprint import checks, keys, tokens
+from ai_footprint.checks import Checklist
 from ai_footprint.fsinfo import disk_bytes, human_size, outermost
 from ai_footprint.model import Artifact, AuditReport, Category, Lens, ToolCapture, ToolReport
-from ai_footprint.rules import Checklist
 from ai_footprint.text import plural
 
 TOOL_RUN_PURPOSES = ("Confirm tool version", "Confirm subcommand exists")
@@ -184,7 +184,7 @@ def approval(tool: ToolReport) -> Figure:
     label = "Approval turned off"
     if found:
         return Figure("approval", label, "found", "found", "; ".join(found.evidence))
-    read = [s for s in tool.settings if s.key in rules.approval_keys()]
+    read = [s for s in tool.settings if s.key in checks.approval_keys()]
     if read:
         checked = "; ".join(f"{s.key} = {s.value}" for s in read)
         return Figure(
