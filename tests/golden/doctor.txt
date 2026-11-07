@@ -1,0 +1,323 @@
+ai-footprint doctor  ·  macOS 26.2  ·  dark_knight@Studio  ·  <TIME>
+
+Claude Code
+  REVIEW   Approval not turned off by a recorded setting
+             Claude Code skips approval prompts in some sessions (permissions.defaultMode =
+             bypassPermissions). In those sessions, text that reaches the model (a web page, a repo
+             file, an MCP result, an instruction file) can become commands running as you, limited
+             only by the sandbox, deny rules and hooks that still apply.
+             → Block bypass mode with a root-owned managed policy, then drop the alias
+               $ sudo mkdir -p '/Library/Application Support/ClaudeCode'
+                 ✗ program 'mkdir': not found on PATH
+               $ echo '{"permissions":{"disableBypassPermissionsMode":"disable"}}' | sudo tee '/Library/Application Support/ClaudeCode/managed-settings.json'
+                 ✗ program 'tee': not found on PATH
+               Remove shell aliases that add --dangerously-skip-permissions
+                 manual step (not machine-checkable)
+  REVIEW   Instruction files contain nothing that steers the model
+             ~/.claude/CLAUDE.md is read as your instructions every session and contains authority
+             or attestation claims: attest, never ask, sanctioned.
+             → Review and remove the flagged lines
+               Edit ~/.claude/CLAUDE.md and delete what you did not write or no longer need
+                 manual step (not machine-checkable)
+  REVIEW   Token carries no connector scopes
+             The Claude Code token carries 1 connector scope: user:mcp_servers. This CLI has
+             connected to claude.ai Gmail (recorded in ~/.claude.json).
+             → Disconnect connectors you do not use (the token keeps its scopes)
+               Remove unused connectors in the provider's web settings
+                 manual step (not machine-checkable)
+  not checked  No sessions published to share links (this audit records no share setting for Claude Code)
+  not checked  Keychain item requires a prompt (no credential is stored in the Keychain)
+  REVIEW   Credentials in an OS-protected store
+             Claude Code keeps credentials for Anthropic in plaintext (~/.claude/.credentials.json).
+             Any program running as you can copy them.
+             → Keep credentials in the OS credential store
+               Prefer OAuth login stored in the Keychain over keys in files
+                 manual step (not machine-checkable)
+  REVIEW   No secrets in history or logs (full audit only)
+             1 current Claude Code credential is copied into data files outside its credential
+             store.
+             → Rotate the credential and delete the copies
+               Rotate API keys in the provider's console and log out and back in for logins, then delete the listed files
+                 manual step (not machine-checkable)
+             Claude Code data files hold 2 distinct secret-shaped values: 1 Anthropic OAuth access
+             token, 1 Anthropic API key.
+             → Rotate real secrets, then delete or redact the files
+               Rotate each real key at its provider; delete the transcripts holding it
+                 manual step (not machine-checkable)
+  REVIEW   No MCP server command points at a missing file
+             Claude Code starts `node <HOME>/gone/index.js` at launch (user), but that
+             file is missing. Whoever creates it runs code every time the tool starts.
+             → Remove the entries that point at the missing file
+               $ claude mcp remove ghost -s user
+                 ✗ program 'claude': not found on PATH
+  REVIEW   No automatic code execution points
+             Claude Code is set up to run local code automatically from 3 places (2 MCP servers and
+             1 hook). Whoever can change those commands, or the files they run, controls code that
+             runs as you.
+             → Monitor these files for changes
+               Add the listed scripts and config files to file-integrity monitoring
+                 manual step (not machine-checkable)
+  clear    No process outlives its session or accepts connections from other accounts or the network
+  clear    One install per tool
+  REVIEW   Credentials not readable by other accounts
+             guest can read 1 Claude Code credential(s) (Anthropic) straight from
+             ~/.claude/.credentials.json.
+             → Restrict the files, then rotate the credentials
+               $ chmod 600 <HOME>/.claude/.credentials.json
+                 ✗ program 'chmod': not found on PATH
+               $ chmod 700 <HOME>/.claude
+                 ✗ program 'chmod': not found on PATH
+               Rotate every credential listed: assume it was copied
+                 manual step (not machine-checkable)
+  REVIEW   Data stores not readable by other accounts
+             guest can read 5 Claude Code data stores, including global config, settings,
+             transcripts, prompt history.
+             → Restrict permissions (re-check after updates)
+               $ chmod 600 <HOME>/.claude.json
+                 ✗ program 'chmod': not found on PATH
+               $ chmod 600 <HOME>/.claude/settings.json
+                 ✗ program 'chmod': not found on PATH
+               $ chmod 700 <HOME>/.claude/projects
+                 ✗ program 'chmod': not found on PATH
+               $ chmod 600 <HOME>/.claude/history.jsonl
+                 ✗ program 'chmod': not found on PATH
+               $ chmod 600 <HOME>/.claude/CLAUDE.md
+                 ✗ program 'chmod': not found on PATH
+  not checked  Local server requires authentication (this audit records no local server for Claude Code)
+  REVIEW   No broad trusted folders and none holding instruction files
+             Claude Code trusts 1 folder. Broad folders on the list: ~/work.
+             → Withdraw trust from folders you do not own or no longer use
+               Set hasTrustDialogAccepted to false for those projects in ~/.claude.json
+                 ✗ claude binary: not installed; cannot confirm
+  REVIEW   Provider keeps no extra copies (training, cloud tasks)
+             claude.ai connectors used from this CLI: claude.ai Gmail.
+             → Review the provider's data settings
+               Turn off model training at claude.ai/settings/data-privacy-controls and disconnect unused connectors
+                 manual step (not machine-checkable)
+  not checked  No paired devices or unused stored logins (nothing on disk records where else the Claude Code token is used)
+Codex CLI
+  REVIEW   Approval not turned off by a recorded setting
+             Codex CLI skips approval prompts in some sessions (approval_policy = never and
+             sandbox_mode = danger-full-access). In those sessions, text that reaches the model (a
+             web page, a repo file, an MCP result, an instruction file) can become commands running
+             as you, limited only by the sandbox, deny rules and hooks that still apply.
+             → Require approval and restore the sandbox in ~/.codex/config.toml
+               Set approval_policy = "on-request" and sandbox_mode = "workspace-write"
+                 ✗ codex binary: not installed; cannot confirm
+               Remove shell aliases that add --dangerously-bypass-approvals-and-sandbox
+                 manual step (not machine-checkable)
+  REVIEW   Instruction files contain nothing that steers the model
+             ~/.codex/AGENTS.md is read as your instructions every session and contains hidden/bidi
+             characters: U+200B; external URLs the model may fetch: example.org.
+             → Review and remove the flagged lines
+               Edit ~/.codex/AGENTS.md and delete what you did not write or no longer need
+                 manual step (not machine-checkable)
+  REVIEW   Token carries no connector scopes
+             The Codex CLI token carries 1 connector scope: api.connectors.read.
+             → Disconnect connectors you do not use (the token keeps its scopes)
+               Remove unused connectors in the provider's web settings
+                 manual step (not machine-checkable)
+  not checked  No sessions published to share links (this audit records no share setting for Codex CLI)
+  not checked  Keychain item requires a prompt (no credential is stored in the Keychain)
+  REVIEW   Credentials in an OS-protected store
+             Codex CLI keeps credentials for OpenAI in plaintext (~/.codex/auth.json). Any program
+             running as you can copy them.
+             → Move Codex tokens into the OS keyring
+               Add cli_auth_credentials_store = "keyring" to ~/.codex/config.toml
+                 ✗ codex binary: not installed; cannot confirm
+               $ codex logout
+                 ✗ program 'codex': not found on PATH
+               $ codex login
+                 ✗ program 'codex': not found on PATH
+  clear    No secrets in history or logs (full audit only)
+  not checked  No MCP server command points at a missing file (no local MCP server command to check)
+  clear    No automatic code execution points
+  clear    No process outlives its session or accepts connections from other accounts or the network
+  clear    One install per tool
+  clear    Credentials not readable by other accounts
+  REVIEW   Data stores not readable by other accounts
+             guest can read 2 Codex CLI data stores, including config, global instructions.
+             → Restrict permissions (re-check after updates)
+               $ chmod 600 <HOME>/.codex/config.toml
+                 ✗ program 'chmod': not found on PATH
+               $ chmod 600 <HOME>/.codex/AGENTS.md
+                 ✗ program 'chmod': not found on PATH
+  not checked  Local server requires authentication (this audit records no local server for Codex CLI)
+  clear    No broad trusted folders and none holding instruction files
+  not checked  Provider keeps no extra copies (training, cloud tasks) (no data-use setting is recorded)
+  clear    No paired devices or unused stored logins
+OpenCode
+  not checked  Approval not turned off by a recorded setting (this audit records no approval setting for OpenCode)
+  REVIEW   Instruction files contain nothing that steers the model
+             ~/.claude/CLAUDE.md is read as your instructions every session and contains authority
+             or attestation claims: attest, never ask, sanctioned.
+             → Review and remove the flagged lines
+               Edit ~/.claude/CLAUDE.md and delete what you did not write or no longer need
+                 manual step (not machine-checkable)
+  not checked  Token carries no connector scopes (no stored token records its scopes)
+  clear    No sessions published to share links
+  not checked  Keychain item requires a prompt (no credential is stored in the Keychain)
+  REVIEW   Credentials in an OS-protected store
+             OpenCode keeps credentials for DeepSeek in plaintext
+             (~/.local/share/opencode/auth.json, ~/.local/share/opencode/opencode.db). Any program
+             running as you can copy them.
+             → Remove provider credentials you no longer use
+               $ opencode auth list
+                 ✗ program 'opencode': not found on PATH
+               $ opencode auth logout
+                 ✗ program 'opencode': not found on PATH
+  clear    No secrets in history or logs (full audit only)
+  not checked  No MCP server command points at a missing file (no local MCP server command to check)
+  clear    No automatic code execution points
+  clear    No process outlives its session or accepts connections from other accounts or the network
+  clear    One install per tool
+  REVIEW   Credentials not readable by other accounts
+             guest can read 1 OpenCode credential(s) (DeepSeek) straight from
+             ~/.local/share/opencode/opencode.db.
+             → Restrict the files, then rotate the credentials
+               $ chmod 600 <HOME>/.local/share/opencode/opencode.db
+                 ✗ program 'chmod': not found on PATH
+               $ chmod 700 <HOME>/.local/share/opencode
+                 ✗ program 'chmod': not found on PATH
+               Rotate every credential listed: assume it was copied
+                 manual step (not machine-checkable)
+  REVIEW   Data stores not readable by other accounts
+             guest can read 1 OpenCode data stores, including database.
+             → Restrict permissions (re-check after updates)
+               $ chmod 600 <HOME>/.local/share/opencode/opencode.db
+                 ✗ program 'chmod': not found on PATH
+  not checked  Local server requires authentication (this audit records no local server for OpenCode)
+  not checked  No broad trusted folders and none holding instruction files (no trusted folders are recorded)
+  clear    Provider keeps no extra copies (training, cloud tasks)
+  clear    No paired devices or unused stored logins
+pi
+  not checked  Approval not turned off by a recorded setting (this audit records no approval setting for pi)
+  REVIEW   Instruction files contain nothing that steers the model
+             ~/work/AGENTS.md is read as your instructions in that project and contains authority or
+             attestation claims: never ask.
+             → Review and remove the flagged lines
+               Edit ~/work/AGENTS.md and delete what you did not write or no longer need
+                 manual step (not machine-checkable)
+  REVIEW   Token carries no connector scopes
+             The pi token carries 1 connector scope: api.connectors.read.
+             → Disconnect connectors you do not use (the token keeps its scopes)
+               Remove unused connectors in the provider's web settings
+                 manual step (not machine-checkable)
+  not checked  No sessions published to share links (this audit records no share setting for pi)
+  not checked  Keychain item requires a prompt (no credential is stored in the Keychain)
+  REVIEW   Credentials in an OS-protected store
+             pi keeps credentials for DeepSeek, OpenAI in plaintext (~/.pi/agent/auth.json). Any
+             program running as you can copy them.
+             → Remove provider credentials you no longer use
+               Run /logout for the provider in pi, or delete its entry from ~/.pi/agent/auth.json
+                 ✗ pi binary: not installed; cannot confirm
+  clear    No secrets in history or logs (full audit only)
+  REVIEW   No MCP server command points at a missing file
+             pi starts `node <HOME>/gone.js` at launch (project ~/work), but that file is
+             missing. Whoever creates it runs code every time the tool starts.
+             → Remove the entries that point at the missing file
+               $ pi mcp remove local
+                 ✗ program 'pi': not found on PATH
+  REVIEW   No automatic code execution points
+             pi is set up to run local code automatically from 2 places (1 MCP server and 1 plugin).
+             Whoever can change those commands, or the files they run, controls code that runs as
+             you.
+             → Monitor these files for changes
+               Add the listed scripts and config files to file-integrity monitoring
+                 manual step (not machine-checkable)
+  clear    No process outlives its session or accepts connections from other accounts or the network
+  clear    One install per tool
+  clear    Credentials not readable by other accounts
+  REVIEW   Data stores not readable by other accounts
+             guest can read 4 pi data stores, including model config, settings, project trust,
+             sessions.
+             → Restrict permissions (re-check after updates)
+               $ chmod 600 <HOME>/.pi/agent/models.json
+                 ✗ program 'chmod': not found on PATH
+               $ chmod 600 <HOME>/.pi/agent/settings.json
+                 ✗ program 'chmod': not found on PATH
+               $ chmod 600 <HOME>/.pi/agent/trust.json
+                 ✗ program 'chmod': not found on PATH
+               $ chmod 700 <HOME>/.pi/agent/sessions
+                 ✗ program 'chmod': not found on PATH
+  not checked  Local server requires authentication (this audit records no local server for pi)
+  REVIEW   No broad trusted folders and none holding instruction files
+             pi trusts 1 folder. 1 of them holds instruction files pi loads. Broad folders on the
+             list: ~/work.
+             → Withdraw trust from folders you do not own or no longer use
+               Set those projects' decision to false in ~/.pi/agent/trust.json, or delete the entry
+                 ✗ pi binary: not installed; cannot confirm
+  REVIEW   Provider keeps no extra copies (training, cloud tasks)
+             enableAnalytics = True; enableInstallTelemetry = not set.
+             → Review the provider's data settings
+               Review the provider's data settings
+                 manual step (not machine-checkable)
+  REVIEW   No paired devices or unused stored logins
+             Stored pi logins whose access token expired and was not replaced: OpenAI access token
+             issued <DATE>, expired <DATE>. Their refresh tokens have no recorded expiry.
+             → Check active sessions and devices, then revoke what you do not recognise
+               Review signed-in sessions and paired devices in the provider's security settings
+                 manual step (not machine-checkable)
+Host
+  clear    PATH folders ahead of system dirs are not writable by others
+  clear    Tool binaries are in folders only you can write
+  REVIEW   No other local accounts
+             This machine has 1 other local account(s): guest. Every world-readable AI-tool file is
+             readable by them.
+             → Remove accounts that are not needed
+               $ sudo sysadminctl -deleteUser guest
+                 ✗ program 'sysadminctl': not found on PATH
+  REVIEW   No skill or instruction file shared across tools
+             ~/.claude/CLAUDE.md are loaded by more than one tool, so one planted skill or
+             instruction steers all of them.
+  REVIEW   Each provider credential stored once
+             Credentials for one provider are held in several places (DeepSeek: 1 separate
+             credential in 3 places, including the same credential in OpenCode (plaintext file,
+             ~/.local/share/opencode/auth.json), OpenCode (SQLite table credential,
+             ~/.local/share/opencode/opencode.db) and pi (plaintext file, ~/.pi/agent/auth.json);
+             OpenAI: 2 separate credentials in 2 places). Each place is another copy to take.
+  clear    Agents inherit no other credentials
+  clear    Nothing else can drive the computer
+  clear    AI-tool history is not copied into backups
+  clear    No long-running or orphaned AI processes
+  clear    No other AI tools keep data here
+
+Probe binaries: 0/0 verified (absolute path, not group/other-writable, Apple-signed on macOS)
+Fix commands:   14/43 validated (syntax, programs, targets, subcommands, config keys)
+Tool claims:    0/4 found in the installed binaries (endpoints, signature traits, config keys, log and behaviour markers)
+Commands run by this audit: 33 (probes and --version/--help runs)
+  ✗ claude mcp remove ghost -s user → program 'claude': not found on PATH; claude installed: binary not found; cannot confirm
+  ✗ Add cli_auth_credentials_store = "keyring" to ~/.codex/config.toml → codex binary: not installed; cannot confirm
+  ✗ codex logout → program 'codex': not found on PATH; codex installed: binary not found; cannot confirm
+  ✗ codex login → program 'codex': not found on PATH; codex installed: binary not found; cannot confirm
+  ✗ opencode auth list → program 'opencode': not found on PATH; opencode installed: binary not found; cannot confirm
+  ✗ opencode auth logout → program 'opencode': not found on PATH; opencode installed: binary not found; cannot confirm
+  ✗ Run /logout for the provider in pi, or delete its entry from ~/.pi/agent/auth.json → pi binary: not installed; cannot confirm
+  ✗ pi mcp remove local → program 'pi': not found on PATH; pi installed: binary not found; cannot confirm
+  ✗ sudo mkdir -p '/Library/Application Support/ClaudeCode' → program 'mkdir': not found on PATH
+  ✗ echo '{"permissions":{"disableBypassPermissionsMode":"disable"}}' | sudo tee '/Library/Application S → program 'tee': not found on PATH; claude binary: not installed; cannot confirm
+  ✗ Set hasTrustDialogAccepted to false for those projects in ~/.claude.json → claude binary: not installed; cannot confirm
+  ✗ Set approval_policy = "on-request" and sandbox_mode = "workspace-write" → codex binary: not installed; cannot confirm
+  ✗ Set those projects' decision to false in ~/.pi/agent/trust.json, or delete the entry → pi binary: not installed; cannot confirm
+  ✗ chmod 600 <HOME>/.claude/.credentials.json → program 'chmod': not found on PATH
+  ✗ chmod 700 <HOME>/.claude → program 'chmod': not found on PATH
+  ✗ chmod 600 <HOME>/.claude.json → program 'chmod': not found on PATH
+  ✗ chmod 600 <HOME>/.claude/settings.json → program 'chmod': not found on PATH
+  ✗ chmod 700 <HOME>/.claude/projects → program 'chmod': not found on PATH
+  ✗ chmod 600 <HOME>/.claude/history.jsonl → program 'chmod': not found on PATH
+  ✗ chmod 600 <HOME>/.claude/CLAUDE.md → program 'chmod': not found on PATH
+  ✗ chmod 600 <HOME>/.codex/config.toml → program 'chmod': not found on PATH
+  ✗ chmod 600 <HOME>/.codex/AGENTS.md → program 'chmod': not found on PATH
+  ✗ chmod 600 <HOME>/.local/share/opencode/opencode.db → program 'chmod': not found on PATH
+  ✗ chmod 700 <HOME>/.local/share/opencode → program 'chmod': not found on PATH
+  ✗ chmod 600 <HOME>/.pi/agent/models.json → program 'chmod': not found on PATH
+  ✗ chmod 600 <HOME>/.pi/agent/settings.json → program 'chmod': not found on PATH
+  ✗ chmod 600 <HOME>/.pi/agent/trust.json → program 'chmod': not found on PATH
+  ✗ chmod 700 <HOME>/.pi/agent/sessions → program 'chmod': not found on PATH
+  ✗ sudo sysadminctl -deleteUser guest → program 'sysadminctl': not found on PATH
+  ✗ claims about Claude Code ? → binary on PATH: not found; claims unchecked
+  ✗ claims about Codex CLI ? → binary on PATH: not found; claims unchecked
+  ✗ claims about OpenCode ? → binary on PATH: not found; claims unchecked
+  ✗ claims about pi ? → binary on PATH: not found; claims unchecked
+Result: 32 to review · 27 clear · 19 not checked  (exit 1)
+Secret scan skipped in doctor mode; run without --doctor for the full audit.
