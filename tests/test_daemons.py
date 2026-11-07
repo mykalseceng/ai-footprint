@@ -126,7 +126,7 @@ def test_rule_names_each_daemon_and_offers_validated_codex_fixes(tmp_path: Path)
     assert found.statement == (
         "Codex CLI keeps 1 background process running outside any session (started by "
         "launchd): pid 47165 "
-        "`app-server --listen unix:// --managed-daemon` (3 days, launchd; unix "
+        "`codex app-server --listen unix:// --managed-daemon` (3 days, launchd; unix "
         "/tmp/codex-daemon-501/abcdefghijkl… mode 600; binary /x/bin/codex, not the one on PATH)."
     )
     assert found.fix is not None
@@ -156,8 +156,8 @@ def test_a_session_child_that_listens_is_named_with_its_session_and_never_killed
     ctx = checks.RuleContext(host=host(tmp_path), platform="darwin", home=tmp_path)
     [found] = local_code.rule_daemons(report, ctx)
     assert found.statement == (
-        "OpenCode sessions accept connections: pid 50615 `serve --service`, started by "
-        "session pid 50614, on tcp 127.0.0.1:49374."
+        "OpenCode sessions accept connections: pid 50615 `opencode.exe serve --service`, "
+        "started by session pid 50614, on tcp 127.0.0.1:49374."
     )
     assert "outside any session" not in found.statement
     assert found.fix is not None
@@ -209,3 +209,21 @@ def test_an_installed_app_started_by_launchd_is_the_app_not_a_daemon():
     ]
     found = daemons.collect(Context(home=Path("/none"), system=FakeSystem(), now=0), report)
     assert [d.pid for d in found] == [11]
+
+
+def test_a_program_path_with_spaces_is_read_whole(tmp_path: Path):
+    program = tmp_path / "My App.app" / "Contents" / "MacOS" / "helper tool"
+    program.parent.mkdir(parents=True)
+    program.write_text("")
+    assert daemons._binary(f"{program} --flag value") == str(program)
+    assert daemons._binary("/usr/bin/env python3 x.py") == "/usr/bin/env"
+
+
+def test_a_helper_inside_the_installed_app_is_not_off_path():
+    report = ToolReport(name="demo", display_name="Demo", installed=True)
+    report.binaries = [
+        BinaryInfo("/Applications/Demo.app/Contents/MacOS/Demo", "/Applications/Demo.app/x.asar")
+    ]
+    helper = "/Applications/Demo.app/Contents/Frameworks/Helper"
+    assert not daemons._off_path(helper, report)
+    assert daemons._off_path("/opt/other/demo", report)
