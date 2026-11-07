@@ -44,6 +44,11 @@ class RuleContext:
         harness = harnesses.get(report.name)
         return harness.profile.approval_off if harness else {}
 
+    def approval_off_flagged(self, report: ToolReport) -> tuple[str, ...]:
+        """Setting keys that mean approval is off for the audited tool when flagged."""
+        harness = harnesses.get(report.name)
+        return harness.profile.approval_off_flagged if harness else ()
+
     def can_signal(self, report: ToolReport) -> bool:
         """The tool's harness marks signs of credential use elsewhere as concerns."""
         harness = harnesses.get(report.name)

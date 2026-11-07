@@ -229,6 +229,7 @@ marker = "AGENTS.override.md"
 
 [signals]
 approval_off = { approval_policy = "never", sandbox_mode = "danger-full-access" }
+approval_off_flagged = ["threads with approval_mode=never"]
 
 [[host_control]]
 glob = "{home}/computer-use/*.app"

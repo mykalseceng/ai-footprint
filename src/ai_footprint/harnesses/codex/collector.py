@@ -25,7 +25,6 @@ from ai_footprint.harnesses.common import (
 )
 from ai_footprint.host import processes
 from ai_footprint.model import (
-    THREADS_WITHOUT_APPROVAL,
     BinaryInfo,
     Credential,
     Endpoint,
@@ -42,6 +41,8 @@ from ai_footprint.text import plural, when
 from ai_footprint.tokens import inspect_token, iso_time, verify_rs256
 
 PROFILE = profile.load_beside(__name__)
+THREADS_WITHOUT_APPROVAL = "threads with approval_mode=never"
+"""Setting key counting recorded threads that ran with approval off (a profile signal)."""
 NAME = PROFILE.name
 DISPLAY = PROFILE.display_name
 

@@ -7,7 +7,6 @@ from ai_footprint.checks.base import RuleContext, exposure
 from ai_footprint.harnesses.profile import Remedy
 from ai_footprint.model import (
     RUNNING_BYPASS,
-    THREADS_WITHOUT_APPROVAL,
     Exposure,
     Fix,
     FixCommand,
@@ -19,8 +18,12 @@ from ai_footprint.text import join, plural
 
 def approval_keys() -> frozenset[str]:
     """Every setting the no-approval check reads, across all harnesses."""
-    keys = {key for h in harnesses.registry().values() for key in h.profile.approval_off}
-    return frozenset({*keys, RUNNING_BYPASS, THREADS_WITHOUT_APPROVAL})
+    keys = {
+        key
+        for h in harnesses.registry().values()
+        for key in (*h.profile.approval_off, *h.profile.approval_off_flagged)
+    }
+    return frozenset({*keys, RUNNING_BYPASS})
 
 
 def rule_no_approval(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
@@ -28,7 +31,8 @@ def rule_no_approval(report: ToolReport, ctx: RuleContext) -> list[Exposure]:
     off = ctx.approval_off(report)
     configured = [s for s in report.settings if off.get(s.key) == s.value]
     running = [s for s in report.settings if s.key == RUNNING_BYPASS]
-    threads = [s for s in report.settings if s.key == THREADS_WITHOUT_APPROVAL and s.concern]
+    flagged = ctx.approval_off_flagged(report)
+    threads = [s for s in report.settings if s.key in flagged and s.concern]
     if not configured and not running and not threads:
         return []
     observed = [f"{s.key} = {s.value}" for s in configured]

@@ -183,6 +183,7 @@ class Profile:
     settings: tuple[Named, ...] = ()
     env: tuple[Named, ...] = ()
     approval_off: Mapping[str, str] = field(default_factory=dict)
+    approval_off_flagged: tuple[str, ...] = ()
     capabilities: frozenset[Capability] = frozenset()
     process_words: tuple[str, ...] = ()
     drives: tuple[str, ...] = ()
@@ -368,9 +369,13 @@ def _host_control(
     return tuple(out)
 
 
-def _signals(where: str, raw: Mapping[str, Any]) -> dict[str, str]:
-    _keys(f"{where}.signals", raw, {"approval_off"}, set())
-    return dict(raw.get("approval_off", {}))
+def _signals(where: str, raw: Mapping[str, Any]) -> tuple[dict[str, str], tuple[str, ...]]:
+    """Setting values that turn approval off, and setting keys that do so when flagged."""
+    _keys(f"{where}.signals", raw, {"approval_off", "approval_off_flagged"}, set())
+    flagged = _str_tuple(
+        f"{where}.signals.approval_off_flagged", raw.get("approval_off_flagged", [])
+    )
+    return dict(raw.get("approval_off", {})), flagged
 
 
 def parse(where: str, raw: Mapping[str, Any]) -> Profile:
@@ -381,6 +386,7 @@ def parse(where: str, raw: Mapping[str, Any]) -> Profile:
     """
     _keys(where, raw, _TOP, {"name", "display_name", "binaries", "roots", "presence", "process"})
     roots = _roots(where, raw["roots"])
+    approval_off, approval_off_flagged = _signals(where, raw.get("signals", {}))
     for index, template in enumerate(raw["presence"]):
         _check_root(f"{where}.presence[{index}]", template, roots)
     return Profile(
@@ -395,7 +401,8 @@ def parse(where: str, raw: Mapping[str, Any]) -> Profile:
         fingerprint=_fingerprint(where, raw.get("fingerprint", [])),
         settings=_named(f"{where}.settings", raw.get("settings", [])),
         env=_named(f"{where}.env", raw.get("env", [])),
-        approval_off=_signals(where, raw.get("signals", {})),
+        approval_off=approval_off,
+        approval_off_flagged=approval_off_flagged,
         capabilities=frozenset(
             _enum(f"{where}.capabilities", Capability, c) for c in raw.get("capabilities", [])
         ),

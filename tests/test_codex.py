@@ -11,7 +11,7 @@ from ai_footprint.harnesses.codex import account as codex_account
 from ai_footprint.harnesses.codex import collector as codex
 from ai_footprint.harnesses.common import Context, shell_shortcuts, socket_endpoints
 from ai_footprint.host import Socket
-from ai_footprint.model import THREADS_WITHOUT_APPROVAL, HostReport, ProcessInfo, ToolReport
+from ai_footprint.model import HostReport, ProcessInfo, ToolReport
 from ai_footprint.reporting import figures
 from ai_footprint.system import ProbeResult
 from tests.conftest import FakeSystem
@@ -82,7 +82,8 @@ def test_threads_that_ran_with_approval_off_are_counted_by_sandbox(tmp_path: Pat
     )
     setting = codex.thread_approval(tmp_path)
     assert setting is not None
-    assert setting.key == THREADS_WITHOUT_APPROVAL
+    assert setting.key == codex.THREADS_WITHOUT_APPROVAL
+    assert setting.key in codex.PROFILE.approval_off_flagged
     assert setting.value == (
         "3 of 4 CLI threads (sandbox 2 danger-full-access, 1 disabled; latest 2026-10-17)"
     )

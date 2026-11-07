@@ -272,8 +272,6 @@ class Endpoint:
 
 RUNNING_BYPASS = "running with --dangerously-skip-permissions"
 """Setting key that lists sessions started with approval prompts turned off."""
-THREADS_WITHOUT_APPROVAL = "threads with approval_mode=never"
-"""Setting key that counts recorded threads that ran with approval off."""
 
 EXTENSION_KINDS: dict[str, tuple[str, str]] = {
     "mcp": ("MCP server", "MCP servers"),
