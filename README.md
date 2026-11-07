@@ -1,6 +1,6 @@
 # ai-footprint
 
-Audits what Claude Code, Codex CLI, OpenCode and pi leave on your Mac and what that exposes:
+Audits what Claude Code, Claude Desktop, Codex CLI, OpenCode, pi and T3 Code leave on your Mac and what that exposes:
 stored credentials and who can read them, sessions and logs, secrets in history, instruction
 files, MCP servers and hooks that run automatically, and where each tool connects. Each run
 writes a single-file HTML dashboard.
@@ -16,17 +16,32 @@ uv run ai-footprint all --json run.json    # also write the data the dashboard s
 uv run ai-footprint all --html report.html # also write the static report (no scripts)
 uv run ai-footprint all --doctor           # each check: review, clear or not checked
 uv run ai-footprint --validate             # verify probes, fix commands, tool claims, CLI options
+uv run ai-footprint t3code --profile       # documented features here, and what the profile misses
 uv run ai-footprint claude --live          # opt-in network checks
 uv run ai-footprint all --capture          # record where each tool connects when started (sudo)
 uv run ai-footprint all --network ai-footprint-capture.json   # show that capture again later
 ```
 
-Tool names are `claude`, `codex`, `opencode` and `pi`. `--doctor` and `--validate` exit 1
+Tool names are `claude`, `claude_desktop`, `codex`, `opencode`, `pi` and `t3code`. `--doctor` and `--validate` exit 1
 when a check fails.
 
 `--capture` shows which hosts each tool reaches on its own. It runs `sudo tcpdump` on all
 interfaces, starts each tool idle with no prompt for 60 seconds, and names every host its
 processes reached from the TLS server name, HTTP Host header or DNS answer in the capture.
+
+## Harnesses
+
+Each tool is a package under `src/ai_footprint/harnesses/<tool>/`. Its `profile.toml` holds
+everything that is data: folders and the variables that move them, files and what they hold,
+hosts, binary markers, approval signals, fix commands and the documented feature inventory.
+`collector.py` reads what needs code. The registry finds packages on its own, the checks in
+`checks/` and the outputs in `reporting/` never name a tool, and `tests/test_architecture.py`
+fails if they do.
+
+`--profile` maps a tool's documented features onto this machine and lists paths, config keys
+and variables its profile does not cover yet. The `harness-profiler` agent
+(`.claude/agents/harness-profiler.md`) researches those in the official docs, writes what it
+confirms into the profile, and onboards new tools the same way.
 
 ## Safety
 

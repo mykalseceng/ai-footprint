@@ -6,7 +6,7 @@ import re
 from hypothesis import given
 from hypothesis import strategies as st
 
-from ai_footprint import dashboard
+from ai_footprint.reporting import dashboard
 
 SCRIPT = (dashboard.ASSETS / "dashboard.js").read_text(encoding="utf-8")
 # Anything that turns a string into markup or code, or reaches the network.

@@ -1,4 +1,4 @@
-from ai_footprint import reportcheck
+from ai_footprint.reporting import reportcheck
 
 
 def answer(text: str = "", rows: list[list[str]] | None = None) -> dict:

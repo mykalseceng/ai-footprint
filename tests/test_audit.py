@@ -10,18 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import (
-    answers,
-    cli,
-    dashboard,
-    document,
-    figures,
-    fsinfo,
-    report_html,
-    reportcheck,
-    surface,
-)
+from ai_footprint import cli, fsinfo
 from ai_footprint.audit import detect_tools, run_audit
+from ai_footprint.harnesses import registry
 from ai_footprint.model import (
     Artifact,
     AuditReport,
@@ -31,7 +22,17 @@ from ai_footprint.model import (
     HostReport,
     ToolReport,
 )
-from ai_footprint.report_text import Style, render_doctor, render_summary
+from ai_footprint.reporting import (
+    answers,
+    dashboard,
+    document,
+    figures,
+    report_html,
+    reportcheck,
+    surface,
+)
+from ai_footprint.reporting.report_text import Style, render_doctor, render_summary
+from ai_footprint.text import plural
 from tests.conftest import (
     FAKE_ANTHROPIC_ACCESS,
     FAKE_ANTHROPIC_REFRESH,
@@ -85,16 +86,16 @@ def test_expected_exposures_for_each_tool(audited):
         "claude:live-token-on-disk",
         "claude:secrets-at-rest",
         "claude:instructions",
-        "claude:token-reach",
+        "claude:connected-apps",
         "codex:no-approval",
         "codex:creds-plaintext",
         "codex:instructions",
-        "codex:token-reach",
+        "codex:connected-apps",
         "opencode:creds-readable",
         "opencode:creds-plaintext",
         "pi:creds-plaintext",
         "pi:instructions",
-        "pi:token-reach",
+        "pi:connected-apps",
         "pi:trust",
         "pi:dangling",
         "host:other-accounts",
@@ -169,14 +170,17 @@ def test_jwt_claims_and_connector_scopes_are_reported(audited):
     token = next(t for t in codex.credentials[0].tokens if t.field == "access_token")
     assert token.issuer == "https://auth.example.com"
     assert "api.connectors.read" in token.scopes
-    reach = next(x for x in codex.exposures if x.id == "codex:token-reach")
+    reach = next(x for x in codex.exposures if x.id == "codex:connected-apps")
     assert reach.statement == (
-        "The Codex CLI token carries 1 connector scope: api.connectors.read."
+        "Anyone holding the Codex CLI token can use the apps connected to your account, because "
+        "it carries api.connectors.read. Which apps are connected is not recorded on this "
+        "machine; the provider's connected-apps settings list them."
     )
     claude = next(t for t in audit.tools if t.name == "claude")
-    reach = next(x for x in claude.exposures if x.id == "claude:token-reach")
+    reach = next(x for x in claude.exposures if x.id == "claude:connected-apps")
     assert "user:mcp_servers" in reach.statement
-    assert "connected to claude.ai Gmail" in reach.statement
+    assert "recorded on this machine are" in reach.statement
+    assert "claude.ai Gmail" in reach.statement
 
 
 def test_no_secret_value_reaches_any_output(audited):
@@ -342,7 +346,7 @@ def test_summary_line_sizes_only_outermost_locations_and_says_how_many(audited):
     listed = sum(1 for a in figures.outermost(codex.artifacts) if a.exists)
     size = fsinfo.human_size(figures.disk_bytes(codex.artifacts))
     line = next(line for line in text.splitlines() if line.strip().startswith("Codex CLI"))
-    assert f"{size} in {surface.plural(listed, 'listed location')} · " in line
+    assert f"{size} in {plural(listed, 'listed location')} · " in line
 
 
 def test_headline_names_every_installed_version():
@@ -359,9 +363,9 @@ def test_headline_names_every_installed_version():
 
 
 def test_plural_handles_words_ending_in_y():
-    assert surface.plural(2, "entry") == "2 entries"
-    assert surface.plural(1, "entry") == "1 entry"
-    assert surface.plural(2, "key") == "2 keys"
+    assert plural(2, "entry") == "2 entries"
+    assert plural(1, "entry") == "1 entry"
+    assert plural(2, "key") == "2 keys"
 
 
 def test_readers_answer_says_how_many_files_the_group_can_read(tmp_path: Path):
@@ -421,4 +425,4 @@ def test_collect_detects_by_itself_when_no_presence_is_given(tmp_path: Path):
     (tmp_path / ".claude").mkdir()
     audit, _checklist = run_audit(system=QuietFakeSystem(), home=tmp_path, scan=False)
     installed = {t.name: t.installed for t in audit.tools}
-    assert installed == {"claude": True, "codex": False, "opencode": False, "pi": False}
+    assert installed == {name: name == "claude" for name in registry()}

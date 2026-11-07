@@ -5,11 +5,14 @@ import sqlite3
 import time
 from pathlib import Path
 
-from ai_footprint import accounts, extensions, figures, rules
-from ai_footprint.collectors import codex
-from ai_footprint.collectors.common import Context, shell_shortcuts, socket_endpoints
+from ai_footprint import checks, extensions
+from ai_footprint.checks import needs, steering
+from ai_footprint.harnesses.codex import account as codex_account
+from ai_footprint.harnesses.codex import collector as codex
+from ai_footprint.harnesses.common import Context, shell_shortcuts, socket_endpoints
 from ai_footprint.host import Socket
 from ai_footprint.model import HostReport, ProcessInfo, ToolReport
+from ai_footprint.reporting import figures
 from ai_footprint.system import ProbeResult
 from tests.conftest import FakeSystem
 
@@ -30,7 +33,7 @@ def state_db(root: Path, sql: str, rows: list[tuple] | None = None) -> None:
 THREADS = "CREATE TABLE threads (approval_mode TEXT, sandbox_policy TEXT, updated_at INTEGER)"
 ENROLLMENTS = (
     "CREATE TABLE remote_control_enrollments (app_server_client_name TEXT, server_name TEXT, "
-    "remote_control_enabled INTEGER, updated_at INTEGER)"
+    "remote_control_enabled INTEGER, updated_at INTEGER, websocket_url TEXT)"
 )
 
 
@@ -38,7 +41,7 @@ def codex_report(**fields) -> ToolReport:
     return ToolReport(name="codex", display_name="Codex CLI", installed=True, **fields)
 
 
-def rule_context(home: Path) -> rules.RuleContext:
+def rule_context(home: Path) -> checks.RuleContext:
     host = HostReport(
         os="macOS",
         kernel="",
@@ -49,7 +52,7 @@ def rule_context(home: Path) -> rules.RuleContext:
         home=str(home),
         home_mode="drwx------",
     )
-    return rules.RuleContext(host=host, platform="darwin", home=home)
+    return checks.RuleContext(host=host, platform="darwin", home=home)
 
 
 def test_thread_approval_is_absent_without_a_state_db_or_threads_table(tmp_path: Path):
@@ -79,7 +82,8 @@ def test_threads_that_ran_with_approval_off_are_counted_by_sandbox(tmp_path: Pat
     )
     setting = codex.thread_approval(tmp_path)
     assert setting is not None
-    assert setting.key == rules.THREADS_WITHOUT_APPROVAL
+    assert setting.key == codex.THREADS_WITHOUT_APPROVAL
+    assert setting.key in codex.PROFILE.approval_off_flagged
     assert setting.value == (
         "3 of 4 CLI threads (sandbox 2 danger-full-access, 1 disabled; latest 2026-10-17)"
     )
@@ -112,7 +116,7 @@ def test_recorded_threads_drive_the_no_approval_signal_and_figure(tmp_path: Path
     setting = codex.thread_approval(tmp_path)
     assert setting is not None
     report = codex_report(settings=[setting])
-    [found] = rules.rule_no_approval(report, rule_context(tmp_path))
+    [found] = steering.rule_no_approval(report, rule_context(tmp_path))
     assert "threads with approval_mode=never: 1 of 1 CLI threads" in found.statement
     report.exposures = [found]
     figure = figures.approval(report)
@@ -125,9 +129,9 @@ def test_threads_that_all_asked_are_read_as_not_found(tmp_path: Path):
     setting = codex.thread_approval(tmp_path)
     assert setting is not None
     report = codex_report(settings=[setting])
-    assert rules.rule_no_approval(report, rule_context(tmp_path)) == []
+    assert steering.rule_no_approval(report, rule_context(tmp_path)) == []
     assert figures.approval(report).value == "not found"
-    assert rules._needs_approval_setting(report, rule_context(tmp_path)) == ""
+    assert needs.needs_approval_setting(report, rule_context(tmp_path)) == ""
 
 
 def test_cloud_access_note_makes_no_claim_about_cloud_tasks(tmp_path: Path):
@@ -139,7 +143,7 @@ def test_cloud_access_note_makes_no_claim_about_cloud_tasks(tmp_path: Path):
             }
         )
     )
-    [note] = accounts._codex_data(codex_report(), tmp_path, {})
+    [note] = codex_account.data_notes(codex_report(), tmp_path, {})
     assert note.text == "Codex cloud access: enabled; cloud-linked repos: none."
     assert not note.concern
 
@@ -148,30 +152,35 @@ def test_mobile_setup_flag_alone_is_stated_and_not_a_concern(tmp_path: Path):
     (tmp_path / ".codex-global-state.json").write_text(
         json.dumps({"codex-mobile-has-connected-device": True})
     )
-    [note] = accounts._codex_remote({}, tmp_path)
+    [note] = codex_account.remote_notes({}, tmp_path)
     assert "codex-mobile-has-connected-device = true" in note.text
     assert "can drive" not in note.text
     assert not note.concern
 
 
 def test_enabled_remote_control_enrollment_is_a_concern_with_its_record(tmp_path: Path):
-    state_db(tmp_path, ENROLLMENTS, [("Codex Desktop", "Studio", 1, UPDATED)])
-    config = {"desktop": {"keepRemoteControlAwakeWhilePluggedIn": True}}
-    enrolled, awake = accounts._codex_remote(config, tmp_path)
-    assert enrolled.text == (
-        "Codex state, shared with the desktop app, records remote control enabled for server "
-        "Studio through client Codex Desktop "
-        "(updated 2026-10-17). Which devices are paired now is not recorded locally."
+    state_db(
+        tmp_path,
+        ENROLLMENTS,
+        [("Codex Desktop", "Studio", 1, UPDATED, "wss://relay.example.com/v1")],
     )
+    config = {"desktop": {"keepRemoteControlAwakeWhilePluggedIn": True}}
+    enrolled, awake = codex_account.remote_notes(config, tmp_path)
+    assert enrolled.text == (
+        "Codex records remote control enabled for this machine (server Studio) through Codex "
+        "Desktop, relayed by relay.example.com (updated 2026-10-17). Which devices are paired "
+        "now is not recorded locally."
+    )
+    assert enrolled.signal == "remote-control"
     assert enrolled.source == "~/.codex/state_5.sqlite remote_control_enrollments"
     assert enrolled.concern
     assert awake.text == "desktop.keepRemoteControlAwakeWhilePluggedIn = true."
 
 
 def test_disabled_enrollment_and_missing_table_raise_no_concern(tmp_path: Path):
-    assert accounts._codex_remote({}, tmp_path) == []
-    state_db(tmp_path, ENROLLMENTS, [("Codex Desktop", "Studio", 0, UPDATED)])
-    [note] = accounts._codex_remote({}, tmp_path)
+    assert codex_account.remote_notes({}, tmp_path) == []
+    state_db(tmp_path, ENROLLMENTS, [("Codex Desktop", "Studio", 0, UPDATED, None)])
+    [note] = codex_account.remote_notes({}, tmp_path)
     assert "records remote control not enabled" in note.text
     assert not note.concern
 
@@ -183,10 +192,10 @@ def test_codex_log_markers_need_the_codex_binary_to_know_them(tmp_path: Path):
         "Your access token could not be refreshed. Please run /login\n"
     )
     ctx = Context(home=tmp_path, system=FakeSystem(), now=time.time())
-    assert accounts._codex_detect(ctx, codex_report(), root, "") == []
+    assert codex_account.detect_notes(ctx, codex_report(), root, "") == []
     binary = tmp_path / "codex"
     binary.write_bytes(b"\0".join(m.encode() for m in codex.LOG_MARKERS))
-    [note] = accounts._codex_detect(ctx, codex_report(), root, str(binary))
+    [note] = codex_account.detect_notes(ctx, codex_report(), root, str(binary))
     assert note.text.startswith("Auth events in local logs: token refresh failed: 1 times")
     assert "asked to log in again" not in note.text
 
@@ -270,3 +279,17 @@ def test_every_tool_merges_socket_rows_and_skips_inbound_connections():
     ]
     [row] = socket_endpoints("pi", socks)
     assert (row.host, row.count, row.purpose) == ("1.1.1.1:443", 2, "open sockets from pid 1, 2")
+
+
+def test_managed_policy_names_the_files_and_their_keys(tmp_path: Path):
+    home, root = tmp_path / "home", tmp_path / "root"
+    home.mkdir()
+    managed = root / "etc" / "codex"
+    managed.mkdir(parents=True)
+    (managed / "requirements.toml").write_text('allowed_approval_policies = ["on-request"]\n')
+    system = FakeSystem()
+    system.root = root
+    setting = codex.managed_policy(Context(home=home, system=system, now=0))
+    assert setting.value == f"{managed / 'requirements.toml'} (keys: allowed_approval_policies)"
+    system.root = tmp_path / "nothing"
+    assert codex.managed_policy(Context(home=home, system=system, now=0)).value == "none"

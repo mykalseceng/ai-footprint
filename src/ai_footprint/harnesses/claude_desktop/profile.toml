@@ -1,0 +1,517 @@
+# claude_desktop: what ai-footprint knows about this harness. Schema: harnesses/profile.py.
+#
+# Claude Desktop is Anthropic's Electron app. Besides chat it runs Cowork (agent mode: an
+# agent loop on this machine whose shell commands run in a local Linux VM) and Claude Code
+# sessions in its Code tab, using Claude Code builds it downloads into its own folder. Its
+# JavaScript lives in Contents/Resources/app.asar, where markers are searched.
+name = "claude_desktop"
+display_name = "Claude Desktop"
+binaries = []
+process = "/Claude\\.app/Contents/"
+presence = ["{support}", "{logs}"]
+process_words = ["claudefordesktop"]
+env_prefixes = ["CLAUDE_DESKTOP_"]
+capabilities = ["remote-control"]
+settings = [
+  "mcpServers",
+  "preferences",
+  "coworkUserFilesPath",
+  "permissionMode",
+  "chromePermissionMode",
+  "bypassPermissionsModeEnabled",
+  "dispatchCodeTasksPermissionMode",
+  "ccRemoteControlDefaultEnabled",
+  "chicagoEnabled",
+  "coworkBrowserToolsEnabled",
+  "coworkScheduledTasksEnabled",
+  "ccdScheduledTasksEnabled",
+  "keepAwakeEnabled",
+]
+
+[roots]
+support = { default = "~/Library/Application Support/Claude" }
+logs = { default = "~/Library/Logs/Claude" }
+third_party = { default = "~/Library/Application Support/Claude-3p" }
+user_apps = { default = "~/Applications" }
+system_apps = { default = "/Applications" }
+
+[signals]
+approval_off = { "preferences.dispatchCodeTasksPermissionMode" = "bypassPermissions" }
+approval_off_flagged = [
+  "sessions with permissionMode=bypassPermissions",
+  "sessions with chromePermissionMode=skip_all_permission_checks",
+  "scheduled tasks that skip approval",
+]
+
+[[artifacts]]
+label = "App state and sign-in"
+path = "{support}/config.json"
+category = "credential"
+description = "App state and the claude.ai OAuth token cache (oauth:tokenCacheV2), stored as Electron safeStorage ciphertext whose key is in the Keychain"
+
+[[artifacts]]
+label = "SSH remote state"
+path = "{support}/ssh-remote-server-state.json"
+category = "credential"
+description = "Controller tokens for SSH remote machines, one per host, as safeStorage ciphertext"
+
+[[artifacts]]
+label = "Extension settings"
+path = "{support}/Claude Extensions Settings"
+category = "credential"
+description = "Per desktop extension: enabled state and user_config; sensitive values are safeStorage ciphertext (__encrypted__:)"
+
+[[artifacts]]
+label = "Cookies"
+path = "{support}/Cookies"
+category = "credential"
+description = "Electron cookie store, including the claude.ai sign-in cookies"
+
+[[artifacts]]
+label = "Spaces link key"
+path = "{support}/spaces-present"
+category = "credential"
+description = "Per-account link-key file (safeStorage ciphertext)"
+
+[[artifacts]]
+label = "MCP servers and preferences"
+path = "{support}/claude_desktop_config.json"
+category = "config"
+description = "Local MCP servers Desktop starts (mcpServers) and app preferences, including Code, Cowork, Dispatch, computer use and Remote Control settings"
+
+[[artifacts]]
+label = "Third-party mode config"
+path = "{third_party}/claude_desktop_config.json"
+category = "config"
+description = "Configuration used when Claude Desktop runs against a third-party inference provider"
+
+[[artifacts]]
+label = "Remote Control state"
+path = "{support}/remote-control-state.json"
+category = "config"
+description = "Environments this machine registered for Remote Control, per signed-in identity"
+
+[[artifacts]]
+label = "Cowork CLI operations"
+path = "{support}/cowork-enabled-cli-ops.json"
+category = "config"
+description = "Owner account of the CLI operations enabled for Cowork"
+
+[[artifacts]]
+label = "Extension blocklist"
+path = "{support}/extensions-blocklist.json"
+category = "config"
+description = "Cached desktop extension blocklist and when it was fetched"
+
+[[artifacts]]
+label = "MCP tool toggles"
+path = "{support}/mcp-user-tool-toggles.json"
+category = "config"
+description = "MCP tools turned off per account"
+
+[[artifacts]]
+label = "Code session presets"
+path = "{support}/ccd-session-presets.json"
+category = "config"
+description = "Saved presets for new Code sessions, per account"
+
+[[artifacts]]
+label = "Device registry"
+path = "{support}/ant-device-registry.json"
+category = "config"
+description = "Device ids per account"
+
+[[artifacts]]
+label = "Install id"
+path = "{support}/ant-did"
+category = "config"
+description = "Stable id of this install"
+
+[[artifacts]]
+label = "Token counter"
+path = "{support}/buddy-tokens.json"
+category = "config"
+description = "Today's token usage count (a number, not a credential)"
+
+[[artifacts]]
+label = "Plan usage history"
+path = "{support}/plan-usage-history.json"
+category = "config"
+description = "Recent plan usage samples"
+
+[[artifacts]]
+label = "Electron preferences"
+path = "{support}/Preferences"
+category = "config"
+description = "Chromium profile preferences"
+
+[[artifacts]]
+label = "Desktop extensions"
+path = "{support}/Claude Extensions"
+category = "extension"
+description = "Installed desktop extensions (.mcpb/.dxt), one folder per extension with its manifest.json"
+
+[[artifacts]]
+label = "Extension installations"
+path = "{support}/extensions-installations.json"
+category = "extension"
+description = "Metadata of installed desktop extensions"
+
+[[artifacts]]
+label = "Plugin list"
+path = "{support}/plugin-list"
+category = "extension"
+description = "Plugins enabled per account and organization"
+
+[[artifacts]]
+label = "Terminal shell integration"
+path = "{support}/terminal-shell-integration"
+category = "extension"
+description = "Shell startup scripts Desktop loads into its terminals (bash, zsh, fish, pwsh)"
+
+[[artifacts]]
+label = "Cowork sessions"
+path = "{support}/local-agent-mode-sessions"
+category = "session"
+description = "Cowork session records, uploads, outputs, audit log, per-session Claude Code home, scheduled tasks and synced skills"
+
+[[artifacts]]
+label = "Code sessions"
+path = "{support}/claude-code-sessions"
+category = "session"
+description = "Code tab session records (folder, model, permission modes, connectors) and scheduled tasks"
+
+[[artifacts]]
+label = "Scratch workspaces"
+path = "{support}/scratch-workspaces"
+category = "session"
+description = "Working folders of sessions started without a project, with the files they made"
+
+[[artifacts]]
+label = "Git worktrees"
+path = "{support}/git-worktrees.json"
+category = "session"
+description = "Worktrees and scratch folders Code sessions use"
+
+[[artifacts]]
+label = "Git shadow"
+path = "{support}/git-shadow"
+category = "session"
+description = "Temporary roots of Claude Code CLI runs"
+
+[[artifacts]]
+label = "Local Storage"
+path = "{support}/Local Storage"
+category = "session"
+description = "Electron profile: claude.ai local storage"
+
+[[artifacts]]
+label = "IndexedDB"
+path = "{support}/IndexedDB"
+category = "session"
+description = "Electron profile: claude.ai IndexedDB"
+
+[[artifacts]]
+label = "Session Storage"
+path = "{support}/Session Storage"
+category = "session"
+description = "Electron profile: per-window session storage"
+
+[[artifacts]]
+label = "Partitions"
+path = "{support}/Partitions"
+category = "session"
+description = "Separate Electron profiles, such as the launch preview's"
+
+[[artifacts]]
+label = "Bundled Claude Code"
+path = "{support}/claude-code"
+category = "binary"
+description = "Claude Code builds the Code tab runs, by version"
+
+[[artifacts]]
+label = "Cowork VM Claude Code"
+path = "{support}/claude-code-vm"
+category = "binary"
+description = "Claude Code build that runs inside the Cowork VM"
+
+[[artifacts]]
+label = "Cowork VM"
+path = "{support}/vm_bundles"
+category = "binary"
+description = "Linux VM kernel, root and session-data disk images Cowork runs shell commands in"
+
+[[artifacts]]
+label = "Logs"
+path = "{logs}"
+category = "log"
+description = "Main, MCP server, Cowork VM, Remote Control and SSH logs"
+
+[[artifacts]]
+label = "Crash reports"
+path = "{support}/Crashpad"
+category = "log"
+description = "Crash dumps"
+
+[[artifacts]]
+label = "Error reports"
+path = "{support}/sentry"
+category = "log"
+description = "Error-report session and upload queue"
+
+[[artifacts]]
+label = "HTTP cache"
+path = "{support}/Cache"
+category = "cache"
+description = "Electron HTTP cache"
+
+[[artifacts]]
+label = "Code cache"
+path = "{support}/Code Cache"
+category = "cache"
+description = "Compiled JavaScript cache"
+
+[[endpoints]]
+host = "claude.ai"
+purpose = "Claude web app and sign-in"
+
+[[endpoints]]
+host = "api.anthropic.com"
+purpose = "Anthropic API"
+
+[[endpoints]]
+host = "mcp-proxy.anthropic.com"
+purpose = "MCP proxy (MCP_PROXY_URL)"
+
+[[endpoints]]
+host = "bridge.claudeusercontent.com"
+purpose = "Bridge to the Claude in Chrome extension"
+
+[[endpoints]]
+host = "downloads.claude.ai"
+purpose = "Downloads"
+
+[[fingerprint]]
+label = "Data folder"
+value = "~/Library/Application Support/Claude"
+marker = "claude_desktop_config.json"
+
+[[fingerprint]]
+label = "Account token"
+value = "oauth:tokenCacheV2 in config.json, Electron safeStorage ciphertext"
+marker = "oauth:tokenCacheV2"
+
+[[fingerprint]]
+label = "Code session permission modes"
+value = "default, acceptEdits, plan, auto, bypassPermissions"
+marker = "bypassPermissions"
+
+[[fingerprint]]
+label = "Claude in Chrome modes"
+value = "ask, follow_a_plan, skip_all_permission_checks"
+marker = "skip_all_permission_checks"
+
+[remedies.require-approval]
+summary = "Require approval in Code sessions, Claude in Chrome and scheduled tasks"
+commands = [
+  { manual = "Switch each Bypass permissions session to another mode with the selector under the prompt box, and turn off Allow bypass permissions mode in Settings > Code", markers = ["bypassPermissions", "bypassPermissionsModeEnabled"] },
+  { manual = "Set Claude in Chrome to Manually approve or Automatically approve instead of Skip all approvals in each session and scheduled task", markers = ["Skip all approvals", "skip_all_permission_checks"] },
+]
+
+[remedies.remove-mcp]
+summary = "Remove the server entry"
+commands = [
+  { manual = "Delete mcpServers.$name from ~/Library/Application Support/Claude/claude_desktop_config.json, then quit and reopen Claude Desktop", markers = ["mcpServers", "claude_desktop_config.json"] },
+]
+
+[[docs]]
+url = "https://code.claude.com/docs/en/desktop"
+topic = "Code tab: permission modes, Allow bypass permissions mode, browser pane, computer use, SSH sessions, Remote Control settings, Dispatch sessions, worktrees"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/remote-control"
+topic = "Remote Control from the desktop app, auto-connect, disableRemoteControl, trusted devices"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/desktop-scheduled-tasks"
+topic = "local scheduled tasks, per-task permission mode, keep computer awake, missed runs"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/chrome"
+topic = "Claude in Chrome bridge (bridge.claudeusercontent.com), site permissions"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/mcp-quickstart"
+topic = "claude_desktop_config.json servers and claude mcp add-from-claude-desktop"
+
+[[docs]]
+url = "https://support.claude.com/en/articles/13364135-use-claude-cowork-safely"
+topic = "Cowork permission modes, folders, network egress, scheduled tasks, computer use, extensions"
+
+[[docs]]
+url = "https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview"
+topic = "Cowork local VM isolation, connected folders, local MCP and extension policies"
+
+[[docs]]
+url = "https://support.claude.com/en/articles/14128542-let-claude-use-your-computer-in-cowork"
+topic = "computer use: Enable computer use, Full control, app blocklist"
+
+[[docs]]
+url = "https://support.claude.com/en/articles/13947068-assign-tasks-from-anywhere-in-claude-cowork"
+topic = "Dispatch from the mobile app, keep awake, file access"
+
+[[docs]]
+url = "https://support.claude.com/en/articles/12902446-claude-in-chrome-permissions-guide"
+topic = "Claude in Chrome modes: Manually approve, Automatically approve, Skip all approvals"
+
+[[docs]]
+url = "https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop"
+topic = "desktop extensions, local MCP servers, sensitive settings in the OS secure store, admin policies"
+
+[[docs]]
+url = "https://support.claude.com/en/articles/12592343-enabling-and-using-the-desktop-extension-allowlist"
+topic = "desktop extension allowlist"
+
+[[docs]]
+url = "https://www.anthropic.com/engineering/desktop-extensions"
+topic = "MCPB format, manifest.json, user_config, sensitive values in the OS keychain, auto-update"
+
+[[docs]]
+url = "https://claude.com/docs/third-party/claude-desktop/configuration"
+topic = "managed configuration keys: disableBypassPermissionsMode, scheduledTasksEnabled, isLocalDevMcpEnabled, isDesktopExtensionEnabled, sshHostAllowlist"
+
+[[features]]
+kind = "setting"
+name = "permissionMode"
+summary = "Permission mode of each Code session and scheduled task; bypassPermissions runs without prompts"
+doc = "https://code.claude.com/docs/en/desktop"
+marker = "bypassPermissions"
+checks = ["no-approval"]
+
+[[features]]
+kind = "setting"
+name = "chromePermissionMode"
+summary = "Claude in Chrome mode per session and task; skip_all_permission_checks is Skip all approvals, which nothing checks"
+doc = "https://support.claude.com/en/articles/12902446-claude-in-chrome-permissions-guide"
+marker = "skip_all_permission_checks"
+checks = ["no-approval"]
+
+[[features]]
+kind = "setting"
+name = "bypassPermissionsModeEnabled"
+summary = "Allow bypass permissions mode: makes Bypass permissions selectable in Code sessions"
+doc = "https://code.claude.com/docs/en/desktop"
+marker = "bypassPermissionsModeEnabled"
+
+[[features]]
+kind = "integration"
+name = "Dispatch"
+summary = "Tasks sent from the Claude mobile app run on this machine and can spawn Code sessions"
+doc = "https://support.claude.com/en/articles/13947068-assign-tasks-from-anywhere-in-claude-cowork"
+marker = "dispatchCodeTasksPermissionMode"
+checks = ["no-approval"]
+
+[[features]]
+kind = "path"
+name = "~/Library/Application Support/Claude/claude_desktop_config.json"
+summary = "Local MCP servers Desktop starts and loads into Code tab sessions"
+doc = "https://code.claude.com/docs/en/mcp-quickstart"
+marker = "claude_desktop_config.json"
+checks = ["dangling", "autostart"]
+
+[[features]]
+kind = "integration"
+name = "desktop extensions"
+summary = "One-click local MCP servers (.mcpb) that run with your permissions; sensitive settings in the OS secure store"
+doc = "https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop"
+marker = "Claude Extensions Settings"
+checks = ["autostart", "creds-plaintext"]
+
+[[features]]
+kind = "setting"
+name = "desktop extension allowlist"
+summary = "Organization allowlist of desktop extensions; off by default"
+doc = "https://support.claude.com/en/articles/12592343-enabling-and-using-the-desktop-extension-allowlist"
+marker = "dxt:allowlistEnabled"
+
+[[features]]
+kind = "integration"
+name = "Remote Control"
+summary = "Code sessions here can be viewed and steered from claude.ai/code and the Claude apps"
+doc = "https://code.claude.com/docs/en/remote-control"
+marker = "remote-control-state.json"
+checks = ["remote-control"]
+
+[[features]]
+kind = "setting"
+name = "ccRemoteControlDefaultEnabled"
+summary = "Connect new sessions to Remote Control: every new Code session connects automatically"
+doc = "https://code.claude.com/docs/en/desktop"
+marker = "ccRemoteControlDefaultEnabled"
+checks = ["remote-control"]
+
+[[features]]
+kind = "integration"
+name = "SSH sessions"
+summary = "Code sessions on remote machines over SSH; Desktop keeps a controller token per host"
+doc = "https://code.claude.com/docs/en/desktop"
+marker = "ssh-remote-server-state"
+checks = ["remote-control", "creds-plaintext"]
+
+[[features]]
+kind = "integration"
+name = "scheduled tasks"
+summary = "Local tasks start sessions on a schedule while the app is open, each with its own permission mode"
+doc = "https://code.claude.com/docs/en/desktop-scheduled-tasks"
+marker = "scheduled-tasks.json"
+checks = ["autostart", "no-approval"]
+
+[[features]]
+kind = "setting"
+name = "keepAwakeEnabled"
+summary = "Keep computer awake while sessions and scheduled tasks work"
+doc = "https://code.claude.com/docs/en/desktop-scheduled-tasks"
+marker = "keepAwakeEnabled"
+
+[[features]]
+kind = "setting"
+name = "chicagoEnabled"
+summary = "Enable computer use: Claude clicks and types in your apps with no sandbox"
+doc = "https://support.claude.com/en/articles/14128542-let-claude-use-your-computer-in-cowork"
+marker = "chicagoEnabled"
+checks = ["computer-control"]
+
+[[features]]
+kind = "setting"
+name = "coworkBrowserToolsEnabled"
+summary = "Browser tools in Cowork and Code sessions"
+doc = "https://code.claude.com/docs/en/desktop"
+marker = "coworkBrowserToolsEnabled"
+
+[[features]]
+kind = "integration"
+name = "Cowork VM"
+summary = "Shell commands and code from Cowork run in a local Linux VM with its own egress filtering"
+doc = "https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview"
+marker = "vm_bundles"
+
+[[features]]
+kind = "setting"
+name = "egressAllowedDomains"
+summary = "Hosts the Cowork sandbox may reach; does not apply to web fetch, web search or MCP"
+doc = "https://support.claude.com/en/articles/13364135-use-claude-cowork-safely"
+marker = "egressAllowedDomains"
+
+[[features]]
+kind = "endpoint"
+name = "bridge.claudeusercontent.com"
+summary = "Bridge between Claude and the Claude in Chrome extension"
+doc = "https://code.claude.com/docs/en/chrome"
+marker = "bridge.claudeusercontent.com"
+
+[[features]]
+kind = "setting"
+name = "disableBypassPermissionsMode"
+summary = "Managed key that removes bypass permissions mode from Code and Cowork"
+doc = "https://claude.com/docs/third-party/claude-desktop/configuration"
+marker = "disableBypassPermissionsMode"

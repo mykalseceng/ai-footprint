@@ -1,5 +1,6 @@
 """Facts about the machine: other accounts, PATH writability, AI-tool processes, sockets."""
 
+import dataclasses
 import datetime
 import grp
 import os
@@ -144,17 +145,46 @@ def all_processes(system: System) -> list[ProcessInfo]:
                 ProcessInfo(
                     int(match.group(1)),
                     match.group(3),
-                    match.group(4)[:300],
+                    match.group(4),
                     ppid=int(match.group(2)),
                 )
             )
     return found
 
 
+MAX_COMMAND = 300
+"""Longest command line kept for a process, after shortening long arguments."""
+MAX_ARGUMENT = 60
+"""Arguments longer than this (encoded blobs, long flag values) keep their start only."""
+
+
+def readable_command(command: str, limit: int) -> str:
+    """A command line to show: long non-path arguments shortened, cut at a word with "…".
+
+    Paths are kept whole, since they say what runs; a cut is always marked.
+    """
+    words = [
+        w if len(w) <= MAX_ARGUMENT or w.startswith("/") else f"{w[: MAX_ARGUMENT - 20]}…"
+        for w in command.split(" ")
+    ]
+    text = " ".join(words)
+    if len(text) <= limit:
+        return text
+    cut = text.rfind(" ", 0, limit - 2)
+    return f"{text[: cut if cut > 0 else limit - 2]} …"
+
+
 def processes(system: System, pattern: str) -> list[ProcessInfo]:
-    """Running processes whose command line matches ``pattern`` (a regex)."""
+    """Running processes whose command line matches ``pattern`` (a regex), made readable.
+
+    The match runs on the full command line; the stored one is shortened for display.
+    """
     regex = re.compile(pattern)
-    return [p for p in all_processes(system) if regex.search(p.command)]
+    return [
+        dataclasses.replace(p, command=readable_command(p.command, MAX_COMMAND))
+        for p in all_processes(system)
+        if regex.search(p.command)
+    ]
 
 
 def started_at(proc: ProcessInfo) -> datetime.datetime | None:

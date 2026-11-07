@@ -1,0 +1,162 @@
+# pi: what ai-footprint knows about this harness. Schema: harnesses/profile.py.
+name = "pi"
+display_name = "pi"
+binaries = ["pi"]
+process = "(^|/)pi(\\s|$)|pi-coding-agent"
+presence = ["{agent}"]
+process_words = ["pi-coding-agent"]
+env_prefixes = ["PI_"]
+settings = ["defaultProjectTrust", "enableAnalytics", "enableInstallTelemetry", "shellCommandPrefix", "defaultProvider", "\"packages\""]
+env = ["PI_TELEMETRY", "PI_OFFLINE", "PI_SHARE_VIEWER_URL", { name = "PI_CODING_AGENT_SESSION_DIR", marker = "_CODING_AGENT_SESSION_DIR" }]
+
+[roots]
+agent = { env = "PI_CODING_AGENT_DIR", default = "~/.pi/agent" }
+
+[[artifacts]]
+label = "Provider credentials"
+path = "{agent}/auth.json"
+category = "credential"
+description = "Provider keys and OAuth tokens as JSON"
+
+[[artifacts]]
+label = "Model config"
+path = "{agent}/models.json"
+category = "config"
+description = "Provider base URLs, API keys and model lists"
+
+[[artifacts]]
+label = "Model catalog cache"
+path = "{agent}/models-store.json"
+category = "cache"
+description = "Provider model catalogs pi refreshes"
+
+[[artifacts]]
+label = "Settings"
+path = "{agent}/settings.json"
+category = "config"
+description = "Defaults, packages, trust, analytics"
+
+[[artifacts]]
+label = "Project trust"
+path = "{agent}/trust.json"
+category = "config"
+description = "Trust decision per project folder"
+
+[[artifacts]]
+label = "MCP servers"
+path = "{agent}/mcp.json"
+category = "extension"
+description = "Global MCP server config"
+
+[[artifacts]]
+label = "Sessions"
+path = "{agent}/sessions"
+category = "session"
+description = "Session JSONL per project: messages and tool output"
+
+[[artifacts]]
+label = "Packages"
+path = "{agent}/npm"
+category = "extension"
+description = "Extension packages installed with npm"
+
+[[artifacts]]
+label = "Extensions"
+path = "{agent}/extensions"
+category = "extension"
+description = "In-process extension code"
+
+[[artifacts]]
+label = "Skills"
+path = "{agent}/skills"
+category = "extension"
+description = "User skills"
+
+[[artifacts]]
+label = "Prompts"
+path = "{agent}/prompts"
+category = "extension"
+description = "Prompt templates"
+
+[[artifacts]]
+label = "Tools"
+path = "{agent}/tools"
+category = "extension"
+description = "Custom tools"
+
+[[artifacts]]
+label = "Themes"
+path = "{agent}/themes"
+category = "cache"
+description = "Custom themes"
+
+[[artifacts]]
+label = "Managed binaries"
+path = "{agent}/bin"
+category = "binary"
+description = "fd and rg managed by pi"
+
+[[artifacts]]
+label = "Debug log"
+path = "{agent}/pi-debug.log"
+category = "log"
+description = "Debug log"
+
+[[endpoints]]
+host = "pi.dev"
+purpose = "Session share viewer"
+marker = "https://pi.dev/session/"
+
+[[endpoints]]
+host = "radius.pi.dev"
+purpose = "pi model gateway"
+
+[[fingerprint]]
+label = "User-Agent"
+value = "pi-coding-agent"
+marker = "\"User-Agent\":\"pi-coding-agent\""
+
+[[fingerprint]]
+label = "Config dir"
+value = "~/.pi/agent, or PI_CODING_AGENT_DIR"
+marker = "_CODING_AGENT_DIR"
+
+[[fingerprint]]
+label = "Share viewer"
+value = "https://pi.dev/session/#<gist id>"
+marker = "https://pi.dev/session/"
+
+[[fingerprint]]
+label = "Context files"
+value = "AGENTS.override.md, AGENTS.md, CLAUDE.md, walking up from the working directory"
+marker = "\"AGENTS.override.md\",\"AGENTS.md\""
+
+[[fingerprint]]
+label = "Trusted-project resources"
+value = ".pi/settings.json, mcp.json, extensions, skills, prompts, themes, SYSTEM.md, APPEND_SYSTEM.md"
+marker = "APPEND_SYSTEM.md"
+
+[[fingerprint]]
+label = "Skills"
+value = "SKILL.md folders"
+marker = "SKILL.md"
+
+[remedies.protect-credentials]
+summary = "Remove provider credentials you no longer use"
+commands = [
+  { manual = "Run /logout for the provider in pi, or delete its entry from ~/.pi/agent/auth.json", markers = ["\"auth.json\""] },
+]
+
+[remedies.remove-mcp]
+summary = "Remove the server entry"
+commands = [{ run = "pi mcp remove $name", help = ["mcp", "remove"] }]
+
+[remedies.withdraw-trust]
+summary = "Withdraw trust from folders you do not own or no longer use"
+commands = [
+  { manual = "Set those projects' decision to false in ~/.pi/agent/trust.json, or delete the entry", markers = ["trust.json"] },
+]
+
+[[docs]]
+url = "https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent"
+topic = "README: settings, files, environment variables, extensions"

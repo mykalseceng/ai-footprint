@@ -201,6 +201,38 @@ def describe(path: Path, *, label: str, category: Category, description: str) ->
     return artifact
 
 
+def describe_matches(
+    paths: list[Path], *, shown: str, label: str, category: Category, description: str
+) -> Artifact:
+    """One ``Artifact`` for every path a glob matched: sizes and counts added, dates widened.
+
+    Args:
+        paths: The matches; an empty list gives an artifact that does not exist.
+        shown: The pattern, stored as the artifact's path so the report says what was matched.
+        label: Artifact label.
+        category: What the matches hold.
+        description: What the matches are.
+    """
+    total = Artifact(label=label, path=shown, category=category, description=description)
+    found = [describe(p, label=label, category=category, description=description) for p in paths]
+    found = [a for a in found if a.exists]
+    if not found:
+        return total
+    total.exists = True
+    total.is_dir, total.mode, total.owner = found[0].is_dir, found[0].mode, found[0].owner
+    total.size_bytes = sum(a.size_bytes for a in found)
+    total.file_count = sum(a.file_count for a in found)
+    total.group_readable_files = sum(a.group_readable_files for a in found)
+    total.other_readable_files = sum(a.other_readable_files for a in found)
+    total.other_readable = any(a.other_readable for a in found)
+    total.group_readable = next((a.group_readable for a in found if a.group_readable), "")
+    total.group_writable = any(a.group_writable for a in found)
+    total.other_writable = any(a.other_writable for a in found)
+    total.oldest = min((a.oldest for a in found if a.oldest), default="")
+    total.newest = max((a.newest for a in found if a.newest), default="")
+    return total
+
+
 def human_size(size: int) -> str:
     """Compact size string in decimal units, as Finder shows them, e.g. ``598.0 MB``."""
     value = float(size)

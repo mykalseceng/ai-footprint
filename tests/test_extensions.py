@@ -4,11 +4,17 @@ import json
 import time
 from pathlib import Path
 
-from ai_footprint import document, extensions
-from ai_footprint.collectors import claude, opencode
-from ai_footprint.collectors.common import Context
+from ai_footprint import extensions
+from ai_footprint.harnesses import registry
+from ai_footprint.harnesses.claude import collector as claude
+from ai_footprint.harnesses.common import Context
 from ai_footprint.model import AuditReport, Extension, HostReport
+from ai_footprint.reporting import document
 from tests.conftest import FakeSystem, build_claude_home
+
+CLAUDE = registry()["claude"]
+OPENCODE = registry()["opencode"]
+
 
 SKILL = """---
 name: grill
@@ -134,8 +140,8 @@ def test_extensions_page_lists_a_shared_skill_once_with_both_tools(tmp_path: Pat
     (tmp_path / ".config" / "opencode").mkdir(parents=True)
     (tmp_path / ".local" / "share" / "opencode").mkdir(parents=True)
     ctx = context(tmp_path)
-    claude_report, _f = claude.collect(ctx)
-    opencode_report, _f = opencode.collect(ctx)
+    claude_report = CLAUDE.collect(ctx)
+    opencode_report = OPENCODE.collect(ctx)
     host = HostReport(
         os="macOS",
         kernel="",

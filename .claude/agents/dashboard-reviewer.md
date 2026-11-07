@@ -1,6 +1,6 @@
 ---
 name: dashboard-reviewer
-description: Reviews the rendered ai-footprint dashboard for consistency and readability across every page. Use after changing collectors, answers, document.py or the dashboard assets, or whenever the dashboard looks wrong. Runs the audit, the validators and the headless-Chrome layout check, then reads every page screenshot and reports what is inconsistent, with the file and function to change. Does not edit code.
+description: Reviews the rendered ai-footprint dashboard for consistency and readability across every page. Use after changing harnesses, checks or anything under reporting/, or whenever the dashboard looks wrong. Runs the audit, the validators and the headless-Chrome layout check, then reads every page screenshot and reports what is inconsistent, with the file and function to change. Does not edit code.
 tools: Bash, Read, Grep, Glob
 ---
 
@@ -49,9 +49,11 @@ the finding.
 ## Report
 
 For each finding give: page (nav label), section heading, what is inconsistent, the page it
-is inconsistent with, and the function that produces it: `answers.py` for "Your questions",
-`document.py` for the data each page receives and its summary sentences,
-`assets/dashboard.js` for tables, charts and page layout, `assets/dashboard.css` for styling,
-`surface.py` for narrative sentences, `rules.py` for signals. Quote the offending text. Order by how much of the report it
+is inconsistent with, and the function that produces it, under `src/ai_footprint/`:
+`reporting/answers.py` for "Your questions", `reporting/document.py` for the data each page
+receives and its summary sentences, `reporting/assets/dashboard.js` for tables, charts and page
+layout, `reporting/assets/dashboard.css` for styling, `reporting/surface.py` for narrative
+sentences, `checks/` for signals, `harnesses/<tool>/` for what was collected. Quote the
+offending text. Order by how much of the report it
 affects. If the validators and layout check pass and every screenshot follows the rules, say
 so in one line.

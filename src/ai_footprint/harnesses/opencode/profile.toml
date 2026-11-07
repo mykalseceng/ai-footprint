@@ -1,0 +1,635 @@
+# opencode: what ai-footprint knows about this harness. Schema: harnesses/profile.py.
+name = "opencode"
+display_name = "OpenCode"
+binaries = ["opencode"]
+process = "(^|/)opencode2?(\\.exe)?(\\s|$)"
+presence = ["{data}", "{config}", "{install}"]
+process_words = ["opencode"]
+env_prefixes = ["OPENCODE_"]
+settings = ["\"permission\"", "\"share\"", "autoupdate:", "\"plugin\"", "\"instructions\""]
+
+[roots]
+data = { env = "XDG_DATA_HOME", default = "~/.local/share", child = "opencode" }
+config = { env = "XDG_CONFIG_HOME", default = "~/.config", child = "opencode" }
+state = { env = "XDG_STATE_HOME", default = "~/.local/state", child = "opencode" }
+cache = { env = "XDG_CACHE_HOME", default = "~/.cache", child = "opencode" }
+install = { default = "~/.opencode" }
+
+[[artifacts]]
+label = "Provider credentials"
+path = "{data}/auth.json"
+category = "credential"
+description = "OAuth tokens and API keys per provider, plaintext"
+
+[[artifacts]]
+label = "Database"
+path = "{data}/opencode.db"
+category = "session"
+description = "Sessions, messages, tool output, and a credential table"
+
+[[artifacts]]
+label = "Database WAL"
+path = "{data}/opencode.db-wal"
+category = "session"
+description = "Uncommitted database pages"
+
+[[artifacts]]
+label = "Database SHM"
+path = "{data}/opencode.db-shm"
+category = "session"
+description = "Shared-memory index of the database WAL"
+
+[[artifacts]]
+label = "MCP credentials"
+path = "{data}/mcp-auth.json"
+category = "credential"
+description = "OAuth tokens for remote MCP servers"
+
+[[artifacts]]
+label = "Shell output"
+path = "{data}/shell"
+category = "session"
+description = "Output of shell commands run in sessions, per project, kept 7 days"
+
+[[artifacts]]
+label = "Plans"
+path = "{data}/plans"
+category = "session"
+description = "Plans the plan agent saves outside Git projects"
+
+[[artifacts]]
+label = "Reference repositories"
+path = "{data}/repos"
+category = "cache"
+description = "Git checkouts of repositories configured as references, refreshed daily"
+
+[[artifacts]]
+label = "Legacy storage"
+path = "{data}/storage"
+category = "session"
+description = "Pre-SQLite sessions"
+
+[[artifacts]]
+label = "Snapshots"
+path = "{data}/snapshot"
+category = "cache"
+description = "Git snapshots of project files for undo"
+
+[[artifacts]]
+label = "Tool output"
+path = "{data}/tool-output"
+category = "session"
+description = "Large tool results"
+
+[[artifacts]]
+label = "Logs"
+path = "{data}/log"
+category = "log"
+description = "Client and server logs"
+
+[[artifacts]]
+label = "Config"
+path = "{config}/opencode.jsonc"
+category = "config"
+description = "Main config"
+
+[[artifacts]]
+label = "Config (json)"
+path = "{config}/opencode.json"
+category = "config"
+description = "Main config"
+
+[[artifacts]]
+label = "Server password"
+path = "{config}/service.json"
+category = "credential"
+description = "Basic-auth password for the local opencode server"
+
+[[artifacts]]
+label = "Global instructions"
+path = "{config}/AGENTS.md"
+category = "instructions"
+description = "Loaded into every session"
+
+[[artifacts]]
+label = "Plugin deps"
+path = "{config}/node_modules"
+category = "extension"
+description = "npm packages loaded by plugins"
+
+[[artifacts]]
+label = "Plugin dependency list"
+path = "{config}/package.json"
+category = "extension"
+description = "npm packages OpenCode installs at startup for plugins and custom tools"
+
+[[artifacts]]
+label = "Plugins"
+path = "{config}/plugins"
+category = "extension"
+description = "Local plugins loaded at startup, in-process"
+
+[[artifacts]]
+label = "Custom tools"
+path = "{config}/tools"
+category = "extension"
+description = "Tools the model can call, as JavaScript or TypeScript files"
+
+[[artifacts]]
+label = "Skills"
+path = "{config}/skills"
+category = "extension"
+description = "Global skills (SKILL.md folders) offered in every session"
+
+[[artifacts]]
+label = "Agents"
+path = "{config}/agents"
+category = "extension"
+description = "Global agent definitions: prompts, models and permission overrides"
+
+[[artifacts]]
+label = "Commands"
+path = "{config}/commands"
+category = "extension"
+description = "Global custom command prompts"
+
+[[artifacts]]
+label = "Prompt history"
+path = "{state}/prompt-history.jsonl"
+category = "session"
+description = "Prompts typed into the TUI"
+
+[[artifacts]]
+label = "Prompt stash"
+path = "{state}/prompt-stash.jsonl"
+category = "session"
+description = "Prompts stashed in the TUI for later"
+
+[[artifacts]]
+label = "Server registration"
+path = "{state}/service.json"
+category = "credential"
+description = "URL, pid and Basic-auth password of the running local server"
+
+[[artifacts]]
+label = "Model state"
+path = "{state}/model.json"
+category = "cache"
+description = "Recent and favourite models"
+
+[[artifacts]]
+label = "TUI state"
+path = "{state}/latest"
+category = "cache"
+description = "TUI state and locks"
+
+[[artifacts]]
+label = "Cache"
+path = "{cache}"
+category = "cache"
+description = "Model catalog, downloads"
+
+[[artifacts]]
+label = "Install"
+path = "{install}"
+category = "binary"
+description = "Installed binary and deps"
+
+[[endpoints]]
+host = "opencode.ai"
+purpose = "Config schema, themes, Zen model gateway, updates"
+
+[[endpoints]]
+host = "models.dev"
+purpose = "Model catalog"
+
+[[fingerprint]]
+label = "User-Agent"
+value = "opencode/{version}"
+marker = "\"User-Agent\":`opencode/${"
+
+[[fingerprint]]
+label = "Gateway headers"
+value = "x-opencode-client, x-opencode-session, x-opencode-project (opencode.ai requests)"
+marker = "\"x-opencode-client\""
+
+[[fingerprint]]
+label = "Local server"
+value = "HTTP Basic auth; password from OPENCODE_SERVER_PASSWORD (realm 'Secure Area')"
+marker = "OPENCODE_SERVER_PASSWORD"
+
+[[fingerprint]]
+label = "Shared skill dirs"
+value = "reads ~/.claude and ~/.agents skill folders"
+marker = "[\".claude\",\".agents\"]"
+
+[[fingerprint]]
+label = "Instruction files"
+value = "AGENTS.md, CLAUDE.md, CONTEXT.md; ~/.claude/CLAUDE.md unless OPENCODE_DISABLE_CLAUDE_CODE_PROMPT is set"
+marker = "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT"
+
+[remedies.require-approval]
+summary = "Require approval for shell and edit tools"
+commands = [
+  { manual = "Add \"permission\": {\"bash\": \"ask\", \"edit\": \"ask\"} to the opencode config", markers = ["\"ask\""] },
+]
+
+[remedies.protect-credentials]
+summary = "Remove provider credentials you no longer use"
+commands = [
+  { run = "opencode auth list", help = ["auth", "list"] },
+  { run = "opencode auth logout", help = ["auth", "logout"] },
+]
+
+[remedies.remove-mcp]
+summary = "Remove the server entry"
+commands = [{ manual = "Delete mcp.$name from the opencode config" }]
+
+[remedies.disable-share]
+summary = "Unshare and turn off auto-share"
+commands = [{ manual = "Set \"share\": \"disabled\" in the opencode config", markers = ["disabled"] }]
+
+[remedies.data-controls]
+summary = "Review the provider's data settings"
+commands = [{ manual = "Set \"share\": \"disabled\" and review each provider's data settings" }]
+
+[[docs]]
+url = "https://opencode.ai/docs/config/"
+topic = "config file and keys (V2)"
+
+[[docs]]
+url = "https://opencode.ai/docs/cli/"
+topic = "subcommands and flags (V2)"
+
+[[docs]]
+url = "https://opencode.ai/docs/permissions/"
+topic = "permissions (V2)"
+
+[[docs]]
+url = "https://opencode.ai/docs/server/"
+topic = "local server (V2)"
+
+[[docs]]
+url = "https://opencode.ai/docs/references/"
+topic = "reference directories and repository cache (V2)"
+
+[[docs]]
+url = "https://opencode.ai/docs/troubleshooting/"
+topic = "service files, logs, database location (V2)"
+
+[[docs]]
+url = "https://opencode.ai/docs/migrate-v1/"
+topic = "V1 to V2 changes, shared config locations"
+
+[[docs]]
+url = "https://opencode.ai/config.json"
+topic = "config schema with key descriptions"
+
+[[docs]]
+url = "https://docs.opencode.ai/docs/config/"
+topic = "config file, locations, remote and managed config (V1)"
+
+[[docs]]
+url = "https://docs.opencode.ai/docs/cli/"
+topic = "subcommands, flags and environment variables (V1)"
+
+[[docs]]
+url = "https://docs.opencode.ai/docs/permissions/"
+topic = "permissions (V1)"
+
+[[docs]]
+url = "https://docs.opencode.ai/docs/server/"
+topic = "local server and Basic auth (V1)"
+
+[[docs]]
+url = "https://docs.opencode.ai/docs/troubleshooting/"
+topic = "storage locations (V1)"
+
+[[docs]]
+url = "https://docs.opencode.ai/docs/providers/"
+topic = "provider credentials and options (V1)"
+
+[[docs]]
+url = "https://docs.opencode.ai/docs/mcp-servers/"
+topic = "MCP servers and OAuth token storage (V1)"
+
+[[docs]]
+url = "https://docs.opencode.ai/docs/plugins/"
+topic = "plugins and their dependencies (V1)"
+
+[[docs]]
+url = "https://docs.opencode.ai/docs/custom-tools/"
+topic = "custom tools (V1)"
+
+[[docs]]
+url = "https://docs.opencode.ai/docs/skills/"
+topic = "skill locations (V1)"
+
+[[docs]]
+url = "https://docs.opencode.ai/docs/agents/"
+topic = "agent files and plan storage (V1)"
+
+[[docs]]
+url = "https://docs.opencode.ai/docs/commands/"
+topic = "command files (V1)"
+
+[[docs]]
+url = "https://docs.opencode.ai/docs/rules/"
+topic = "instruction files (V1)"
+
+[[docs]]
+url = "https://github.com/anomalyco/opencode/blob/v1.4.6/packages/web/src/content/docs/share.mdx"
+topic = "session sharing (docs source at the installed v1.4.6; no longer on the site)"
+
+[[docs]]
+url = "https://github.com/anomalyco/opencode/blob/v1.4.6/packages/web/src/content/docs/cli.mdx"
+topic = "environment variables at the installed v1.4.6"
+
+[[docs]]
+url = "https://github.com/anomalyco/opencode/blob/v1.4.6/packages/opencode/src/cli/cmd/tui/component/prompt/stash.tsx"
+topic = "prompt stash file (source; undocumented)"
+
+[[docs]]
+url = "https://github.com/anomalyco/opencode/blob/v2.1.4/packages/core/src/shell.ts"
+topic = "shell output folder and retention (source; undocumented)"
+
+[[features]]
+kind = "setting"
+name = "permission"
+summary = "allow, ask or deny per tool; most tools run without approval by default"
+doc = "https://docs.opencode.ai/docs/permissions/"
+marker = "\"permission\""
+checks = ["no-approval"]
+
+[[features]]
+kind = "setting"
+name = "share"
+summary = "manual, auto or disabled; auto uploads every new session to a public link"
+doc = "https://github.com/anomalyco/opencode/blob/v1.4.6/packages/web/src/content/docs/share.mdx"
+marker = "\"manual\",\"auto\",\"disabled\""
+checks = ["shared"]
+
+[[features]]
+kind = "setting"
+name = "autoupdate"
+summary = "Update checks and notices; false turns them off, updates are never installed automatically"
+doc = "https://docs.opencode.ai/docs/config/"
+marker = "autoupdate:"
+
+[[features]]
+kind = "setting"
+name = "plugin"
+summary = "npm plugins installed with Bun and loaded in-process at startup"
+doc = "https://docs.opencode.ai/docs/plugins/"
+marker = "\"plugin\""
+
+[[features]]
+kind = "setting"
+name = "instructions"
+summary = "Extra instruction files, globs or remote URLs loaded into every session"
+doc = "https://docs.opencode.ai/docs/rules/"
+marker = "instructions:"
+checks = ["instructions"]
+
+[[features]]
+kind = "setting"
+name = "mcp"
+summary = "Local MCP commands with their environment, and remote MCP URLs with headers or OAuth"
+doc = "https://docs.opencode.ai/docs/mcp-servers/"
+marker = "mcp:"
+checks = ["dangling"]
+
+[[features]]
+kind = "setting"
+name = "server"
+summary = "Port, hostname, mDNS and CORS for serve and web; mDNS without a hostname listens on 0.0.0.0"
+doc = "https://docs.opencode.ai/docs/config/"
+marker = "mdnsDomain"
+checks = ["daemons", "open-server"]
+
+[[features]]
+kind = "setting"
+name = "provider"
+summary = "Provider options including apiKey and baseURL; {env:} and {file:} substitute values"
+doc = "https://docs.opencode.ai/docs/providers/"
+marker = "{file:"
+
+[[features]]
+kind = "setting"
+name = "enabled_providers"
+summary = "Allowlist of providers; all others are ignored"
+doc = "https://docs.opencode.ai/docs/config/"
+marker = "enabled_providers"
+
+[[features]]
+kind = "setting"
+name = "disabled_providers"
+summary = "Providers never loaded, even with credentials in the environment or auth.json"
+doc = "https://docs.opencode.ai/docs/config/"
+marker = "disabled_providers"
+
+[[features]]
+kind = "setting"
+name = "openTelemetry"
+summary = "experimental.openTelemetry: OpenTelemetry spans for AI SDK calls (deprecated)"
+doc = "https://opencode.ai/config.json"
+marker = "openTelemetry"
+
+[[features]]
+kind = "env"
+name = "OPENCODE_SERVER_PASSWORD"
+summary = "Turns on HTTP Basic auth for serve and web; without it the server accepts any local caller"
+doc = "https://docs.opencode.ai/docs/server/"
+marker = "OPENCODE_SERVER_PASSWORD"
+checks = ["open-server"]
+
+[[features]]
+kind = "env"
+name = "OPENCODE_SERVER_USERNAME"
+summary = "Basic-auth username for serve and web (default opencode)"
+doc = "https://docs.opencode.ai/docs/server/"
+marker = "OPENCODE_SERVER_USERNAME"
+checks = ["open-server"]
+
+[[features]]
+kind = "env"
+name = "OPENCODE_PERMISSION"
+summary = "Inline JSON permission rules that apply on top of the config files"
+doc = "https://docs.opencode.ai/docs/cli/"
+marker = "OPENCODE_PERMISSION"
+
+[[features]]
+kind = "env"
+name = "OPENCODE_AUTO_SHARE"
+summary = "Shares every session automatically"
+doc = "https://github.com/anomalyco/opencode/blob/v1.4.6/packages/web/src/content/docs/cli.mdx"
+marker = "OPENCODE_AUTO_SHARE"
+checks = ["shared"]
+
+[[features]]
+kind = "env"
+name = "OPENCODE_CONFIG"
+summary = "Extra config file loaded between the global and project configs"
+doc = "https://docs.opencode.ai/docs/config/"
+marker = "OPENCODE_CONFIG"
+
+[[features]]
+kind = "env"
+name = "OPENCODE_CONFIG_DIR"
+summary = "Extra config directory searched for agents, commands, modes and plugins"
+doc = "https://docs.opencode.ai/docs/config/"
+marker = "OPENCODE_CONFIG_DIR"
+
+[[features]]
+kind = "env"
+name = "OPENCODE_CONFIG_CONTENT"
+summary = "Inline JSON config that overrides the config files"
+doc = "https://docs.opencode.ai/docs/config/"
+marker = "OPENCODE_CONFIG_CONTENT"
+
+[[features]]
+kind = "env"
+name = "OPENCODE_DISABLE_PROJECT_CONFIG"
+summary = "Ignores project config and project instruction files"
+doc = "https://docs.opencode.ai/docs/cli/"
+marker = "OPENCODE_DISABLE_PROJECT_CONFIG"
+
+[[features]]
+kind = "env"
+name = "OPENCODE_DISABLE_CLAUDE_CODE"
+summary = "Stops reading .claude (CLAUDE.md and skills)"
+doc = "https://docs.opencode.ai/docs/rules/"
+marker = "OPENCODE_DISABLE_CLAUDE_CODE"
+checks = ["instructions", "shared-surfaces"]
+
+[[features]]
+kind = "env"
+name = "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT"
+summary = "Stops reading ~/.claude/CLAUDE.md"
+doc = "https://docs.opencode.ai/docs/rules/"
+marker = "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT"
+checks = ["instructions"]
+
+[[features]]
+kind = "env"
+name = "OPENCODE_DISABLE_CLAUDE_CODE_SKILLS"
+summary = "Stops loading .claude/skills"
+doc = "https://docs.opencode.ai/docs/rules/"
+marker = "OPENCODE_DISABLE_CLAUDE_CODE_SKILLS"
+checks = ["shared-surfaces"]
+
+[[features]]
+kind = "env"
+name = "OPENCODE_DISABLE_EXTERNAL_SKILLS"
+summary = "Stops skill discovery in .claude and .agents folders"
+doc = "https://docs.opencode.ai/docs/cli/"
+marker = "OPENCODE_DISABLE_EXTERNAL_SKILLS"
+checks = ["shared-surfaces"]
+
+[[features]]
+kind = "env"
+name = "OPENCODE_PURE"
+summary = "Runs without external plugins, like --pure"
+doc = "https://docs.opencode.ai/docs/cli/"
+marker = "OPENCODE_PURE"
+
+[[features]]
+kind = "env"
+name = "OPENCODE_DISABLE_DEFAULT_PLUGINS"
+summary = "Turns off the built-in default plugins"
+doc = "https://docs.opencode.ai/docs/cli/"
+marker = "OPENCODE_DISABLE_DEFAULT_PLUGINS"
+
+[[features]]
+kind = "env"
+name = "OPENCODE_DISABLE_AUTOUPDATE"
+summary = "Turns off update checks"
+doc = "https://docs.opencode.ai/docs/cli/"
+marker = "OPENCODE_DISABLE_AUTOUPDATE"
+
+[[features]]
+kind = "env"
+name = "OPENCODE_DB"
+summary = "Moves the session database; relative paths resolve under the data folder"
+doc = "https://docs.opencode.ai/docs/cli/"
+marker = "OPENCODE_DB"
+
+[[features]]
+kind = "env"
+name = "OPENCODE_ENABLE_EXA"
+summary = "Turns on the Exa web search tools, which send queries to Exa"
+doc = "https://docs.opencode.ai/docs/cli/"
+marker = "OPENCODE_ENABLE_EXA"
+
+[[features]]
+kind = "env"
+name = "OPENCODE_MODELS_URL"
+summary = "Fetches the model catalog from another URL"
+doc = "https://docs.opencode.ai/docs/cli/"
+marker = "OPENCODE_MODELS_URL"
+
+[[features]]
+kind = "subcommand"
+name = "serve"
+summary = "Headless HTTP server that runs prompts and tools; open unless OPENCODE_SERVER_PASSWORD is set"
+doc = "https://docs.opencode.ai/docs/server/"
+marker = "starts a headless opencode server"
+checks = ["daemons", "open-server"]
+
+[[features]]
+kind = "subcommand"
+name = "web"
+summary = "Server with a browser interface; same authentication as serve"
+doc = "https://docs.opencode.ai/docs/cli/"
+marker = "start opencode server and open web interface"
+checks = ["daemons", "open-server"]
+
+[[features]]
+kind = "subcommand"
+name = "auth"
+summary = "Log in to, list and log out of providers; keys and OAuth tokens go to auth.json"
+doc = "https://docs.opencode.ai/docs/cli/"
+marker = "manage AI providers and credentials"
+checks = ["creds-plaintext", "creds-readable", "duplicate-creds"]
+
+[[features]]
+kind = "subcommand"
+name = "mcp auth"
+summary = "OAuth login for a remote MCP server; tokens go to mcp-auth.json"
+doc = "https://docs.opencode.ai/docs/mcp-servers/"
+marker = "authenticate with an OAuth-enabled MCP server"
+
+[[features]]
+kind = "subcommand"
+name = "plugin"
+summary = "Installs an npm plugin and adds it to the project or global config"
+doc = "https://docs.opencode.ai/docs/cli/"
+marker = "install plugin and update config"
+
+[[features]]
+kind = "subcommand"
+name = "github install"
+summary = "Adds a GitHub Actions workflow that runs the agent in a repository"
+doc = "https://docs.opencode.ai/docs/cli/"
+marker = "install the GitHub agent"
+
+[[features]]
+kind = "integration"
+name = "remote config"
+summary = "Organization defaults fetched from a provider's .well-known/opencode when you authenticate"
+doc = "https://docs.opencode.ai/docs/config/"
+marker = ".well-known/opencode"
+
+[[features]]
+kind = "integration"
+name = "macOS managed preferences"
+summary = "MDM-deployed ai.opencode.managed settings that override every other config"
+doc = "https://docs.opencode.ai/docs/config/"
+marker = "ai.opencode.managed"
+
+[[features]]
+kind = "path"
+name = "/Library/Application Support/opencode"
+summary = "Admin-managed opencode.json(c) that overrides user and project config"
+doc = "https://docs.opencode.ai/docs/config/"
+marker = "/Library/Application Support/opencode"

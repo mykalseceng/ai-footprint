@@ -3,9 +3,12 @@ import datetime
 import shlex
 from pathlib import Path
 
-from ai_footprint import accounts, hostscan
-from ai_footprint.collectors import claude as claude_cli
-from ai_footprint.collectors.common import Context
+from ai_footprint import hostscan
+from ai_footprint.harnesses import account_notes, registry
+from ai_footprint.harnesses.claude import account as claude_account
+from ai_footprint.harnesses.claude import collector as claude_cli
+from ai_footprint.harnesses.codex import account as codex_account
+from ai_footprint.harnesses.common import Context
 from ai_footprint.host import all_processes
 from ai_footprint.model import (
     Credential,
@@ -134,11 +137,11 @@ def test_claude_grove_cache_is_reported_as_the_notice_config_not_the_choice(tmp_
         "oauthAccount": {"accountUuid": "u1"},
         "groveConfigCache": {"u1": {"grove_enabled": True, "timestamp": 1791742272447}},
     }
-    assert accounts._claude_data(ctx, config, "") == []
+    assert claude_account.data_notes(ctx, config, "") == []
     binary = tmp_path / "claude"
     markers = [*claude_cli.TRAINING_MARKERS, claude_cli.GROVE_NOTICE_MARKER]
     binary.write_bytes(b"".join(m.encode() + b"\0" for m in markers))
-    [wording, grove] = accounts._claude_data(ctx, config, str(binary))
+    [wording, grove] = claude_account.data_notes(ctx, config, str(binary))
     assert "extends data retention from 30 days to 5 years" in wording.text
     assert grove.text.startswith("The cached Grove notice config has grove_enabled true")
     assert "not cached on disk" in grove.text
@@ -148,7 +151,7 @@ def test_claude_grove_cache_is_reported_as_the_notice_config_not_the_choice(tmp_
 def test_log_markers_count_only_the_markers_asked_for(tmp_path: Path):
     log = tmp_path / "debug.txt"
     log.write_text('{"error":"refresh_token_reused"} ... Please run /login ... Please run /login')
-    markers = accounts.log_markers([tmp_path], claude_cli.LOG_MARKERS)
+    markers = account_notes.log_markers([tmp_path], claude_cli.LOG_MARKERS)
     assert markers == {"Please run /login": (2, markers["Please run /login"][1])}
     assert "refresh_token_reused" not in claude_cli.LOG_MARKERS
 
@@ -171,15 +174,17 @@ def test_codex_group_claim_is_stated_as_recorded_not_as_a_concern(tmp_path: Path
             Credential("codex", "OpenAI", StoreKind.FILE, "auth.json", "", tokens=[token])
         ],
     )
-    notes = accounts._codex_data(report, tmp_path, {})
+    notes = codex_account.data_notes(report, tmp_path, {})
     assert "api-data-sharing-incentives-program" in notes[0].text
     assert "training" not in notes[0].text
     assert not notes[0].concern
 
 
-def test_account_collect_skips_uninstalled_tools(tmp_path: Path):
+def test_an_uninstalled_tool_has_no_account_notes(tmp_path: Path):
     ctx = Context(home=tmp_path, system=FakeSystem(), now=0)
-    assert accounts.collect(ctx, ToolReport(name="claude", display_name="Claude Code"), {}) == []
+    report = registry()["claude"].collect(ctx)
+    assert not report.installed
+    assert report.account == []
 
 
 def test_process_parent_ids_are_parsed():
@@ -211,18 +216,6 @@ def test_shell_wrapped_mcp_command_with_escaped_space_does_not_crash():
     )
     needles = hostscan._mcp_needles([tool])
     assert needles[direct] == ("hopper", ["Codex CLI"])
-
-
-def test_long_desktop_mcp_commands_are_cut_with_an_ellipsis(tmp_path: Path):
-    config = tmp_path / "Library/Application Support/Claude/claude_desktop_config.json"
-    config.parent.mkdir(parents=True)
-    config.write_text(
-        '{"mcpServers": {"big": {"command": "/opt/server", "args": ["' + "x" * 300 + '"]}}}'
-    )
-    [fact] = hostscan._desktop_mcp(tmp_path)
-    assert fact.detail.startswith("/opt/server x")
-    assert fact.detail.endswith("…")
-    assert len(fact.detail) == 240
 
 
 def test_bridges_for_browsers_that_are_not_installed_are_not_concerns(tmp_path: Path):

@@ -4,22 +4,19 @@ import argparse
 import json
 import os
 import sys
+import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from ai_footprint import (
-    __version__,
-    capture,
-    dashboard,
-    document,
-    figurecheck,
-    optioncheck,
-    report_html,
-    reportcheck,
-)
-from ai_footprint.audit import TOOLS, detect_tools, run_audit
-from ai_footprint.model import NetworkCapture, ToolPresence
-from ai_footprint.report_text import (
+from ai_footprint import __version__, capture, optioncheck, profiling
+from ai_footprint.audit import detect_tools, run_audit
+from ai_footprint.checks import Checklist
+from ai_footprint.harnesses import registry
+from ai_footprint.harnesses.common import Context
+from ai_footprint.model import AuditReport, NetworkCapture, ToolPresence
+from ai_footprint.profiling import render as profile_render
+from ai_footprint.reporting import dashboard, document, figurecheck, report_html, reportcheck
+from ai_footprint.reporting.report_text import (
     Style,
     render_doctor,
     render_list,
@@ -28,12 +25,15 @@ from ai_footprint.report_text import (
 )
 from ai_footprint.system import System
 
+HARNESSES = registry()
+DISPLAY_NAMES = ", ".join(h.display_name for h in HARNESSES.values())
+
 DESCRIPTION = f"""\
-Audit the local footprint of AI coding tools ({", ".join(s.display_name for s in TOOLS.values())}):
+Audit the local footprint of AI coding tools ({DISPLAY_NAMES}):
 where they store credentials, sessions and logs, who can read them, what runs automatically,
 where they connect, and what a stolen token or account unlocks.
 
-Pick tools by name ({", ".join(TOOLS)}) or "all". With no names, an interactive terminal asks
+Pick tools by name ({", ".join(HARNESSES)}) or "all". With no names, an interactive terminal asks
 which installed tools to audit; otherwise every installed tool is audited.
 
   ai-footprint --list              show supported tools and which are installed
@@ -41,6 +41,7 @@ which installed tools to audit; otherwise every installed tool is audited.
   ai-footprint codex opencode      audit only these
   ai-footprint all --html r.html   also write the static report (no scripts)
   ai-footprint all --doctor        each check: review, clear or not checked
+  ai-footprint t3code --profile    documented features here, and what is new
   ai-footprint all --capture       also record where each tool connects when started (sudo)
 """
 
@@ -63,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
         "tools",
         nargs="*",
         metavar="TOOL",
-        help=f"tools to audit: {', '.join(TOOLS)}, or all (default: installed tools)",
+        help=f"tools to audit: {', '.join(HARNESSES)}, or all (default: installed tools)",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--list", action="store_true", help="list supported tools and exit")
@@ -71,6 +72,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--doctor",
         action="store_true",
         help="mark each check review, clear or not checked, with validated fixes (no secret scan)",
+    )
+    mode.add_argument(
+        "--profile",
+        action="store_true",
+        help="map each tool's documented features onto this machine and list paths, config "
+        "keys and variables its profile does not cover yet (with --json, also as JSON)",
     )
     mode.add_argument(
         "--validate",
@@ -146,15 +153,15 @@ def select_tools(
         SelectionError: A name is unknown, a named tool is not installed, or nothing is installed.
     """
     installed = [p for p in presences if p.installed]
-    unknown = sorted(set(requested) - set(TOOLS) - {"all"})
+    unknown = sorted(set(requested) - set(HARNESSES) - {"all"})
     if unknown:
         raise SelectionError(
             f"ai-footprint: unknown tool(s) {', '.join(unknown)}; choose from "
-            f"{', '.join(TOOLS)} or all"
+            f"{', '.join(HARNESSES)} or all"
         )
     if not installed:
         raise SelectionError(
-            f"ai-footprint: none of the supported tools ({', '.join(TOOLS)}) are installed"
+            f"ai-footprint: none of the supported tools ({', '.join(HARNESSES)}) are installed"
         )
     if "all" in requested:
         return [p.name for p in installed]
@@ -165,7 +172,7 @@ def select_tools(
                 f"ai-footprint: {', '.join(missing)} not installed; installed: "
                 f"{', '.join(p.name for p in installed)}"
             )
-        return [name for name in TOOLS if name in requested]
+        return [name for name in HARNESSES if name in requested]
     if ask is None:
         return [p.name for p in installed]
     menu = "\n".join(
@@ -217,6 +224,39 @@ def _network(
     return found
 
 
+def _validate(
+    audit: AuditReport, checklist: Checklist, presences: list[ToolPresence], style: Style
+) -> tuple[str, int]:
+    """Run every validator on the audit; returns the text and the exit code."""
+    audit.option_validation = optioncheck.validate(
+        build_parser(),
+        DESCRIPTION,
+        presences,
+        select=lambda names, found: select_tools(names, found, ask=None),
+        tool_names=list(HARNESSES),
+    )
+    data = document.build(audit, checklist)
+    audit.report_validation = [
+        *reportcheck.check_report(report_html.render(audit, checklist, data["views"])),
+        *reportcheck.check_document(data),
+        reportcheck.check_wording(data, dashboard.script()),
+    ]
+    audit.figure_validation = figurecheck.check_figures(data)
+    return render_validation(audit, style)
+
+
+def _profile(args: argparse.Namespace, system: System, tools: list[str]) -> int:
+    """Print each selected tool's profile; with --json, also write it for the profiler agent."""
+    ctx = Context(home=args.home, system=system, now=time.time(), scan=False)
+    profiles = [profiling.profile(ctx, HARNESSES[name]) for name in tools]
+    print(profile_render.to_text(profiles))
+    if args.json:
+        data = json.dumps(profile_render.to_json(profiles), indent=2, ensure_ascii=False)
+        write_private(args.json, data)
+        print(f"Profile data: {args.json.resolve()}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return the process exit code."""
     args = build_parser().parse_args(argv)
@@ -227,6 +267,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(render_list(presences, style, home=str(args.home)))
         return 0
     tools = select_tools(args.tools, presences, ask=input if _interactive() else None)
+    if args.profile:
+        return _profile(args, system, tools)
     quick = args.doctor or args.validate
     try:
         network = _network(args, system, [p for p in presences if p.name in tools])
@@ -234,7 +276,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"ai-footprint: {exc}", file=sys.stderr)
         return 2
     if not quick:
-        names = ", ".join(TOOLS[name].display_name for name in tools)
+        names = ", ".join(HARNESSES[name].display_name for name in tools)
         print(f"Auditing {names} (full secret scan)…", file=sys.stderr)
     audit, checklist = run_audit(
         system=system,
@@ -246,26 +288,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         presences=presences,
     )
     audit.network = network
-    if args.validate:
-        audit.option_validation = optioncheck.validate(
-            build_parser(),
-            DESCRIPTION,
-            presences,
-            select=lambda names, found: select_tools(names, found, ask=None),
-            tool_names=list(TOOLS),
+    if args.validate or args.doctor:
+        text, code = (
+            _validate(audit, checklist, presences, style)
+            if args.validate
+            else render_doctor(audit, checklist, style)
         )
-        data = document.build(audit, checklist)
-        audit.report_validation = [
-            *reportcheck.check_report(report_html.render(audit, checklist, data["views"])),
-            *reportcheck.check_document(data),
-            reportcheck.check_wording(data, dashboard.script()),
-        ]
-        audit.figure_validation = figurecheck.check_figures(data)
-        text, code = render_validation(audit, style)
-        print(text)
-        return code
-    if args.doctor:
-        text, code = render_doctor(audit, checklist, style)
         print(text)
         return code
     data = document.build(audit, checklist)

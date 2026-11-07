@@ -175,6 +175,7 @@ class StoreKind(StrEnum):
     """How a credential is stored; the value is the text the report shows."""
 
     KEYCHAIN = "macOS Keychain"
+    ENCRYPTED_FILE = "file encrypted with a Keychain key"
     FILE = "plaintext file"
     SQLITE = "SQLite table credential"
     ENV = "environment variable"
@@ -270,6 +271,31 @@ class Endpoint:
     count: int = 0
 
 
+RUNNING_BYPASS = "running with --dangerously-skip-permissions"
+"""Setting key that lists sessions started with approval prompts turned off."""
+
+EXTENSION_KINDS: dict[str, tuple[str, str]] = {
+    "mcp": ("MCP server", "MCP servers"),
+    "connector": ("connected app", "Connected apps"),
+    "plugin": ("plugin", "Plugins"),
+    "skill": ("skill", "Skills"),
+    "hook": ("hook", "Hooks"),
+    "native-host": ("browser native host", "Browser native hosts"),
+    "statusline": ("status line", "Status line"),
+    "service": ("background service", "Background services"),
+    "scheduled-task": ("scheduled task", "Scheduled tasks"),
+}
+"""``Extension.kind`` -> (singular noun, table title). A kind missing here is shown as is."""
+
+
+def kind_noun(kind: str) -> str:
+    """Singular noun for an extension kind, e.g. ``MCP server``."""
+    return EXTENSION_KINDS.get(kind, (kind, kind))[0]
+
+
+AD_HOC = "ad-hoc signed (no signing identity)"
+"""Signer recorded for a binary signed without a signing identity."""
+
 BARE_SECURITY = 'spawns "security" by bare name (PATH lookup)'
 """Fingerprint value for a binary that runs ``security`` through a PATH lookup."""
 
@@ -358,6 +384,14 @@ class AccountNote:
     text: str
     source: str
     concern: bool = False
+    signal: str = ""
+    """Which check reads this note when it is a concern: ``REMOTE_CONTROL`` or ``UNUSED_LOGIN``."""
+
+
+REMOTE_CONTROL = "remote-control"
+"""Account-note signal: another device can drive this machine's agent."""
+UNUSED_LOGIN = "unused-login"
+"""Account-note signal: a stored login that is no longer refreshed."""
 
 
 class FactKind(StrEnum):

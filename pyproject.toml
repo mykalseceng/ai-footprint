@@ -1,7 +1,7 @@
 [project]
 name = "ai-footprint"
 version = "0.1.0"
-description = "Local footprint and exposure audit for AI coding CLIs: Claude Code, Codex CLI, OpenCode."
+description = "Local footprint and exposure audit for AI coding harnesses."
 authors = [
     { name = "mykalseceng", email = "165401443+mykalseceng@users.noreply.github.com" }
 ]
@@ -55,7 +55,7 @@ ban-relative-imports = "all"
 "src/ai_footprint/cli.py" = ["T201"]
 "scripts/layout_check.py" = ["T201"]  # a CLI: its output is the report
 # Inline CSS is a long single-line literal by nature.
-"src/ai_footprint/report_html.py" = ["E501"]
+"src/ai_footprint/reporting/report_html.py" = ["E501"]
 
 [tool.ty.environment]
 python-version = "3.13"

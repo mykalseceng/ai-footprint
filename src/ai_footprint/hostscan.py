@@ -14,10 +14,10 @@ import plistlib
 import re
 import shlex
 import sqlite3
+import time
 from collections.abc import Iterable
 from pathlib import Path
 
-from ai_footprint.collectors.common import command_target, load_json
 from ai_footprint.fsinfo import (
     human_size,
     mode_string,
@@ -26,21 +26,16 @@ from ai_footprint.fsinfo import (
     tilde,
     tree_stats,
 )
+from ai_footprint.harnesses import registry
+from ai_footprint.harnesses.base import resolve
+from ai_footprint.harnesses.common import Context, command_target, load_json
 from ai_footprint.host import all_processes, started_at
 from ai_footprint.model import Category, FactKind, HostFact, ProcessInfo, ToolReport
 from ai_footprint.system import System
 
 SECRET_ENV = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.IGNORECASE)
-TOOL_WORDS = (
-    "claude",
-    "codex",
-    "opencode",
-    "pi-coding-agent",
-    "anthropic",
-    "openai",
-    "cursor",
-    "ollama",
-)
+VENDOR_WORDS = ("anthropic", "openai", "cursor", "ollama")
+"""Words in a program name that mark it as AI tooling, besides each harness's own words."""
 LONG_RUNNING = datetime.timedelta(days=1)
 TCC_SERVICES = {
     "kTCCServiceSystemPolicyAllFiles": "Full Disk Access",
@@ -292,30 +287,24 @@ def _native_hosts(home: Path) -> list[HostFact]:
     return facts
 
 
-def _desktop_mcp(home: Path) -> list[HostFact]:
-    config = home / "Library/Application Support/Claude/claude_desktop_config.json"
-    servers = (load_json(config) or {}).get("mcpServers", {})
+def tool_words() -> tuple[str, ...]:
+    """Lower-case words that mark a program as one of the audited tools or their vendors."""
+    harness_words = (w for h in registry().values() for w in h.profile.process_words)
+    return (*harness_words, *VENDOR_WORDS)
+
+
+def _harness_control(home: Path, system: System) -> list[HostFact]:
+    """Apps a harness keeps in its own folder that can drive the screen and input."""
+    ctx = Context(home=home, system=system, now=time.time(), scan=False)
     facts = []
-    for name, spec in servers.items():
-        args = [str(a) for a in spec.get("args", [])]
-        facts.append(
-            _fact(
-                "control",
-                f"Claude Desktop MCP '{name}'",
-                _clip(" ".join([str(spec.get("command", "")), *args]), 240),
-                config,
-                concern=True,
+    for harness in registry().values():
+        for spec in harness.profile.host_control:
+            pattern = resolve(ctx, harness.profile, spec.glob)
+            facts.extend(
+                _fact("control", app.stem, spec.detail, app, concern=True)
+                for app in sorted(pattern.parent.glob(pattern.name))
             )
-        )
     return facts
-
-
-def _computer_use(home: Path) -> list[HostFact]:
-    apps = sorted((home / ".codex/computer-use").glob("*.app"))
-    return [
-        _fact("control", app.stem, "helper app in Codex's computer-use folder", app, concern=True)
-        for app in apps
-    ]
 
 
 def _tcc_grants(db: Path) -> list[tuple[str, str]] | None:
@@ -367,15 +356,15 @@ def _tcc_facts(home: Path) -> list[HostFact]:
         )
     ]
     for client, service in sorted(set(grants)):
-        relevant = client in TERMINALS or any(w in client.lower() for w in TOOL_WORDS)
+        relevant = client in TERMINALS or any(w in client.lower() for w in tool_words())
         if relevant and service in TCC_SERVICES:
             facts.append(_fact("control", client, TCC_SERVICES[service], concern=True))
     return facts
 
 
-def control(home: Path) -> list[HostFact]:
+def control(home: Path, system: System) -> list[HostFact]:
     """Paths by which software can drive the browser, screen, keyboard or files."""
-    return _native_hosts(home) + _desktop_mcp(home) + _computer_use(home) + _tcc_facts(home)
+    return _native_hosts(home) + _harness_control(home, system) + _tcc_facts(home)
 
 
 # --- backups -----------------------------------------------------------------------------------
@@ -544,7 +533,7 @@ def _launch_agents(home: Path) -> list[HostFact]:
             program = " ".join(
                 [str(data.get("Program", "")), *map(str, data.get("ProgramArguments", []))]
             ).strip()
-            if any(w in program.lower() for w in TOOL_WORDS):
+            if any(w in program.lower() for w in tool_words()):
                 facts.append(
                     _fact(
                         "unattended",
@@ -561,11 +550,6 @@ def _launch_agents(home: Path) -> list[HostFact]:
 # --- AI tools this audit does not analyse in depth ---------------------------------------------
 
 OTHER_TOOLS = (
-    (
-        "Claude Desktop",
-        ("Library/Application Support/Claude", "Library/Logs/Claude"),
-        "Library/Application Support/Claude/claude_desktop_config.json",
-    ),
     ("ChatGPT app", ("Library/Application Support/com.openai.chat",), ""),
     (
         "Codex desktop app",
@@ -625,7 +609,7 @@ def scan(home: Path, system: System, tools: list[ToolReport]) -> list[HostFact]:
     ]
     return (
         reach(home, system)
-        + control(home)
+        + control(home, system)
         + backups(system, roots)
         + unattended(system, tools, home, datetime.datetime.now())
         + other_tools(home)

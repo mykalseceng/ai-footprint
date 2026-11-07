@@ -9,9 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import document, figurecheck, keys, tokens
+from ai_footprint import tokens
 from ai_footprint.audit import run_audit
 from ai_footprint.model import AuditReport, CommandValidation
+from ai_footprint.reporting import document, figurecheck, keys
 from ai_footprint.tokens import inspect_token
 from tests.conftest import (
     FAKE_DEEPSEEK,

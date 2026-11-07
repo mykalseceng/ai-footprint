@@ -5,9 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import accounts, rules
-from ai_footprint.collectors.common import AD_HOC, Context, signer
+from ai_footprint import checks
+from ai_footprint.checks import local_code
+from ai_footprint.harnesses.common import Context, signer
+from ai_footprint.harnesses.opencode import account as opencode_account
+from ai_footprint.harnesses.pi import account as pi_account
 from ai_footprint.model import (
+    AD_HOC,
     BinaryInfo,
     Credential,
     HostReport,
@@ -23,7 +27,7 @@ from tests.conftest import FakeSystem
 NODE = "/u/.nvm/versions/node/v24/lib/node_modules/@opencode/cli/bin/opencode.exe"
 
 
-def rule_ctx(home: Path) -> rules.RuleContext:
+def rule_ctx(home: Path) -> checks.RuleContext:
     host = HostReport(
         os="macOS",
         kernel="",
@@ -34,7 +38,7 @@ def rule_ctx(home: Path) -> rules.RuleContext:
         home=str(home),
         home_mode="drwx------",
     )
-    return rules.RuleContext(host=host, platform="darwin", home=home)
+    return checks.RuleContext(host=host, platform="darwin", home=home)
 
 
 def opencode_with(*binaries: BinaryInfo) -> ToolReport:
@@ -50,7 +54,7 @@ NEW = BinaryInfo("/u/.nvm/versions/node/v24/bin/opencode", NODE, version="2.0.26
 def test_an_older_copy_first_on_path_is_the_one_to_remove():
     report = opencode_with(OLD, NEW)
     report.processes = [ProcessInfo(50615, "", f"{NODE} serve --service", ppid=50614)]
-    [found] = rules.rule_duplicate_installs(report, rule_ctx(Path("/u")))
+    [found] = local_code.rule_duplicate_installs(report, rule_ctx(Path("/u")))
     assert found.statement == (
         "2 copies of OpenCode are installed: 1.4.6 at `~/.opencode/bin/opencode` and 2.0.26 at "
         "`~/.nvm/versions/node/v24/bin/opencode`. A shell runs the first on PATH, 1.4.6, which "
@@ -67,7 +71,7 @@ def test_an_older_copy_first_on_path_is_the_one_to_remove():
 def test_an_older_npm_copy_later_on_path_is_uninstalled_with_npm(tmp_path: Path):
     old_npm = BinaryInfo("/u/.nvm/bin/opencode", NODE, version="1.0.0")
     newer = BinaryInfo("/u/.opencode/bin/opencode", "/u/.opencode/bin/opencode", version="1.10.0")
-    [found] = rules.rule_duplicate_installs(opencode_with(newer, old_npm), rule_ctx(tmp_path))
+    [found] = local_code.rule_duplicate_installs(opencode_with(newer, old_npm), rule_ctx(tmp_path))
     assert found.statement.endswith("A shell runs the first on PATH, 1.10.0, the newest.")
     assert found.fix is not None
     assert [c.text for c in found.fix.commands] == ["npm uninstall -g @opencode/cli"]
@@ -75,7 +79,7 @@ def test_an_older_npm_copy_later_on_path_is_uninstalled_with_npm(tmp_path: Path)
 
 def test_copies_of_one_version_are_not_a_finding(tmp_path: Path):
     same = BinaryInfo("/b/opencode", "/b/opencode", version="1.4.6")
-    assert rules.rule_duplicate_installs(opencode_with(OLD, same), rule_ctx(tmp_path)) == []
+    assert local_code.rule_duplicate_installs(opencode_with(OLD, same), rule_ctx(tmp_path)) == []
 
 
 @pytest.mark.parametrize(
@@ -101,7 +105,7 @@ def oauth(provider: str, *, issued: float, expires: float) -> Credential:
 def test_an_expired_login_states_issue_and_expiry_dates_only(tmp_path: Path):
     report = ToolReport(name="pi", display_name="pi", installed=True)
     report.credentials = [oauth("OpenAI", issued=1777413000, expires=1778278200)]
-    [note] = [n for n in accounts.pi(_ctx(tmp_path), report, {}) if n.topic == "detect"]
+    [note] = [n for n in pi_account.notes(_ctx(tmp_path), report, {}) if n.topic == "detect"]
     assert note.text == (
         "Stored pi logins whose access token expired and was not replaced: OpenAI access token "
         "issued 2026-04-28, expired 2026-05-08. Their refresh tokens have no recorded expiry."
@@ -112,10 +116,10 @@ def test_an_expired_login_states_issue_and_expiry_dates_only(tmp_path: Path):
 def test_a_current_login_raises_no_stale_note(tmp_path: Path):
     report = ToolReport(name="pi", display_name="pi", installed=True)
     report.credentials = [oauth("OpenAI", issued=time.time(), expires=time.time() + 3600)]
-    assert not [n for n in accounts.pi(_ctx(tmp_path), report, {}) if n.topic == "detect"]
+    assert not [n for n in pi_account.notes(_ctx(tmp_path), report, {}) if n.topic == "detect"]
 
 
-def test_revoke_advice_names_only_the_stored_providers(tmp_path: Path):
+def test_revoke_advice_names_only_the_stored_providers():
     report = ToolReport(name="opencode", display_name="OpenCode", installed=True)
     report.credentials = [
         oauth("OpenAI", issued=time.time(), expires=time.time() + 60),
@@ -124,7 +128,7 @@ def test_revoke_advice_names_only_the_stored_providers(tmp_path: Path):
             "opencode", "OpenCode local server", StoreKind.FILE, "/s.json", "", local_service=True
         ),
     ]
-    notes = accounts.opencode(_ctx(tmp_path), report, {"config": {}})
+    notes = opencode_account.notes(report, {})
     [revoke] = [n.text for n in notes if n.topic == "revoke"]
     assert "claude.ai" not in revoke
     assert "sign out of all devices in ChatGPT security settings" in revoke
@@ -147,7 +151,7 @@ def scanned(total: int, current: int) -> ToolReport:
 
 
 def test_secrets_that_are_all_current_credentials_are_not_called_test_data(tmp_path: Path):
-    live, at_rest = rules.rule_secrets(scanned(1, 1), rule_ctx(tmp_path))
+    live, at_rest = local_code.rule_secrets(scanned(1, 1), rule_ctx(tmp_path))
     assert live.statement == (
         "1 current pi credential is copied into data files outside its credential store."
     )
@@ -158,8 +162,8 @@ def test_secrets_that_are_all_current_credentials_are_not_called_test_data(tmp_p
 
 
 def test_other_secrets_are_counted_without_guessing_where_they_came_from(tmp_path: Path):
-    _live, at_rest = rules.rule_secrets(scanned(3, 1), rule_ctx(tmp_path))
+    _live, at_rest = local_code.rule_secrets(scanned(3, 1), rule_ctx(tmp_path))
     assert "test data" not in at_rest.statement
     assert "current credential" not in at_rest.statement
-    [only] = rules.rule_secrets(scanned(2, 0), rule_ctx(tmp_path))
+    [only] = local_code.rule_secrets(scanned(2, 0), rule_ctx(tmp_path))
     assert only.id.endswith("secrets-at-rest")

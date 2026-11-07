@@ -1,0 +1,1035 @@
+# claude: what ai-footprint knows about this harness. Schema: harnesses/profile.py.
+name = "claude"
+display_name = "Claude Code"
+binaries = ["claude"]
+process = "(^|/)claude(\\s|$)"
+presence = ["{home}/.claude", "{home}/.claude.json"]
+process_words = ["claude"]
+env_prefixes = ["CLAUDE_CODE_", "ANTHROPIC_"]
+settings = ["defaultMode", "skipDangerousModePermissionPrompt", "disableBypassPermissionsMode", "enableAllProjectMcpServers", "cleanupPeriodDays", "DISABLE_TELEMETRY", "DISABLE_ERROR_REPORTING", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "claudeInChromeDefaultEnabled"]
+
+[roots]
+home = { default = "~" }
+managed = { default = "/Library/Application Support/ClaudeCode" }
+
+[[artifacts]]
+label = "Global config"
+path = "{home}/.claude.json"
+category = "config"
+description = "Account profile, project paths and trust, MCP servers"
+
+[[artifacts]]
+label = "Config backup"
+path = "{home}/.claude.json.backup"
+category = "config"
+description = "Older copy of .claude.json"
+
+[[artifacts]]
+label = "Config backups"
+path = "{home}/.claude/backups"
+category = "config"
+description = "Timestamped .claude.json copies"
+
+[[artifacts]]
+label = "Settings"
+path = "{home}/.claude/settings.json"
+category = "config"
+description = "Permissions, hooks, plugins, env vars"
+
+[[artifacts]]
+label = "Local settings"
+path = "{home}/.claude/settings.local.json"
+category = "config"
+description = "Per-machine settings"
+
+[[artifacts]]
+label = "Plaintext credentials"
+path = "{home}/.claude/.credentials.json"
+category = "credential"
+description = "OAuth tokens as JSON"
+
+[[artifacts]]
+label = "Transcripts"
+path = "{home}/.claude/projects"
+category = "session"
+description = "Full conversations including every tool input and output"
+
+[[artifacts]]
+label = "Tool results"
+path = "{home}/.claude/projects/*/*/tool-results"
+category = "session"
+description = "Tool output too large to keep inline: command output, fetched pages, files read"
+
+[[artifacts]]
+label = "Subagent transcripts"
+path = "{home}/.claude/projects/*/*/subagents"
+category = "session"
+description = "Conversations of subagents a session started"
+
+[[artifacts]]
+label = "Memory files"
+path = "{home}/.claude/projects/*/memory"
+category = "instructions"
+description = "Auto-memory notes written in a project and loaded into later sessions there"
+
+[[artifacts]]
+label = "Managed settings"
+path = "{managed}/managed-settings.json"
+category = "config"
+description = "Organization policy; overrides user and project settings"
+
+[[artifacts]]
+label = "Managed MCP servers"
+path = "{managed}/managed-mcp.json"
+category = "extension"
+description = "MCP servers set by organization policy"
+
+[[artifacts]]
+label = "Managed instructions"
+path = "{managed}/CLAUDE.md"
+category = "instructions"
+description = "Instructions set by organization policy, loaded into every session"
+
+[[project_artifacts]]
+label = "Project settings"
+path = ".claude/settings.json"
+category = "config"
+description = "Hooks, permission rules and MCP approvals for this repo, shared through git"
+
+[[project_artifacts]]
+label = "Project local settings"
+path = ".claude/settings.local.json"
+category = "config"
+description = "Personal hooks and permission rules for this repo"
+
+[[project_artifacts]]
+label = "Project MCP servers"
+path = ".mcp.json"
+category = "extension"
+description = "MCP servers the repo asks Claude Code to start"
+
+[[project_artifacts]]
+label = "Project agents"
+path = ".claude/agents"
+category = "extension"
+description = "Subagents defined in the repo"
+
+[[project_artifacts]]
+label = "Project commands"
+path = ".claude/commands"
+category = "extension"
+description = "Slash commands defined in the repo"
+
+[[project_artifacts]]
+label = "Project skills"
+path = ".claude/skills"
+category = "extension"
+description = "Skills defined in the repo"
+
+[[artifacts]]
+label = "Prompt history"
+path = "{home}/.claude/history.jsonl"
+category = "session"
+description = "Every prompt typed"
+
+[[artifacts]]
+label = "File snapshots"
+path = "{home}/.claude/file-history"
+category = "session"
+description = "Before/after copies of edited files"
+
+[[artifacts]]
+label = "Paste cache"
+path = "{home}/.claude/paste-cache"
+category = "session"
+description = "Large pasted content"
+
+[[artifacts]]
+label = "Todos"
+path = "{home}/.claude/todos"
+category = "session"
+description = "Task lists from older versions; no longer written"
+
+[[artifacts]]
+label = "Plans"
+path = "{home}/.claude/plans"
+category = "session"
+description = "Plan-mode plans"
+
+[[artifacts]]
+label = "Tasks"
+path = "{home}/.claude/tasks"
+category = "session"
+description = "Task lists written by the task tools"
+
+[[artifacts]]
+label = "Teams"
+path = "{home}/.claude/teams"
+category = "session"
+description = "Agent-team state"
+
+[[artifacts]]
+label = "Session registry"
+path = "{home}/.claude/sessions"
+category = "session"
+description = "Per-pid files (process start, peer token) and session key files"
+
+[[artifacts]]
+label = "Debug logs"
+path = "{home}/.claude/debug"
+category = "log"
+description = "Per-session debug logs"
+
+[[artifacts]]
+label = "Telemetry"
+path = "{home}/.claude/telemetry"
+category = "log"
+description = "Telemetry event batches"
+
+[[artifacts]]
+label = "Statsig cache"
+path = "{home}/.claude/statsig"
+category = "log"
+description = "Feature-flag cache from older versions; no longer written"
+
+[[artifacts]]
+label = "Shell snapshots"
+path = "{home}/.claude/shell-snapshots"
+category = "log"
+description = "Your aliases, functions and PATH, sourced before each command"
+
+[[artifacts]]
+label = "Session env"
+path = "{home}/.claude/session-env"
+category = "log"
+description = "Per-session env files"
+
+[[artifacts]]
+label = "Global instructions"
+path = "{home}/.claude/CLAUDE.md"
+category = "instructions"
+description = "Loaded into every session"
+
+[[artifacts]]
+label = "Skills"
+path = "{home}/.claude/skills"
+category = "extension"
+description = "User skills"
+
+[[artifacts]]
+label = "Commands"
+path = "{home}/.claude/commands"
+category = "extension"
+description = "Custom slash commands"
+
+[[artifacts]]
+label = "Agents"
+path = "{home}/.claude/agents"
+category = "extension"
+description = "Custom subagents"
+
+[[artifacts]]
+label = "Plugins"
+path = "{home}/.claude/plugins"
+category = "extension"
+description = "Marketplaces and plugin cache"
+
+[[artifacts]]
+label = "Chrome bridge"
+path = "{home}/.claude/chrome"
+category = "extension"
+description = "Native-messaging host wrapper"
+
+[[artifacts]]
+label = "Status line"
+path = "{home}/.claude/statusline.sh"
+category = "extension"
+description = "Status line script"
+
+[[artifacts]]
+label = "MCP logs (macOS)"
+path = "{home}/Library/Caches/claude-cli-nodejs"
+category = "log"
+description = "Per-project MCP connection logs"
+
+[[artifacts]]
+label = "MCP logs"
+path = "{home}/.cache/claude-cli-nodejs"
+category = "log"
+description = "Per-project MCP connection logs"
+
+[[artifacts]]
+label = "Install"
+path = "{home}/.local/share/claude"
+category = "binary"
+description = "Native install and old versions"
+
+[[artifacts]]
+label = "Usage totals"
+path = "{home}/.claude/stats-cache.json"
+category = "log"
+description = "Daily activity, token and cost totals shown by /usage; kept until deleted"
+
+[[artifacts]]
+label = "Cache"
+path = "{home}/.claude/cache"
+category = "cache"
+description = "Cached changelog for /release-notes and model catalog"
+
+[[artifacts]]
+label = "Channels"
+path = "{home}/.claude/channels"
+category = "credential"
+description = "Channel plugin state; the Telegram and Discord channels keep bot tokens in <channel>/.env"
+
+[[artifacts]]
+label = "Stray MCP list (.mcp.json)"
+path = "{home}/.claude/.mcp.json"
+category = "config"
+description = "MCP server definitions in a location the docs do not name; not known to be loaded"
+
+[[artifacts]]
+label = "Stray MCP list (mcp.json)"
+path = "{home}/.claude/mcp.json"
+category = "config"
+description = "MCP server definitions in a location the docs do not name; not known to be loaded"
+
+[[artifacts]]
+label = "Server-managed settings cache"
+path = "{home}/.claude/remote-settings.json"
+category = "config"
+description = "Cached copy of the organization's server-managed settings"
+
+[[artifacts]]
+label = "Policy limits cache"
+path = "{home}/.claude/policy-limits.json"
+category = "config"
+description = "Cached feature policy for the organization"
+
+[[artifacts]]
+label = "Remote Control uploads"
+path = "{home}/.claude/uploads"
+category = "session"
+description = "Files and photos attached from the web or mobile app to Remote Control sessions"
+
+[[artifacts]]
+label = "Image cache"
+path = "{home}/.claude/image-cache"
+category = "session"
+description = "Attached images saved by older versions"
+
+[[artifacts]]
+label = "Insights reports"
+path = "{home}/.claude/usage-data"
+category = "session"
+description = "/insights reports and cached per-session analysis"
+
+[[artifacts]]
+label = "Feedback bundles"
+path = "{home}/.claude/feedback-bundles"
+category = "session"
+description = "Redacted transcript archives written by /feedback, not yet sent"
+
+[[artifacts]]
+label = "Feedback drafts"
+path = "{home}/.claude/feedback"
+category = "session"
+description = "Claude-drafted feedback awaiting review in /feedback"
+
+[[artifacts]]
+label = "Background sessions"
+path = "{home}/.claude/jobs"
+category = "session"
+description = "Per-session state and scratch folders of background sessions"
+
+[[artifacts]]
+label = "Background supervisor"
+path = "{home}/.claude/daemon"
+category = "session"
+description = "Roster of running background sessions"
+
+[[artifacts]]
+label = "Background supervisor log"
+path = "{home}/.claude/daemon.log"
+category = "log"
+description = "Log of the background-session supervisor"
+
+[[artifacts]]
+label = "Rules"
+path = "{home}/.claude/rules"
+category = "instructions"
+description = "Topic-scoped instructions loaded into sessions"
+
+[[artifacts]]
+label = "Output styles"
+path = "{home}/.claude/output-styles"
+category = "instructions"
+description = "Instruction sets that change how Claude works"
+
+[[artifacts]]
+label = "Subagent memory"
+path = "{home}/.claude/agent-memory"
+category = "instructions"
+description = "Persistent memory subagents write and load in later runs"
+
+[[artifacts]]
+label = "Workflows"
+path = "{home}/.claude/workflows"
+category = "extension"
+description = "Workflow scripts, each run as a /<name> command"
+
+[[artifacts]]
+label = "Session mods"
+path = "{home}/.claude/dev-mods"
+category = "extension"
+description = "Mods Claude wrote during a session"
+
+[[artifacts]]
+label = "Managed settings drop-ins"
+path = "{managed}/managed-settings.d"
+category = "config"
+description = "Organization policy fragments merged with managed-settings.json"
+
+[[project_artifacts]]
+label = "Project rules"
+path = ".claude/rules"
+category = "instructions"
+description = "Topic-scoped instructions in the repo, loaded into sessions there"
+
+[[project_artifacts]]
+label = "Project workflows"
+path = ".claude/workflows"
+category = "extension"
+description = "Workflow scripts defined in the repo"
+
+[[project_artifacts]]
+label = "Project subagent memory"
+path = ".claude/agent-memory"
+category = "instructions"
+description = "Subagent memory kept in the repo"
+
+[[endpoints]]
+host = "api.anthropic.com"
+purpose = "Inference, OAuth profile and roles"
+
+[[endpoints]]
+host = "platform.claude.com"
+purpose = "OAuth authorize and token refresh"
+
+[[endpoints]]
+host = "claude.com"
+purpose = "OAuth authorize for claude.ai logins"
+marker = "https://claude.com/"
+
+[[endpoints]]
+host = "claude.ai"
+purpose = "OAuth client metadata, settings pages"
+
+[[endpoints]]
+host = "mcp-proxy.anthropic.com"
+purpose = "claude.ai connectors (Gmail, Drive, Calendar, ...)"
+
+[[endpoints]]
+host = "downloads.claude.ai"
+purpose = "Version checks and updates"
+
+[[endpoints]]
+host = "storage.googleapis.com"
+purpose = "Release artifacts"
+
+[[endpoints]]
+host = "http-intake.logs.us5.datadoghq.com"
+purpose = "Error and event logging"
+
+[[endpoints]]
+host = "cdn.growthbook.io"
+purpose = "Feature flags"
+
+[[endpoints]]
+host = "raw.githubusercontent.com"
+purpose = "Plugin marketplaces"
+
+[[endpoints]]
+host = "github.com"
+purpose = "Plugin marketplaces"
+
+[[fingerprint]]
+label = "User-Agent"
+value = "claude-cli/{version} (external, cli)"
+marker = "claude-cli/"
+
+[[fingerprint]]
+label = "App header"
+value = "x-app: cli"
+marker = "\"x-app\""
+
+[[fingerprint]]
+label = "Beta header"
+value = "anthropic-beta: claude-code-20250219,oauth-2025-04-20,…"
+marker = "claude-code-20250219"
+
+[[fingerprint]]
+label = "Auth header"
+value = "Authorization: Bearer sk-ant-oat01-…"
+marker = "oauth-2025-04-20"
+
+[[fingerprint]]
+label = "OAuth client"
+value = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+marker = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+
+[[fingerprint]]
+label = "Token endpoint"
+value = "https://platform.claude.com/v1/oauth/token"
+marker = "/v1/oauth/token"
+
+[[fingerprint]]
+label = "Keychain item"
+value = "Claude Code-credentials (name assembled at runtime)"
+marker = "-credentials"
+
+[[fingerprint]]
+label = "Child shell"
+value = "zsh -c source ~/.claude/shell-snapshots/snapshot-*.sh"
+marker = "shell-snapshots"
+
+[[fingerprint]]
+label = "Child env"
+value = "CLAUDECODE=1, CLAUDE_CODE_ENTRYPOINT, CLAUDE_CODE_SESSION_ID"
+marker = "CLAUDE_CODE_ENTRYPOINT"
+
+[[fingerprint]]
+label = "Keychain read"
+value = "spawns \"security\" by bare name (PATH lookup)"
+marker = "\"security\",[\"find-generic-password\""
+
+[signals]
+approval_off = { "permissions.defaultMode" = "bypassPermissions" }
+approval_off_flagged = ["projects with defaultMode=bypassPermissions"]
+
+[remedies.withdraw-trust]
+summary = "Withdraw trust from folders you do not own or no longer use"
+commands = [
+  { manual = "Set hasTrustDialogAccepted to false for those projects in ~/.claude.json", markers = ["hasTrustDialogAccepted"] },
+]
+
+[remedies.data-controls]
+summary = "Review the provider's data settings"
+commands = [
+  { manual = "Turn off model training at claude.ai/settings/data-privacy-controls and disconnect unused connectors" },
+]
+
+[[docs]]
+url = "https://code.claude.com/docs/en/settings"
+topic = "settings files, scopes and precedence"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/settings-reference"
+topic = "every setting key, including permissions, sandbox, hooks, MCP, plugins"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/env-vars"
+topic = "environment variables"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/cli-reference"
+topic = "subcommands and flags"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/permissions"
+topic = "permission rules and workspace trust"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/permission-modes"
+topic = "permission modes, bypassPermissions"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/sandboxing"
+topic = "Bash sandbox"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/hooks"
+topic = "hooks"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/mcp"
+topic = "MCP servers, scopes and claude.ai connectors"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/managed-mcp"
+topic = "managed-mcp.json and MCP allow and deny lists"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/managed-settings"
+topic = "managed settings files and precedence"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/authentication"
+topic = "authentication and credential storage"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/claude-directory"
+topic = "files under ~/.claude and their retention"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/monitoring-usage"
+topic = "OpenTelemetry export"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/remote-control"
+topic = "Remote Control"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/channels"
+topic = "channels"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/claude-code-on-the-web"
+topic = "cloud sessions"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/agent-view"
+topic = "background sessions and their supervisor"
+
+[[docs]]
+url = "https://code.claude.com/docs/en/plugins/security"
+topic = "plugin and marketplace trust"
+
+[[docs]]
+url = "https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md"
+topic = "release notes"
+
+[[features]]
+kind = "setting"
+name = "permissions.defaultMode"
+summary = "Mode new sessions start in; bypassPermissions runs every tool without asking"
+doc = "https://code.claude.com/docs/en/settings-reference#permissions-defaultmode"
+marker = "permissions.defaultMode"
+checks = ["no-approval"]
+
+[[features]]
+kind = "subcommand"
+name = "--dangerously-skip-permissions"
+summary = "Starts a session in bypassPermissions mode"
+doc = "https://code.claude.com/docs/en/cli-reference"
+marker = "dangerously-skip-permissions"
+checks = ["no-approval"]
+
+[[features]]
+kind = "subcommand"
+name = "--allow-dangerously-skip-permissions"
+summary = "Adds bypassPermissions to the Shift+Tab cycle without starting in it"
+doc = "https://code.claude.com/docs/en/cli-reference"
+marker = "allow-dangerously-skip-permissions"
+
+[[features]]
+kind = "setting"
+name = "skipDangerousModePermissionPrompt"
+summary = "Skips the confirmation shown before a session enters bypassPermissions"
+doc = "https://code.claude.com/docs/en/settings-reference#skipdangerousmodepermissionprompt"
+marker = "skipDangerousModePermissionPrompt"
+
+[[features]]
+kind = "setting"
+name = "permissions.disableBypassPermissionsMode"
+summary = "\"disable\" blocks bypassPermissions mode and --dangerously-skip-permissions"
+doc = "https://code.claude.com/docs/en/settings-reference#permissions-disablebypasspermissionsmode"
+marker = "disableBypassPermissionsMode"
+
+[[features]]
+kind = "setting"
+name = "permissions"
+summary = "allow, ask and deny rules for tool use"
+doc = "https://code.claude.com/docs/en/settings-reference#permissions"
+marker = "permissions.deny"
+
+[[features]]
+kind = "setting"
+name = "permissions.additionalDirectories"
+summary = "Directories outside the start folder Claude may read and edit"
+doc = "https://code.claude.com/docs/en/settings-reference#permissions-additionaldirectories"
+marker = "permissions.additionalDirectories"
+
+[[features]]
+kind = "setting"
+name = "allowManagedPermissionRulesOnly"
+summary = "Managed: ignore permission rules from every non-managed source"
+doc = "https://code.claude.com/docs/en/settings-reference#allowmanagedpermissionrulesonly"
+marker = "allowManagedPermissionRulesOnly"
+
+[[features]]
+kind = "setting"
+name = "sandbox.enabled"
+summary = "Runs Bash commands in an OS sandbox; unset means no sandbox"
+doc = "https://code.claude.com/docs/en/settings-reference#sandbox-enabled"
+marker = "sandbox.enabled"
+
+[[features]]
+kind = "setting"
+name = "sandbox.allowUnsandboxedCommands"
+summary = "Lets Claude retry a blocked command outside the sandbox (dangerouslyDisableSandbox)"
+doc = "https://code.claude.com/docs/en/settings-reference#sandbox-allowunsandboxedcommands"
+marker = "allowUnsandboxedCommands"
+
+[[features]]
+kind = "setting"
+name = "sandbox.autoAllowBashIfSandboxed"
+summary = "Runs sandboxed Bash commands without a permission prompt"
+doc = "https://code.claude.com/docs/en/settings-reference#sandbox-autoallowbashifsandboxed"
+marker = "autoAllowBashIfSandboxed"
+
+[[features]]
+kind = "setting"
+name = "hooks"
+summary = "Commands, HTTP requests, prompts or MCP tools run on lifecycle events"
+doc = "https://code.claude.com/docs/en/hooks"
+marker = "PreToolUse"
+checks = ["autostart"]
+
+[[features]]
+kind = "setting"
+name = "allowManagedHooksOnly"
+summary = "Managed: run only hooks the organization deploys"
+doc = "https://code.claude.com/docs/en/settings-reference#allowmanagedhooksonly"
+marker = "allowManagedHooksOnly"
+
+[[features]]
+kind = "setting"
+name = "statusLine"
+summary = "Command run to render the status line"
+doc = "https://code.claude.com/docs/en/settings-reference#statusline"
+marker = "statusLine"
+checks = ["autostart"]
+
+[[features]]
+kind = "setting"
+name = "env"
+summary = "Environment variables set for every session and its subprocesses"
+doc = "https://code.claude.com/docs/en/settings-reference#env"
+marker = "Environment variables to set for Claude Code sessions"
+
+[[features]]
+kind = "setting"
+name = "mcpServers"
+summary = "User- and local-scope MCP servers in ~/.claude.json, started in every session or project"
+doc = "https://code.claude.com/docs/en/mcp#mcp-installation-scopes"
+marker = "mcpServers"
+checks = ["autostart", "dangling"]
+
+[[features]]
+kind = "path"
+name = "/Library/Application Support/ClaudeCode/managed-mcp.json"
+summary = "Organization MCP servers; when present only these load"
+doc = "https://code.claude.com/docs/en/managed-mcp"
+marker = "managed-mcp.json"
+checks = ["autostart", "dangling"]
+
+[[features]]
+kind = "setting"
+name = "enableAllProjectMcpServers"
+summary = "Approves every server in project .mcp.json files without a prompt"
+doc = "https://code.claude.com/docs/en/settings-reference#enableallprojectmcpservers"
+marker = "enableAllProjectMcpServers"
+
+[[features]]
+kind = "setting"
+name = "enabledMcpjsonServers"
+summary = "Project .mcp.json servers approved to connect without asking"
+doc = "https://code.claude.com/docs/en/settings-reference#enabledmcpjsonservers"
+marker = "enabledMcpjsonServers"
+
+[[features]]
+kind = "setting"
+name = "allowedMcpServers"
+summary = "Allowlist of MCP servers that may load"
+doc = "https://code.claude.com/docs/en/settings-reference#allowedmcpservers"
+marker = "allowedMcpServers"
+
+[[features]]
+kind = "setting"
+name = "deniedMcpServers"
+summary = "MCP servers that never load, from any source"
+doc = "https://code.claude.com/docs/en/settings-reference#deniedmcpservers"
+marker = "deniedMcpServers"
+
+[[features]]
+kind = "setting"
+name = "allowManagedMcpServersOnly"
+summary = "Managed: only the managed MCP allowlist applies"
+doc = "https://code.claude.com/docs/en/settings-reference#allowmanagedmcpserversonly"
+marker = "allowManagedMcpServersOnly"
+
+[[features]]
+kind = "integration"
+name = "claude.ai connectors"
+summary = "Connectors added on claude.ai, reached through mcp-proxy.anthropic.com with the login token"
+doc = "https://code.claude.com/docs/en/mcp#use-mcp-servers-from-claude-ai"
+marker = "mcp-proxy.anthropic.com"
+checks = ["connected-apps"]
+
+[[features]]
+kind = "setting"
+name = "enabledPlugins"
+summary = "Plugins turned on; their hooks and MCP servers run"
+doc = "https://code.claude.com/docs/en/settings-reference#enabledplugins"
+marker = "enabledPlugins"
+checks = ["autostart"]
+
+[[features]]
+kind = "setting"
+name = "extraKnownMarketplaces"
+summary = "Plugin marketplaces registered from settings, including a repo's"
+doc = "https://code.claude.com/docs/en/settings-reference#extraknownmarketplaces"
+marker = "extraKnownMarketplaces"
+
+[[features]]
+kind = "setting"
+name = "strictKnownMarketplaces"
+summary = "Managed: allowlist of marketplace sources plugins may come from"
+doc = "https://code.claude.com/docs/en/settings-reference#strictknownmarketplaces"
+marker = "strictKnownMarketplaces"
+
+[[features]]
+kind = "setting"
+name = "apiKeyHelper"
+summary = "Shell command run to produce the API credential"
+doc = "https://code.claude.com/docs/en/settings-reference#apikeyhelper"
+marker = "apiKeyHelper"
+
+[[features]]
+kind = "setting"
+name = "awsAuthRefresh"
+summary = "Command run to refresh AWS credentials for Bedrock"
+doc = "https://code.claude.com/docs/en/settings-reference#awsauthrefresh"
+marker = "awsAuthRefresh"
+
+[[features]]
+kind = "setting"
+name = "awsCredentialExport"
+summary = "Command that prints AWS credentials for Bedrock"
+doc = "https://code.claude.com/docs/en/settings-reference#awscredentialexport"
+marker = "awsCredentialExport"
+
+[[features]]
+kind = "setting"
+name = "gcpAuthRefresh"
+summary = "Command run to refresh Google Cloud credentials"
+doc = "https://code.claude.com/docs/en/settings-reference#gcpauthrefresh"
+marker = "gcpAuthRefresh"
+
+[[features]]
+kind = "setting"
+name = "otelHeadersHelper"
+summary = "Command run to produce OpenTelemetry export headers"
+doc = "https://code.claude.com/docs/en/settings-reference#otelheadershelper"
+marker = "otelHeadersHelper"
+
+[[features]]
+kind = "setting"
+name = "cleanupPeriodDays"
+summary = "Days transcripts and other session data are kept (default 30)"
+doc = "https://code.claude.com/docs/en/settings-reference#cleanupperioddays"
+marker = "cleanupPeriodDays"
+
+[[features]]
+kind = "setting"
+name = "hasTrustDialogAccepted"
+summary = "Per-project workspace trust in ~/.claude.json; trusted repos apply their settings"
+doc = "https://code.claude.com/docs/en/permissions#project-allow-rules-and-workspace-trust"
+marker = "hasTrustDialogAccepted"
+checks = ["trust"]
+
+[[features]]
+kind = "path"
+name = "~/.claude/.credentials.json"
+summary = "Plaintext login, used on Linux and when the macOS Keychain refuses the write"
+doc = "https://code.claude.com/docs/en/authentication#credential-management"
+marker = ".credentials.json"
+checks = ["creds-plaintext", "creds-readable"]
+
+[[features]]
+kind = "env"
+name = "ANTHROPIC_API_KEY"
+summary = "API key sent as X-Api-Key; overrides the subscription login"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "ANTHROPIC_API_KEY"
+checks = ["duplicate-creds"]
+
+[[features]]
+kind = "env"
+name = "ANTHROPIC_AUTH_TOKEN"
+summary = "Bearer token sent in the Authorization header"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "ANTHROPIC_AUTH_TOKEN"
+checks = ["duplicate-creds"]
+
+[[features]]
+kind = "env"
+name = "CLAUDE_CODE_OAUTH_TOKEN"
+summary = "claude.ai OAuth token; takes precedence over the Keychain login"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "CLAUDE_CODE_OAUTH_TOKEN"
+checks = ["duplicate-creds"]
+
+[[features]]
+kind = "subcommand"
+name = "setup-token"
+summary = "Prints a long-lived OAuth token for scripts and CI"
+doc = "https://code.claude.com/docs/en/cli-reference"
+marker = "setup-token"
+
+[[features]]
+kind = "env"
+name = "ANTHROPIC_BASE_URL"
+summary = "Sends API requests to another endpoint, such as a proxy or gateway"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "ANTHROPIC_BASE_URL"
+
+[[features]]
+kind = "env"
+name = "CLAUDE_CONFIG_DIR"
+summary = "Moves ~/.claude (settings, history, plugins, credentials) elsewhere"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "CLAUDE_CONFIG_DIR"
+
+[[features]]
+kind = "env"
+name = "CLAUDE_CODE_SKIP_PROMPT_HISTORY"
+summary = "Skips writing prompt history and transcripts to disk"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "CLAUDE_CODE_SKIP_PROMPT_HISTORY"
+
+[[features]]
+kind = "env"
+name = "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB"
+summary = "Strips credentials from the environment of Bash commands, hooks and MCP servers"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB"
+
+[[features]]
+kind = "env"
+name = "CLAUDE_CODE_ENABLE_TELEMETRY"
+summary = "Turns on OpenTelemetry metrics and logs export"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "CLAUDE_CODE_ENABLE_TELEMETRY"
+
+[[features]]
+kind = "env"
+name = "OTEL_EXPORTER_OTLP_ENDPOINT"
+summary = "Collector that OpenTelemetry data is sent to"
+doc = "https://code.claude.com/docs/en/monitoring-usage"
+marker = "OTEL_EXPORTER_OTLP_ENDPOINT"
+
+[[features]]
+kind = "env"
+name = "OTEL_LOG_USER_PROMPTS"
+summary = "Includes prompt text in OpenTelemetry logs and traces"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "OTEL_LOG_USER_PROMPTS"
+
+[[features]]
+kind = "env"
+name = "OTEL_LOG_TOOL_DETAILS"
+summary = "Includes tool arguments, MCP server names and error strings in telemetry"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "OTEL_LOG_TOOL_DETAILS"
+
+[[features]]
+kind = "env"
+name = "OTEL_LOG_TOOL_CONTENT"
+summary = "Includes tool output in trace span events"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "OTEL_LOG_TOOL_CONTENT"
+
+[[features]]
+kind = "env"
+name = "OTEL_LOG_RAW_API_BODIES"
+summary = "Exports full API request and response bodies as log events or files"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "OTEL_LOG_RAW_API_BODIES"
+
+[[features]]
+kind = "env"
+name = "DISABLE_TELEMETRY"
+summary = "Opts out of telemetry and feature-flag fetching"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "DISABLE_TELEMETRY"
+
+[[features]]
+kind = "env"
+name = "DISABLE_ERROR_REPORTING"
+summary = "Opts out of error reporting"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "DISABLE_ERROR_REPORTING"
+
+[[features]]
+kind = "env"
+name = "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
+summary = "Turns off updates, telemetry, error reporting and other nonessential traffic"
+doc = "https://code.claude.com/docs/en/env-vars"
+marker = "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
+
+[[features]]
+kind = "subcommand"
+name = "remote-control"
+summary = "Server mode: drive Claude Code on this machine from claude.ai or the Claude app"
+doc = "https://code.claude.com/docs/en/cli-reference"
+marker = "remote-control"
+
+[[features]]
+kind = "setting"
+name = "remoteControlAtStartup"
+summary = "Connects Remote Control in every interactive session"
+doc = "https://code.claude.com/docs/en/settings-reference#remotecontrolatstartup"
+marker = "remoteControlAtStartup"
+
+[[features]]
+kind = "setting"
+name = "disableRemoteControl"
+summary = "Refuses Remote Control in every form"
+doc = "https://code.claude.com/docs/en/settings-reference#disableremotecontrol"
+marker = "disableRemoteControl"
+
+[[features]]
+kind = "subcommand"
+name = "--channels"
+summary = "Lets channel plugins (Telegram, Discord, iMessage) push messages into the session"
+doc = "https://code.claude.com/docs/en/channels"
+marker = "--channels"
+
+[[features]]
+kind = "subcommand"
+name = "--dangerously-load-development-channels"
+summary = "Loads channels that are not on the approved allowlist"
+doc = "https://code.claude.com/docs/en/cli-reference"
+marker = "dangerously-load-development-channels"
+
+[[features]]
+kind = "setting"
+name = "channelsEnabled"
+summary = "Managed: allows channels for the organization"
+doc = "https://code.claude.com/docs/en/settings-reference#channelsenabled"
+marker = "channelsEnabled"
+
+[[features]]
+kind = "setting"
+name = "allowedChannelPlugins"
+summary = "Managed: channel plugins allowed to push messages"
+doc = "https://code.claude.com/docs/en/settings-reference#allowedchannelplugins"
+marker = "allowedChannelPlugins"
+
+[[features]]
+kind = "integration"
+name = "Claude Code on the web"
+summary = "Cloud sessions that clone your GitHub repos on Anthropic infrastructure"
+doc = "https://code.claude.com/docs/en/claude-code-on-the-web"
+marker = "githubWebConnectionStatusCache"
+checks = ["account-data"]
+
+[[features]]
+kind = "subcommand"
+name = "daemon"
+summary = "Background-session supervisor that keeps sessions running after the terminal closes"
+doc = "https://code.claude.com/docs/en/agent-view"
+marker = "daemon status"
+checks = ["unattended"]

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_footprint import document, figurecheck, figures, fsinfo, rules
+from ai_footprint import checks, fsinfo
 from ai_footprint.audit import run_audit
 from ai_footprint.model import (
     Artifact,
@@ -25,6 +25,7 @@ from ai_footprint.model import (
     Setting,
     ToolReport,
 )
+from ai_footprint.reporting import document, figurecheck, figures
 from tests.conftest import (
     FakeSystem,
     build_claude_home,
@@ -196,8 +197,9 @@ def test_recount_adds_a_location_listed_inside_another_once(doc: dict):
 
 
 def test_recount_catches_overlapping_scan_roots(doc: dict):
-    roots = doc["tools"][0]["secret_scan"]["roots"]
-    overlapping = _set(doc, ["tools", 1, "secret_scan", "roots"], [roots[0] + "/sub"])
+    first, second = [i for i, tool in enumerate(doc["tools"]) if tool["secret_scan"]][:2]
+    roots = doc["tools"][first]["secret_scan"]["roots"]
+    overlapping = _set(doc, ["tools", second, "secret_scan", "roots"], [roots[0] + "/sub"])
     assert any("never read the same folder" in f for f in failures(overlapping))
 
 
@@ -223,8 +225,8 @@ def test_a_check_without_its_input_is_not_checked_and_one_with_a_signal_never_is
 
 def test_every_tool_rule_declares_why_it_could_not_run_or_always_can():
     tool = ToolReport("claude", "Claude Code", installed=True)
-    ctx = rules.RuleContext(host=_audit([]).host, platform="darwin", home=Path("/h"))
-    reasons = {rule.id: rule.needs(tool, ctx) for rule in rules.TOOL_RULES}
+    ctx = checks.RuleContext(host=_audit([]).host, platform="darwin", home=Path("/h"))
+    reasons = {rule.id: rule.needs(tool, ctx) for rule in checks.TOOL_RULES}
     always = {"instructions", "autostart", "daemons", "duplicate-installs"}
     assert {rule_id for rule_id, reason in reasons.items() if not reason} == always
 

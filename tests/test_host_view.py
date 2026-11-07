@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ai_footprint import document, rules
+from ai_footprint import checks
 from ai_footprint.model import (
     AuditReport,
     CheckResult,
@@ -19,6 +19,7 @@ from ai_footprint.model import (
     TokenInfo,
     ToolReport,
 )
+from ai_footprint.reporting import document
 
 HOME = "/Users/tester"
 CLAUDE_BRIDGE = (
@@ -51,9 +52,9 @@ def make_audit(
 
 
 def host_exposures(audit: AuditReport) -> list[Exposure]:
-    ctx = rules.RuleContext(host=audit.host, platform="darwin", home=Path(HOME))
+    ctx = checks.RuleContext(host=audit.host, platform="darwin", home=Path(HOME))
     found = []
-    for rule in rules.HOST_RULES:
+    for rule in checks.HOST_RULES:
         found.extend(rule.fn(audit, ctx))
     return found
 
@@ -175,7 +176,7 @@ def test_control_statement_leaves_paths_to_the_table():
     facts = [
         HostFact(
             "control",
-            "Claude Desktop MCP 'hopper'",
+            "Hopper helper",
             "/Apps/Hopper.app/MacOS/Hopper",
             "config.json",
             concern=True,
@@ -191,7 +192,7 @@ def test_control_statement_leaves_paths_to_the_table():
     audit = make_audit(facts, [])
     [finding] = [x for x in host_exposures(audit) if x.id == "host:computer-control"]
     assert "/Apps/Hopper.app" not in finding.statement
-    assert "Claude Desktop MCP 'hopper'" in finding.statement
+    assert "Hopper helper" in finding.statement
     assert "Codex Computer Use (screen and input control helper)" in finding.statement
 
 

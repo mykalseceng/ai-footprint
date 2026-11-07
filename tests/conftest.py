@@ -30,7 +30,10 @@ class FakeSystem(System):
         self, *, path: str = "", platform: str = "darwin", other_users: tuple[str, ...] = ()
     ) -> None:
         super().__init__(
-            platform=platform, env={"PATH": path, "HOME": "/nonexistent"}, verify_signatures=False
+            platform=platform,
+            env={"PATH": path, "HOME": "/nonexistent"},
+            verify_signatures=False,
+            root=Path("/nonexistent-root"),
         )
         self.other_users = other_users
         self.responders: list[Responder] = []
@@ -252,3 +255,210 @@ def build_pi_home(home: Path) -> None:
     (session / "2026-04-28T21-31-55-615Z_abc.jsonl").write_text(
         json.dumps({"type": "session", "cwd": str(home / "elsewhere")}) + "\n"
     )
+
+
+def bundle_markers(tool: str) -> list[str]:
+    """Every string a harness's profile and collector expect in its app bundle."""
+    from ai_footprint.harnesses import registry  # noqa: PLC0415 - fixtures load harnesses lazily
+
+    harness = registry()[tool]
+    markers = [claim.marker for claim in harness.claims]
+    markers += [
+        m for fix in harness.profile.remedies.values() for c in fix.commands for m in c.markers
+    ]
+    markers += [f.marker for f in harness.profile.features if f.marker]
+    return sorted(set(markers))
+
+
+def _t3_db(path: Path, *, threads: list[str], sessions: list[tuple[str, str]]) -> None:
+    """A state DB with the tables and columns the T3 Code collector reads."""
+    with sqlite3.connect(path) as conn:
+        conn.executescript(
+            "CREATE TABLE orchestration_v2_projection_threads"
+            " (thread_id text, runtime_mode text, deleted_at text);"
+            "CREATE TABLE orchestration_v2_projection_messages (message_id text);"
+            "CREATE TABLE projection_projects (project_id text, deleted_at text);"
+            "CREATE TABLE auth_sessions (client_device_type text, method text, scopes text,"
+            " last_connected_at text, revoked_at text, expires_at text);"
+            "CREATE TABLE auth_pairing_links"
+            " (consumed_at text, revoked_at text, expires_at text);"
+            "CREATE TABLE peer_environment_links (environment_id text);"
+            "CREATE TABLE scheduled_tasks (title text, enabled integer);"
+            "CREATE TABLE provider_session_runtime (provider_name text);"
+        )
+        conn.executemany(
+            "INSERT INTO orchestration_v2_projection_threads VALUES (?, ?, NULL)",
+            [(f"t{i}", mode) for i, mode in enumerate(threads)],
+        )
+        conn.executemany(
+            "INSERT INTO provider_session_runtime VALUES ('claudeAgent')", [()] * len(threads)
+        )
+        conn.executemany(
+            "INSERT INTO auth_sessions VALUES (?, 'bearer-access-token', ?,"
+            " '2026-11-01T10:00:00Z', NULL, '2999-01-01')",
+            sessions,
+        )
+        conn.execute("INSERT INTO projection_projects VALUES ('p1', NULL)")
+
+
+def build_t3code_home(
+    home: Path,
+    *,
+    threads: tuple[str, ...] = ("full-access", "full-access", "approval-required"),
+    sessions: tuple[tuple[str, str], ...] = (("desktop", '["orchestration:read"]'),),
+) -> Path:
+    """T3 Code data folder, an app bundle in ~/Applications and its launchd agent.
+
+    Returns:
+        The app bundle's JavaScript archive, where markers are searched.
+    """
+    import plistlib  # noqa: PLC0415 - only app fixtures write property lists
+
+    userdata = home / ".t3" / "userdata"
+    (userdata / "secrets").mkdir(parents=True)
+    (userdata / "secrets").chmod(0o700)
+    for name in ("server-signing-key", "cloud-link-ed25519-key-pair"):
+        key = userdata / "secrets" / f"{name}.bin"
+        key.write_bytes(b"\x01" * 32)
+        key.chmod(0o600)
+    token = make_jwt({"sub": "user_1", "exp": int(time.time()) + 3600}, sign=False)
+    (userdata / "clerk-tokens.json").write_text(json.dumps({"__clerk_client_jwt": token}))
+    (userdata / "clerk-tokens.json").chmod(0o644)
+    _t3_db(userdata / "statev2.sqlite", threads=list(threads), sessions=list(sessions))
+    asar = _app_bundle(
+        home / "Applications", "T3 Code.app", "T3 Code", "0.1.5", bundle_markers("t3code")
+    )
+    agents = home / "Library" / "LaunchAgents"
+    agents.mkdir(parents=True)
+    (agents / "com.t3tools.t3code.service.plist").write_bytes(
+        plistlib.dumps({"ProgramArguments": [str(home / ".t3/bin/t3"), "serve"], "RunAtLoad": True})
+    )
+    return asar
+
+
+def _app_bundle(apps: Path, name: str, executable: str, version: str, markers: list[str]) -> Path:
+    """A macOS app bundle whose JavaScript archive holds ``markers``; returns the archive."""
+    import plistlib  # noqa: PLC0415 - only app fixtures write property lists
+
+    app = apps / name / "Contents"
+    (app / "Resources").mkdir(parents=True)
+    (app / "MacOS").mkdir()
+    (app / "MacOS" / executable).write_text("#!/bin/sh\n")
+    (app / "Info.plist").write_bytes(
+        plistlib.dumps({"CFBundleExecutable": executable, "CFBundleShortVersionString": version})
+    )
+    asar = app / "Resources" / "app.asar"
+    asar.write_bytes(b"\0".join(m.encode() for m in markers))
+    return asar
+
+
+def safe_storage(value: bytes) -> str:
+    """Electron safeStorage output as the app stores it: ``v10`` ciphertext, base64-encoded."""
+    return base64.b64encode(b"v10" + value).decode()
+
+
+def _write_json(path: Path, data: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data))
+    path.chmod(0o600)
+
+
+def _desktop_sessions(support: Path, modes: tuple[tuple[str, str, str], ...]) -> None:
+    """Session records as ``(Code|Cowork, permissionMode, chromePermissionMode)``."""
+    folders = {"Code": "claude-code-sessions", "Cowork": "local-agent-mode-sessions"}
+    for index, (kind, mode, chrome) in enumerate(modes):
+        record = {"sessionId": f"local_{index}", "title": "private title", "model": "m"}
+        record |= {"permissionMode": mode} if mode else {}
+        record |= {"chromePermissionMode": chrome} if chrome else {}
+        _write_json(support / folders[kind] / "acct" / "org" / f"local_{index}.json", record)
+
+
+def build_claude_desktop_home(
+    home: Path,
+    *,
+    sessions: tuple[tuple[str, str, str], ...] = (
+        ("Code", "bypassPermissions", "ask"),
+        ("Code", "auto", "skip_all_permission_checks"),
+        ("Cowork", "", ""),
+    ),
+    oauth_cache: str | None = None,
+    remote: bool = False,
+    ssh_hosts: int = 0,
+) -> Path:
+    """Claude Desktop: app bundle in ~/Applications, data folder, logs, sessions, extension.
+
+    Returns:
+        The data folder (~/Library/Application Support/Claude).
+    """
+    from ai_footprint.harnesses.claude_desktop import collector  # noqa: PLC0415 - lazy harness
+
+    _app_bundle(
+        home / "Applications",
+        "Claude.app",
+        "Claude",
+        "4.23118.0",
+        bundle_markers("claude_desktop"),
+    )
+    support = home / "Library" / "Application Support" / "Claude"
+    (home / "Library" / "Logs" / "Claude").mkdir(parents=True)
+    (home / "Library" / "Logs" / "Claude" / "main.log").write_text("started\n")
+    _write_json(
+        support / "config.json",
+        {
+            "oauth:tokenCacheV2": oauth_cache or safe_storage(b"\x01" * 48),
+            f"{collector.ALLOWLIST_PREFIX}org": False,
+        },
+    )
+    _write_json(
+        support / collector.CONFIG,
+        {
+            "mcpServers": {
+                "local-tool": {"command": "/bin/sh", "args": ["-c", "true"]},
+                "gone": {"command": "node", "args": [str(home / "missing" / "server.js")]},
+            },
+            "preferences": {
+                "bypassPermissionsModeEnabled": True,
+                "chicagoEnabled": False,
+                "ccRemoteControlDefaultEnabled": remote,
+            },
+        },
+    )
+    _desktop_sessions(support, sessions)
+    task = {
+        "id": "t1",
+        "displayName": "nightly",
+        "enabled": True,
+        "cronExpression": "0 9 * * *",
+        "filePath": "/x/SKILL.md",
+        "createdAt": 1,
+        "permissionMode": "acceptEdits",
+    }
+    _write_json(
+        support / "claude-code-sessions" / "acct" / "org" / "scheduled-tasks.json",
+        {"scheduledTasks": [task]},
+    )
+    identities = {}
+    if remote:
+        folder = {"environmentId": "env_1", "keys": []}
+        identities["acct:org"] = {"serve": "on", "folders": {"/work": folder}}
+    _write_json(support / collector.REMOTE_STATE, {"version": 1, "identities": identities})
+    tokens = {f"host{i}": safe_storage(b"\x02" * 16) for i in range(ssh_hosts)}
+    _write_json(support / collector.SSH_STATE, {"tokens": tokens, "pendingDaemonUpgrades": {}})
+    extension = support / collector.EXTENSIONS_DIR / "ext.weather"
+    _write_json(
+        extension / "manifest.json",
+        {
+            "name": "weather",
+            "display_name": "Weather",
+            "description": "Looks up the weather.",
+            "server": {"type": "node", "entry_point": "server/index.js"},
+            "user_config": {"api_key": {"type": "string", "sensitive": True}},
+        },
+    )
+    (extension / "server").mkdir()
+    (extension / "server" / "index.js").write_text("")
+    _write_json(
+        support / collector.EXTENSION_SETTINGS_DIR / "ext.weather.json",
+        {"isEnabled": True, "userConfig": {"api_key": f"{collector.ENCRYPTED_SETTING}abc"}},
+    )
+    return support

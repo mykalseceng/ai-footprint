@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ai_footprint.collectors.common import Context, is_dangling, load_json
+from ai_footprint.harnesses.common import Context, is_dangling, load_json
 from ai_footprint.model import Extension
 
 MAX_DESCRIPTION = 160

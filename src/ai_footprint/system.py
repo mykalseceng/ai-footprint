@@ -163,8 +163,11 @@ class System:
         platform: str = sys.platform,
         env: Mapping[str, str] | None = None,
         verify_signatures: bool = True,
+        root: Path = Path("/"),
     ) -> None:
         self.platform = platform
+        self.root = root
+        """Filesystem root that machine-wide paths (``/Applications``) are read under."""
         self.env = dict(os.environ if env is None else env)
         self.verify_signatures = verify_signatures and platform == "darwin"
         self.executed: list[ExecRecord] = []

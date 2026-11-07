@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from ai_footprint import capture, cli, live, optioncheck
-from ai_footprint.audit import TOOLS
+from ai_footprint.harnesses import registry
 from ai_footprint.model import (
     BinaryInfo,
     CommandValidation,
@@ -104,6 +104,26 @@ def test_json_writes_private_parseable_report(home: Path):
     assert data["checklist"] and all("exposed" in c for c in data["checklist"])
 
 
+def test_profile_maps_features_and_writes_private_json(home: Path, capsys):
+    (home / ".codex" / "mystery.db").write_text("")
+    out = home / "profile.json"
+    assert run(home, "codex", "--profile", "--json", str(out)) == 0
+    text = capsys.readouterr().out
+    assert text.startswith("Codex CLI (codex)")
+    assert "~/.codex/mystery.db" in text
+    assert not (home / "ai-footprint-dashboard.html").exists()
+    assert stat.S_IMODE(out.stat().st_mode) == 0o600
+    [tool] = json.loads(out.read_text())["tools"]
+    assert tool["tool"] == "codex"
+    assert "~/.codex/mystery.db" in tool["unmapped_paths"]
+
+
+def test_profile_refuses_other_modes(home: Path, capsys):
+    with pytest.raises(SystemExit):
+        run(home, "codex", "--profile", "--doctor")
+    assert "not allowed with" in capsys.readouterr().err
+
+
 def test_live_verifies_signatures_only_when_asked(home: Path, monkeypatch: pytest.MonkeyPatch):
     calls: list[str] = []
 
@@ -139,7 +159,7 @@ def test_workers_reaches_the_scanner(home: Path, monkeypatch: pytest.MonkeyPatch
 
 def test_home_selects_the_audited_home(home: Path, capsys):
     assert cli.main(["--list", "--home", str(home / "empty")]) == 0
-    assert capsys.readouterr().out.count("not installed") == len(TOOLS)
+    assert capsys.readouterr().out.count("not installed") == len(registry())
 
 
 def test_version_prints_package_version(capsys):
@@ -228,6 +248,7 @@ OPTION_TESTS = {
     "list": test_list_shows_installed_and_missing_tools,
     "doctor": test_doctor_marks_exposures_and_exits_one,
     "validate": test_validate_exit_code_matches_reported_failures,
+    "profile": test_profile_maps_features_and_writes_private_json,
     "dashboard": test_dashboard_writes_private_file_at_given_path,
     "html": test_html_writes_the_static_report_alongside_the_dashboard,
     "json": test_json_writes_private_parseable_report,
@@ -261,7 +282,7 @@ def check(description: str) -> list[CommandValidation]:
         description,
         PRESENT,
         select=lambda names, found: cli.select_tools(names, found, ask=None),
-        tool_names=list(TOOLS),
+        tool_names=list(registry()),
     )
 
 

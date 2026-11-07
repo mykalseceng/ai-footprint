@@ -9,21 +9,35 @@ command line names a self-update loop, or the version in the path differs.
 
 import datetime
 import re
+from pathlib import Path
 
-from ai_footprint.collectors.common import Context
-from ai_footprint.host import listeners, started_at
+from ai_footprint.harnesses.common import Context
+from ai_footprint.host import listeners, readable_command, started_at
 from ai_footprint.model import Daemon, ProcessInfo, ToolReport
-from ai_footprint.surface import plural, short_path
+from ai_footprint.text import plural, short_path
 
 VERSION = re.compile(r"(?<![\dv.])\d+\.\d+\.\d+")
 UPDATE_LOOP = "pid-update-loop"
 MAX_COMMAND = 200
 
 
+MAX_PATH_WORDS = 8
+
+
 def _binary(command: str) -> str:
-    """The program a command line runs: its first word, allowing for a quoted path."""
+    """The program a command line runs: its first word, allowing for a quoted path.
+
+    ``ps`` does not quote paths, so for an absolute path the longest run of leading words
+    that names an existing file is taken (``/Applications/My App.app/...``).
+    """
     if command.startswith('"'):
         return command[1:].split('"', 1)[0]
+    if command.startswith("/"):
+        parts = command.split(" ")
+        for count in range(min(len(parts), MAX_PATH_WORDS), 1, -1):
+            candidate = " ".join(parts[:count])
+            if Path(candidate).is_file():
+                return candidate
     words = command.split()
     while len(words) > 1 and words[0].endswith("\\"):
         words = [f"{words[0][:-1]} {words[1]}", *words[2:]]
@@ -31,8 +45,17 @@ def _binary(command: str) -> str:
 
 
 def _off_path(binary: str, report: ToolReport) -> bool:
-    installed = {b.resolved for b in report.binaries}
-    return bool(installed) and binary.startswith("/") and binary not in installed
+    """A program that is neither an installed binary nor inside an installed app bundle."""
+    installed = {b.resolved for b in report.binaries} | {b.path for b in report.binaries}
+    bundles = tuple(
+        b.path.split(".app/", 1)[0] + ".app/" for b in report.binaries if ".app/" in b.path
+    )
+    return (
+        bool(installed)
+        and binary.startswith("/")
+        and binary not in installed
+        and not binary.startswith(bundles or ("\0",))
+    )
 
 
 def _notes(proc: ProcessInfo, binary: str, report: ToolReport) -> list[str]:
@@ -49,6 +72,15 @@ def _notes(proc: ProcessInfo, binary: str, report: ToolReport) -> list[str]:
     return notes
 
 
+def _app_executables(report: ToolReport) -> tuple[str, ...]:
+    """Main executables of the tool's installed app bundles.
+
+    macOS starts every app through launchd, so the running app itself has no session
+    parent; it is the app, not a process left behind.
+    """
+    return tuple(b.path for b in report.binaries if ".app/Contents/MacOS/" in b.path)
+
+
 def collect(ctx: Context, report: ToolReport) -> list[Daemon]:
     """Daemons among the tool's processes, newest listeners attached."""
     if not report.processes:
@@ -58,8 +90,9 @@ def collect(ctx: Context, report: ToolReport) -> list[Daemon]:
         by_pid.setdefault(pid, []).append(listener)
     now = datetime.datetime.now()
     out = []
+    apps = _app_executables(report)
     for proc in report.processes:
-        detached = proc.ppid == 1
+        detached = proc.ppid == 1 and not proc.command.startswith(apps)
         if not detached and proc.pid not in by_pid:
             continue
         started = started_at(proc)
@@ -69,7 +102,7 @@ def collect(ctx: Context, report: ToolReport) -> list[Daemon]:
                 pid=proc.pid,
                 ppid=proc.ppid,
                 started=proc.started,
-                command=proc.command[:MAX_COMMAND],
+                command=readable_command(proc.command, MAX_COMMAND),
                 binary=binary,
                 detached=detached,
                 days=(now - started).days if started else 0,
@@ -83,7 +116,8 @@ def collect(ctx: Context, report: ToolReport) -> list[Daemon]:
 
 def describe(daemon: Daemon, home: str) -> tuple[str, list[str], list[str]]:
     """(what it runs, where it listens, observed notes), each short enough for a table cell."""
-    what = daemon.command.removeprefix(daemon.binary).strip() or daemon.binary.rsplit("/", 1)[-1]
+    name = daemon.binary.rsplit("/", 1)[-1]
+    what = f"{name} {daemon.command.removeprefix(daemon.binary).strip()}".strip()
     listens = [
         f"{ln.kind} {short_path(ln.address, home)}" + (f" mode {ln.mode}" if ln.mode else "")
         for ln in daemon.listeners

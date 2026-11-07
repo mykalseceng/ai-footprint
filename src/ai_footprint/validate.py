@@ -20,7 +20,7 @@ import shlex
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from ai_footprint.collectors.common import Claim, search_file
+from ai_footprint.harnesses.common import Claim, search_file
 from ai_footprint.model import AuditReport, CheckResult, CommandValidation, FixCommand
 from ai_footprint.system import CommandRefusedError, System
 
