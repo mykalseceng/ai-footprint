@@ -11,6 +11,26 @@ settings = ["approval_policy", "sandbox_mode", "notify", "cli_auth_credentials_s
 
 [roots]
 home = { env = "CODEX_HOME", default = "~/.codex" }
+managed = { default = "/etc/codex" }
+mdm = { default = "/Library/Managed Preferences" }
+
+[[artifacts]]
+label = "Managed requirements"
+path = "{managed}/requirements.toml"
+category = "config"
+description = "Admin-enforced requirements users cannot override"
+
+[[artifacts]]
+label = "Managed config"
+path = "{managed}/managed_config.toml"
+category = "config"
+description = "Managed defaults reapplied at each launch"
+
+[[artifacts]]
+label = "MDM requirements"
+path = "{mdm}/com.openai.codex.plist"
+category = "config"
+description = "Requirements delivered through macOS managed preferences"
 
 [[artifacts]]
 label = "Credentials"

@@ -279,3 +279,17 @@ def test_every_tool_merges_socket_rows_and_skips_inbound_connections():
     ]
     [row] = socket_endpoints("pi", socks)
     assert (row.host, row.count, row.purpose) == ("1.1.1.1:443", 2, "open sockets from pid 1, 2")
+
+
+def test_managed_policy_names_the_files_and_their_keys(tmp_path: Path):
+    home, root = tmp_path / "home", tmp_path / "root"
+    home.mkdir()
+    managed = root / "etc" / "codex"
+    managed.mkdir(parents=True)
+    (managed / "requirements.toml").write_text('allowed_approval_policies = ["on-request"]\n')
+    system = FakeSystem()
+    system.root = root
+    setting = codex.managed_policy(Context(home=home, system=system, now=0))
+    assert setting.value == f"{managed / 'requirements.toml'} (keys: allowed_approval_policies)"
+    system.root = tmp_path / "nothing"
+    assert codex.managed_policy(Context(home=home, system=system, now=0)).value == "none"

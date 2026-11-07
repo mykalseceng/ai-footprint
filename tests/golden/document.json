@@ -3150,6 +3150,12 @@
           "key": "pre-approved command rules",
           "note": "Command prefixes that run without asking",
           "value": "0"
+        },
+        {
+          "concern": false,
+          "key": "managed policy",
+          "note": "Admin requirements and defaults that override ~/.codex/config.toml",
+          "value": "none"
         }
       ],
       "stats": {},

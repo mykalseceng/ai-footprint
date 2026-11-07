@@ -113,6 +113,7 @@ def collect(ctx: Context, found: ToolPresence) -> tuple[ToolReport, Collected]:
     report.credentials, known = _credentials(ctx, root, config)
     report.processes = _cli_processes(processes(ctx.system, PROFILE.process))
     report.settings = _settings(ctx, config, root, binary_path(report))
+    report.settings.append(managed_policy(ctx))
     report.settings += shell_shortcuts(ctx, BYPASS_FLAG)
     threads = thread_approval(root)
     if threads is not None:
@@ -246,6 +247,27 @@ def _verify_signatures(cred: Credential, tokens: dict[str, Any]) -> None:
                 ok, why = verify_rs256(tokens[info.field], jwks)
                 info.signature = f"{why} (issuer {issuer})" if ok else f"INVALID: {why}"
     cred.live_check = "JWT signatures checked against the issuer's published JWKS"
+
+
+def managed_policy(ctx: Context) -> Setting:
+    """Which managed policy files exist, with the top-level keys of each TOML one."""
+    roots = resolve_roots(ctx, PROFILE)
+    files = [
+        roots["managed"] / "requirements.toml",
+        roots["managed"] / "managed_config.toml",
+        roots["mdm"] / "com.openai.codex.plist",
+    ]
+    found = []
+    for path in files:
+        if not path.is_file():
+            continue
+        keys = sorted(load_toml(path) or {}) if path.suffix == ".toml" else []
+        found.append(f"{path}" + (f" (keys: {', '.join(keys)})" if keys else ""))
+    return Setting(
+        "managed policy",
+        "; ".join(found) or "none",
+        "Admin requirements and defaults that override ~/.codex/config.toml",
+    )
 
 
 def _settings(ctx: Context, config: dict[str, Any], root: Path, binary: str) -> list[Setting]:
