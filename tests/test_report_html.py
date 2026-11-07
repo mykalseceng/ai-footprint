@@ -206,7 +206,7 @@ def test_control_statement_leaves_paths_to_the_table():
     facts = [
         HostFact(
             "control",
-            "Claude Desktop MCP 'hopper'",
+            "Hopper helper",
             "/Apps/Hopper.app/MacOS/Hopper",
             "config.json",
             concern=True,
@@ -222,7 +222,7 @@ def test_control_statement_leaves_paths_to_the_table():
     audit = make_audit(facts, [])
     [finding] = [x for x in host_exposures(audit) if x.id == "host:computer-control"]
     assert "/Apps/Hopper.app" not in finding.statement
-    assert "Claude Desktop MCP 'hopper'" in finding.statement
+    assert "Hopper helper" in finding.statement
     assert "Codex Computer Use (screen and input control helper)" in finding.statement
 
 

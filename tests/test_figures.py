@@ -197,8 +197,9 @@ def test_recount_adds_a_location_listed_inside_another_once(doc: dict):
 
 
 def test_recount_catches_overlapping_scan_roots(doc: dict):
-    roots = doc["tools"][0]["secret_scan"]["roots"]
-    overlapping = _set(doc, ["tools", 1, "secret_scan", "roots"], [roots[0] + "/sub"])
+    first, second = [i for i, tool in enumerate(doc["tools"]) if tool["secret_scan"]][:2]
+    roots = doc["tools"][first]["secret_scan"]["roots"]
+    overlapping = _set(doc, ["tools", second, "secret_scan", "roots"], [roots[0] + "/sub"])
     assert any("never read the same folder" in f for f in failures(overlapping))
 
 

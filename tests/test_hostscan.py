@@ -218,18 +218,6 @@ def test_shell_wrapped_mcp_command_with_escaped_space_does_not_crash():
     assert needles[direct] == ("hopper", ["Codex CLI"])
 
 
-def test_long_desktop_mcp_commands_are_cut_with_an_ellipsis(tmp_path: Path):
-    config = tmp_path / "Library/Application Support/Claude/claude_desktop_config.json"
-    config.parent.mkdir(parents=True)
-    config.write_text(
-        '{"mcpServers": {"big": {"command": "/opt/server", "args": ["' + "x" * 300 + '"]}}}'
-    )
-    [fact] = hostscan._desktop_mcp(tmp_path)
-    assert fact.detail.startswith("/opt/server x")
-    assert fact.detail.endswith("…")
-    assert len(fact.detail) == 240
-
-
 def test_bridges_for_browsers_that_are_not_installed_are_not_concerns(tmp_path: Path):
     hosts = tmp_path / "Library/Application Support/Microsoft Edge/NativeMessagingHosts"
     hosts.mkdir(parents=True)

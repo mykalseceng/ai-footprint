@@ -154,6 +154,140 @@
       "check": "Approval not turned off by a recorded setting",
       "exposed": true,
       "exposures": [
+        "claude_desktop:no-approval"
+      ],
+      "scope": "Claude Desktop",
+      "unchecked": ""
+    },
+    {
+      "check": "Instruction files contain nothing that steers the model",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": ""
+    },
+    {
+      "check": "Stored token cannot use connected apps",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": "no stored token records its scopes"
+    },
+    {
+      "check": "No sessions published to share links",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": "this audit records no share setting for Claude Desktop"
+    },
+    {
+      "check": "Keychain item requires a prompt",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": "no credential is stored in the Keychain"
+    },
+    {
+      "check": "Credentials in an OS-protected store",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": ""
+    },
+    {
+      "check": "No secrets in history or logs (full audit only)",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": ""
+    },
+    {
+      "check": "No MCP server command points at a missing file",
+      "exposed": true,
+      "exposures": [
+        "claude_desktop:dangling-0"
+      ],
+      "scope": "Claude Desktop",
+      "unchecked": ""
+    },
+    {
+      "check": "No automatic code execution points",
+      "exposed": true,
+      "exposures": [
+        "claude_desktop:autostart"
+      ],
+      "scope": "Claude Desktop",
+      "unchecked": ""
+    },
+    {
+      "check": "No process outlives its session or accepts connections from other accounts or the network",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": ""
+    },
+    {
+      "check": "One install per tool",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": ""
+    },
+    {
+      "check": "Credentials not readable by other accounts",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": ""
+    },
+    {
+      "check": "Data stores not readable by other accounts",
+      "exposed": true,
+      "exposures": [
+        "claude_desktop:data-readable"
+      ],
+      "scope": "Claude Desktop",
+      "unchecked": ""
+    },
+    {
+      "check": "Local server requires authentication",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": "this audit records no local server for Claude Desktop"
+    },
+    {
+      "check": "No broad trusted folders and none holding instruction files",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": "no trusted folders are recorded"
+    },
+    {
+      "check": "Provider keeps no extra copies (training, cloud tasks)",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": "no data-use setting is recorded"
+    },
+    {
+      "check": "Remote control of this machine is off",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": ""
+    },
+    {
+      "check": "No stored login left unused",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": "no stored login records when it expires"
+    },
+    {
+      "check": "Approval not turned off by a recorded setting",
+      "exposed": true,
+      "exposures": [
         "codex:no-approval"
       ],
       "scope": "Codex CLI",
@@ -795,6 +929,166 @@
     {
       "checks": [
         {
+          "detail": "found in binary",
+          "name": "endpoint claude.ai: 'claude.ai'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "endpoint api.anthropic.com: 'api.anthropic.com'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "endpoint mcp-proxy.anthropic.com: 'mcp-proxy.anthropic.com'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "endpoint bridge.claudeusercontent.com: 'bridge.claudeusercontent.com'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "endpoint downloads.claude.ai: 'downloads.claude.ai'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "signature: Data folder: 'claude_desktop_config.json'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "signature: Account token: 'oauth:tokenCacheV2'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "signature: Code session permission modes: 'bypassPermissions'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "signature: Claude in Chrome modes: 'skip_all_permission_checks'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "setting mcpServers: 'mcpServers'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "setting preferences: 'preferences'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "setting coworkUserFilesPath: 'coworkUserFilesPath'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "setting permissionMode: 'permissionMode'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "setting chromePermissionMode: 'chromePermissionMode'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "setting bypassPermissionsModeEnabled: 'bypassPermissionsModeEnabled'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "setting dispatchCodeTasksPermissionMode: 'dispatchCodeTasksPermissionMode'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "setting ccRemoteControlDefaultEnabled: 'ccRemoteControlDefaultEnabled'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "setting chicagoEnabled: 'chicagoEnabled'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "setting coworkBrowserToolsEnabled: 'coworkBrowserToolsEnabled'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "setting coworkScheduledTasksEnabled: 'coworkScheduledTasksEnabled'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "setting ccdScheduledTasksEnabled: 'ccdScheduledTasksEnabled'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "setting keepAwakeEnabled: 'keepAwakeEnabled'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "account token cache key: 'oauth:tokenCacheV2'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "extension secret prefix: '__encrypted__:'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "SSH controller token store: 'ssh-remote-server-state'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "Remote Control state file: 'remote-control-state.json'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "session steered by a remote client: 'steeredByRemoteClient'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "Remote Control off switch: 'disableRemoteControl'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "Cowork session records: 'local-agent-mode-sessions'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "Code session records: 'claude-code-sessions'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "desktop extension allowlist key: 'dxt:allowlistEnabled'",
+          "passed": true
+        }
+      ],
+      "command": "claims about Claude Desktop 4.23118.0"
+    },
+    {
+      "checks": [
+        {
           "detail": "not found; claims unchecked",
           "name": "binary on PATH",
           "passed": false
@@ -1041,6 +1335,36 @@
     },
     {
       "argv": [
+        "/usr/bin/codesign",
+        "-dv",
+        "--verbose=2",
+        "<HOME>/Applications/Claude.app/Contents/MacOS/Claude"
+      ],
+      "purpose": "Read code-signing identity of tool binaries; verify probe binaries",
+      "returncode": 1
+    },
+    {
+      "argv": [
+        "/usr/bin/security",
+        "find-generic-password",
+        "-s",
+        "Claude Safe Storage"
+      ],
+      "purpose": "Read Keychain item metadata; read token values into memory only, which also proves whether a silent read is possible",
+      "returncode": 1
+    },
+    {
+      "argv": [
+        "/bin/ps",
+        "-axww",
+        "-o",
+        "pid=,ppid=,lstart=,command="
+      ],
+      "purpose": "List running AI-tool processes and their launch flags",
+      "returncode": 1
+    },
+    {
+      "argv": [
         "/bin/ps",
         "-axww",
         "-o",
@@ -1253,6 +1577,16 @@
         "-n",
         "-c",
         "chmod 600 <HOME>/.claude/CLAUDE.md"
+      ],
+      "purpose": "Syntax-check fix commands with `sh -n` (parses, never executes)",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/bin/sh",
+        "-n",
+        "-c",
+        "chmod 700 <HOME>/Library/Logs/Claude"
       ],
       "purpose": "Syntax-check fix commands with `sh -n` (parses, never executes)",
       "returncode": 0
@@ -1484,7 +1818,9 @@
         "OpenAI: Codex CLI (plaintext file, ~/.codex/auth.json)",
         "OpenAI: pi (plaintext file, ~/.pi/agent/auth.json)",
         "T3 Code server keys: T3 Code (plaintext file, ~/.t3/userdata/secrets)",
-        "T3 account (Clerk): T3 Code (plaintext file, ~/.t3/userdata/clerk-tokens.json)"
+        "T3 account (Clerk): T3 Code (plaintext file, ~/.t3/userdata/clerk-tokens.json)",
+        "claude.ai account (OAuth): Claude Desktop (file encrypted with a Keychain key, ~/Library/Application Support/Claude/config.json)",
+        "desktop extension Weather: Claude Desktop (file encrypted with a Keychain key, ~/Library/Application Support/Claude/Claude Extensions Settings/ext.weather.json)"
       ],
       "fix": null,
       "id": "host:duplicate-creds",
@@ -2592,6 +2928,668 @@
       "trusted_folders": [
         "<HOME>/work"
       ]
+    },
+    {
+      "account": [
+        {
+          "concern": false,
+          "signal": "",
+          "source": "markers in the installed app",
+          "text": "disableRemoteControl: true in ~/.claude/settings.json stops every session on this computer, Desktop and CLI, from connecting to Remote Control.",
+          "topic": "revoke"
+        }
+      ],
+      "artifacts": [
+        {
+          "category": "credential",
+          "description": "App state and the claude.ai OAuth token cache (oauth:tokenCacheV2), stored as Electron safeStorage ciphertext whose key is in the Keychain",
+          "exists": true,
+          "file_count": 1,
+          "group_readable": "",
+          "group_readable_files": 0,
+          "group_writable": false,
+          "is_dir": false,
+          "label": "App state and sign-in",
+          "mode": "600",
+          "newest": "<DATE>",
+          "oldest": "<DATE>",
+          "other_readable": false,
+          "other_readable_files": 0,
+          "other_writable": false,
+          "owner": "dark_knight",
+          "path": "<HOME>/Library/Application Support/Claude/config.json",
+          "size_bytes": 129
+        },
+        {
+          "category": "credential",
+          "description": "Controller tokens for SSH remote machines, one per host, as safeStorage ciphertext",
+          "exists": true,
+          "file_count": 1,
+          "group_readable": "",
+          "group_readable_files": 0,
+          "group_writable": false,
+          "is_dir": false,
+          "label": "SSH remote state",
+          "mode": "600",
+          "newest": "<DATE>",
+          "oldest": "<DATE>",
+          "other_readable": false,
+          "other_readable_files": 0,
+          "other_writable": false,
+          "owner": "dark_knight",
+          "path": "<HOME>/Library/Application Support/Claude/ssh-remote-server-state.json",
+          "size_bytes": 43
+        },
+        {
+          "category": "credential",
+          "description": "Per desktop extension: enabled state and user_config; sensitive values are safeStorage ciphertext (__encrypted__:)",
+          "exists": true,
+          "file_count": 1,
+          "group_readable": "wheel",
+          "group_readable_files": 0,
+          "group_writable": false,
+          "is_dir": true,
+          "label": "Extension settings",
+          "mode": "755",
+          "newest": "<DATE>",
+          "oldest": "<DATE>",
+          "other_readable": true,
+          "other_readable_files": 0,
+          "other_writable": false,
+          "owner": "dark_knight",
+          "path": "<HOME>/Library/Application Support/Claude/Claude Extensions Settings",
+          "size_bytes": 67
+        },
+        {
+          "category": "config",
+          "description": "Local MCP servers Desktop starts (mcpServers) and app preferences, including Code, Cowork, Dispatch, computer use and Remote Control settings",
+          "exists": true,
+          "file_count": 1,
+          "group_readable": "",
+          "group_readable_files": 0,
+          "group_writable": false,
+          "is_dir": false,
+          "label": "MCP servers and preferences",
+          "mode": "600",
+          "newest": "<DATE>",
+          "oldest": "<DATE>",
+          "other_readable": false,
+          "other_readable_files": 0,
+          "other_writable": false,
+          "owner": "dark_knight",
+          "path": "<HOME>/Library/Application Support/Claude/claude_desktop_config.json",
+          "size_bytes": 275
+        },
+        {
+          "category": "config",
+          "description": "Environments this machine registered for Remote Control, per signed-in identity",
+          "exists": true,
+          "file_count": 1,
+          "group_readable": "",
+          "group_readable_files": 0,
+          "group_writable": false,
+          "is_dir": false,
+          "label": "Remote Control state",
+          "mode": "600",
+          "newest": "<DATE>",
+          "oldest": "<DATE>",
+          "other_readable": false,
+          "other_readable_files": 0,
+          "other_writable": false,
+          "owner": "dark_knight",
+          "path": "<HOME>/Library/Application Support/Claude/remote-control-state.json",
+          "size_bytes": 32
+        },
+        {
+          "category": "extension",
+          "description": "Installed desktop extensions (.mcpb/.dxt), one folder per extension with its manifest.json",
+          "exists": true,
+          "file_count": 2,
+          "group_readable": "wheel",
+          "group_readable_files": 1,
+          "group_writable": false,
+          "is_dir": true,
+          "label": "Desktop extensions",
+          "mode": "755",
+          "newest": "<DATE>",
+          "oldest": "<DATE>",
+          "other_readable": true,
+          "other_readable_files": 1,
+          "other_writable": false,
+          "owner": "dark_knight",
+          "path": "<HOME>/Library/Application Support/Claude/Claude Extensions",
+          "size_bytes": 215
+        },
+        {
+          "category": "session",
+          "description": "Cowork session records, uploads, outputs, audit log, per-session Claude Code home, scheduled tasks and synced skills",
+          "exists": true,
+          "file_count": 1,
+          "group_readable": "wheel",
+          "group_readable_files": 0,
+          "group_writable": false,
+          "is_dir": true,
+          "label": "Cowork sessions",
+          "mode": "755",
+          "newest": "<DATE>",
+          "oldest": "<DATE>",
+          "other_readable": true,
+          "other_readable_files": 0,
+          "other_writable": false,
+          "owner": "dark_knight",
+          "path": "<HOME>/Library/Application Support/Claude/local-agent-mode-sessions",
+          "size_bytes": 64
+        },
+        {
+          "category": "session",
+          "description": "Code tab session records (folder, model, permission modes, connectors) and scheduled tasks",
+          "exists": true,
+          "file_count": 3,
+          "group_readable": "wheel",
+          "group_readable_files": 0,
+          "group_writable": false,
+          "is_dir": true,
+          "label": "Code sessions",
+          "mode": "755",
+          "newest": "<DATE>",
+          "oldest": "<DATE>",
+          "other_readable": true,
+          "other_readable_files": 0,
+          "other_writable": false,
+          "owner": "dark_knight",
+          "path": "<HOME>/Library/Application Support/Claude/claude-code-sessions",
+          "size_bytes": 462
+        },
+        {
+          "category": "log",
+          "description": "Main, MCP server, Cowork VM, Remote Control and SSH logs",
+          "exists": true,
+          "file_count": 1,
+          "group_readable": "wheel",
+          "group_readable_files": 1,
+          "group_writable": false,
+          "is_dir": true,
+          "label": "Logs",
+          "mode": "755",
+          "newest": "<DATE>",
+          "oldest": "<DATE>",
+          "other_readable": true,
+          "other_readable_files": 1,
+          "other_writable": false,
+          "owner": "dark_knight",
+          "path": "<HOME>/Library/Logs/Claude",
+          "size_bytes": 8
+        }
+      ],
+      "binaries": [
+        {
+          "mode": "644",
+          "owner": "dark_knight",
+          "path": "<HOME>/Applications/Claude.app/Contents/MacOS/Claude",
+          "resolved": "<HOME>/Applications/Claude.app/Contents/Resources/app.asar",
+          "signer": "unsigned or not a Mach-O binary",
+          "team_id": "",
+          "version": "4.23118.0",
+          "writable_dirs": []
+        }
+      ],
+      "credentials": [
+        {
+          "keychain_written": "",
+          "live_check": "",
+          "local_service": false,
+          "location": "<HOME>/Library/Application Support/Claude/config.json",
+          "owner": "",
+          "owner_source": "",
+          "protection": "oauth:tokenCacheV2: Electron safeStorage ciphertext; key in a Keychain item this audit did not find; file mode 600",
+          "provider": "claude.ai account (OAuth)",
+          "readable_by_others": false,
+          "silent_read_seconds": null,
+          "store": "file encrypted with a Keychain key",
+          "tokens": [],
+          "tool": "claude_desktop"
+        },
+        {
+          "keychain_written": "",
+          "live_check": "",
+          "local_service": false,
+          "location": "<HOME>/Library/Application Support/Claude/Claude Extensions Settings/ext.weather.json",
+          "owner": "",
+          "owner_source": "",
+          "protection": "1 encrypted value (safeStorage); key in a Keychain item this audit did not find; file mode 600",
+          "provider": "desktop extension Weather",
+          "readable_by_others": false,
+          "silent_read_seconds": null,
+          "store": "file encrypted with a Keychain key",
+          "tokens": [],
+          "tool": "claude_desktop"
+        }
+      ],
+      "daemons": [],
+      "display_name": "Claude Desktop",
+      "endpoints": [
+        {
+          "count": 0,
+          "host": "claude.ai",
+          "purpose": "Claude web app and sign-in",
+          "source": "binary",
+          "tool": "claude_desktop"
+        },
+        {
+          "count": 0,
+          "host": "api.anthropic.com",
+          "purpose": "Anthropic API",
+          "source": "binary",
+          "tool": "claude_desktop"
+        },
+        {
+          "count": 0,
+          "host": "mcp-proxy.anthropic.com",
+          "purpose": "MCP proxy (MCP_PROXY_URL)",
+          "source": "binary",
+          "tool": "claude_desktop"
+        },
+        {
+          "count": 0,
+          "host": "bridge.claudeusercontent.com",
+          "purpose": "Bridge to the Claude in Chrome extension",
+          "source": "binary",
+          "tool": "claude_desktop"
+        },
+        {
+          "count": 0,
+          "host": "downloads.claude.ai",
+          "purpose": "Downloads",
+          "source": "binary",
+          "tool": "claude_desktop"
+        }
+      ],
+      "exposures": [
+        {
+          "evidence": [
+            "sessions with permissionMode=bypassPermissions = 1 of 3 sessions (1 Code)",
+            "sessions with chromePermissionMode=skip_all_permission_checks = 1 of 3 sessions (1 Code)"
+          ],
+          "fix": {
+            "commands": [
+              {
+                "help_probe": [],
+                "manual": true,
+                "marker_tool": "claude_desktop",
+                "markers": [
+                  "bypassPermissions",
+                  "bypassPermissionsModeEnabled"
+                ],
+                "text": "Switch each Bypass permissions session to another mode with the selector under the prompt box, and turn off Allow bypass permissions mode in Settings > Code"
+              },
+              {
+                "help_probe": [],
+                "manual": true,
+                "marker_tool": "claude_desktop",
+                "markers": [
+                  "Skip all approvals",
+                  "skip_all_permission_checks"
+                ],
+                "text": "Set Claude in Chrome to Manually approve or Automatically approve instead of Skip all approvals in each session and scheduled task"
+              }
+            ],
+            "summary": "Require approval in Code sessions, Claude in Chrome and scheduled tasks",
+            "validations": [
+              {
+                "checks": [
+                  {
+                    "detail": "instruction, not a command",
+                    "name": "manual step",
+                    "passed": true
+                  },
+                  {
+                    "detail": "found in binary",
+                    "name": "'bypassPermissions' known to installed claude_desktop",
+                    "passed": true
+                  },
+                  {
+                    "detail": "found in binary",
+                    "name": "'bypassPermissionsModeEnabled' known to installed claude_desktop",
+                    "passed": true
+                  }
+                ],
+                "command": "Switch each Bypass permissions session to another mode with the selector under the prompt box, and turn off Allow bypass permissions mode in Settings > Code"
+              },
+              {
+                "checks": [
+                  {
+                    "detail": "instruction, not a command",
+                    "name": "manual step",
+                    "passed": true
+                  },
+                  {
+                    "detail": "found in binary",
+                    "name": "'Skip all approvals' known to installed claude_desktop",
+                    "passed": true
+                  },
+                  {
+                    "detail": "found in binary",
+                    "name": "'skip_all_permission_checks' known to installed claude_desktop",
+                    "passed": true
+                  }
+                ],
+                "command": "Set Claude in Chrome to Manually approve or Automatically approve instead of Skip all approvals in each session and scheduled task"
+              }
+            ]
+          },
+          "id": "claude_desktop:no-approval",
+          "label": "Approval prompts skipped",
+          "lens": "model",
+          "statement": "Claude Desktop skips approval prompts in some sessions (sessions with permissionMode=bypassPermissions: 1 of 3 sessions (1 Code) and sessions with chromePermissionMode=skip_all_permission_checks: 1 of 3 sessions (1 Code)). In those sessions, text that reaches the model (a web page, a repo file, an MCP result, an instruction file) can become commands running as you, limited only by the sandbox, deny rules and hooks that still apply.",
+          "tool": "claude_desktop"
+        },
+        {
+          "evidence": [
+            "gone (claude_desktop_config.json)"
+          ],
+          "fix": {
+            "commands": [
+              {
+                "help_probe": [],
+                "manual": true,
+                "marker_tool": "claude_desktop",
+                "markers": [
+                  "mcpServers",
+                  "claude_desktop_config.json"
+                ],
+                "text": "Delete mcpServers.gone from ~/Library/Application Support/Claude/claude_desktop_config.json, then quit and reopen Claude Desktop"
+              }
+            ],
+            "summary": "Remove the entries that point at the missing file",
+            "validations": [
+              {
+                "checks": [
+                  {
+                    "detail": "instruction, not a command",
+                    "name": "manual step",
+                    "passed": true
+                  },
+                  {
+                    "detail": "found in binary",
+                    "name": "'mcpServers' known to installed claude_desktop",
+                    "passed": true
+                  },
+                  {
+                    "detail": "found in binary",
+                    "name": "'claude_desktop_config.json' known to installed claude_desktop",
+                    "passed": true
+                  }
+                ],
+                "command": "Delete mcpServers.gone from ~/Library/Application Support/Claude/claude_desktop_config.json, then quit and reopen Claude Desktop"
+              }
+            ]
+          },
+          "id": "claude_desktop:dangling-0",
+          "label": "Autostart command points at a missing file",
+          "lens": "code",
+          "statement": "Claude Desktop starts `node <HOME>/missing/server.js` at launch (claude_desktop_config.json), but that file is missing. Whoever creates it runs code every time the tool starts.",
+          "tool": "claude_desktop"
+        },
+        {
+          "evidence": [
+            "mcp: local-tool → /bin/sh -c true",
+            "mcp: gone → node <HOME>/missing/server.js",
+            "mcp: Weather → node <HOME>/Library/Application Support/Claude/Claude Extensions/ext.weather/server/index.js",
+            "scheduled-task: nightly → cron 0 9 * * *"
+          ],
+          "fix": {
+            "commands": [
+              {
+                "help_probe": [],
+                "manual": true,
+                "marker_tool": "",
+                "markers": [],
+                "text": "Add the listed scripts and config files to file-integrity monitoring"
+              }
+            ],
+            "summary": "Monitor these files for changes",
+            "validations": [
+              {
+                "checks": [
+                  {
+                    "detail": "instruction, not a command",
+                    "name": "manual step",
+                    "passed": true
+                  }
+                ],
+                "command": "Add the listed scripts and config files to file-integrity monitoring"
+              }
+            ]
+          },
+          "id": "claude_desktop:autostart",
+          "label": "Code that runs automatically",
+          "lens": "code",
+          "statement": "Claude Desktop is set up to run local code automatically from 4 places (3 MCP servers and 1 scheduled task). Whoever can change those commands, or the files they run, controls code that runs as you.",
+          "tool": "claude_desktop"
+        },
+        {
+          "evidence": [
+            "~/Library/Logs/Claude (755): Main, MCP server, Cowork VM, Remote Control and SSH logs"
+          ],
+          "fix": {
+            "commands": [
+              {
+                "help_probe": [],
+                "manual": false,
+                "marker_tool": "",
+                "markers": [],
+                "text": "chmod 700 <HOME>/Library/Logs/Claude"
+              }
+            ],
+            "summary": "Restrict permissions (re-check after updates)",
+            "validations": [
+              {
+                "checks": [
+                  {
+                    "detail": "parses",
+                    "name": "shell syntax (sh -n)",
+                    "passed": true
+                  },
+                  {
+                    "detail": "not found on PATH",
+                    "name": "program 'chmod'",
+                    "passed": false
+                  },
+                  {
+                    "detail": "exists",
+                    "name": "target <HOME>/Library/Logs/Claude",
+                    "passed": true
+                  }
+                ],
+                "command": "chmod 700 <HOME>/Library/Logs/Claude"
+              }
+            ]
+          },
+          "id": "claude_desktop:data-readable",
+          "label": "Data readable by other accounts",
+          "lens": "account",
+          "statement": "guest can read 1 Claude Desktop data stores, including logs.",
+          "tool": "claude_desktop"
+        }
+      ],
+      "extensions": [
+        {
+          "access": "stdio",
+          "autostart": true,
+          "dangling": false,
+          "description": "no manifest on disk",
+          "detail": "/bin/sh -c true",
+          "identity": "/bin/sh -c true",
+          "kind": "mcp",
+          "name": "local-tool",
+          "notes": "",
+          "source": "claude_desktop_config.json",
+          "tool": "claude_desktop"
+        },
+        {
+          "access": "stdio",
+          "autostart": true,
+          "dangling": true,
+          "description": "no manifest on disk",
+          "detail": "node <HOME>/missing/server.js",
+          "identity": "node <HOME>/missing/server.js",
+          "kind": "mcp",
+          "name": "gone",
+          "notes": "Target does not exist: whoever creates it gets code execution at startup",
+          "source": "claude_desktop_config.json",
+          "tool": "claude_desktop"
+        },
+        {
+          "access": "stdio",
+          "autostart": true,
+          "dangling": false,
+          "description": "Looks up the weather.",
+          "detail": "node <HOME>/Library/Application Support/Claude/Claude Extensions/ext.weather/server/index.js",
+          "identity": "node <HOME>/Library/Application Support/Claude/Claude Extensions/ext.weather/server/index.js",
+          "kind": "mcp",
+          "name": "Weather",
+          "notes": "",
+          "source": "desktop extension ext.weather",
+          "tool": "claude_desktop"
+        },
+        {
+          "access": "",
+          "autostart": true,
+          "dangling": false,
+          "description": "Local Code scheduled task",
+          "detail": "cron 0 9 * * *",
+          "identity": "Code:t1",
+          "kind": "scheduled-task",
+          "name": "nightly",
+          "notes": "permissionMode acceptEdits",
+          "source": "Code scheduled tasks",
+          "tool": "claude_desktop"
+        }
+      ],
+      "fingerprint": [
+        {
+          "label": "Data folder",
+          "value": "~/Library/Application Support/Claude"
+        },
+        {
+          "label": "Account token",
+          "value": "oauth:tokenCacheV2 in config.json, Electron safeStorage ciphertext"
+        },
+        {
+          "label": "Code session permission modes",
+          "value": "default, acceptEdits, plan, auto, bypassPermissions"
+        },
+        {
+          "label": "Claude in Chrome modes",
+          "value": "ask, follow_a_plan, skip_all_permission_checks"
+        }
+      ],
+      "installed": true,
+      "instructions": [],
+      "name": "claude_desktop",
+      "processes": [],
+      "programs": [],
+      "secret_scan": {
+        "bytes_scanned": 876,
+        "current_credential_hits": [],
+        "current_credential_values": 0,
+        "excluded": [],
+        "files_scanned": 7,
+        "kinds": [],
+        "markers": [],
+        "roots": [
+          "~/Library/Logs/Claude",
+          "~/Library/Application Support/Claude/claude-code-sessions",
+          "~/Library/Application Support/Claude/local-agent-mode-sessions",
+          "~/Library/Application Support/Claude/claude_desktop_config.json",
+          "~/Library/Application Support/Claude/Claude Extensions Settings"
+        ],
+        "seconds": 0.0,
+        "unreadable": []
+      },
+      "settings": [
+        {
+          "concern": true,
+          "key": "sessions with permissionMode=bypassPermissions",
+          "note": "Bypass permissions runs commands and edits without approval prompts",
+          "value": "1 of 3 sessions (1 Code)"
+        },
+        {
+          "concern": true,
+          "key": "sessions with chromePermissionMode=skip_all_permission_checks",
+          "note": "Skip all approvals: Claude in Chrome acts in your signed-in browser and nothing checks its actions",
+          "value": "1 of 3 sessions (1 Code)"
+        },
+        {
+          "concern": false,
+          "key": "scheduled tasks that skip approval",
+          "note": "Tasks that run on a schedule in Bypass permissions or with Chrome approvals skipped",
+          "value": "0 of 1 task"
+        },
+        {
+          "concern": true,
+          "key": "preferences.bypassPermissionsModeEnabled",
+          "note": "Allow bypass permissions mode: Bypass permissions can be chosen in Code sessions",
+          "value": "true"
+        },
+        {
+          "concern": false,
+          "key": "preferences.dispatchCodeTasksPermissionMode",
+          "note": "Permission mode of Code sessions that Dispatch starts",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "preferences.ccRemoteControlDefaultEnabled",
+          "note": "Connect new sessions to Remote Control",
+          "value": "false"
+        },
+        {
+          "concern": false,
+          "key": "preferences.chicagoEnabled",
+          "note": "Computer use: Claude clicks and types in the apps you allow, with no sandbox",
+          "value": "false"
+        },
+        {
+          "concern": false,
+          "key": "preferences.coworkBrowserToolsEnabled",
+          "note": "Browser tools in Cowork sessions",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "preferences.coworkScheduledTasksEnabled",
+          "note": "Cowork scheduled tasks",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "preferences.ccdScheduledTasksEnabled",
+          "note": "Code scheduled tasks",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "preferences.keepAwakeEnabled",
+          "note": "Keep computer awake while Claude works",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "desktop extension allowlist",
+          "note": "With the allowlist off, any extension in the directory can be installed",
+          "value": "on for 0 of 1 organization"
+        }
+      ],
+      "stats": {
+        "Code sessions": "2",
+        "Cowork sessions": "1",
+        "MCP servers": "3",
+        "bundled Claude Code versions": "0",
+        "desktop extensions": "1",
+        "scheduled tasks": "1"
+      },
+      "trusted_folders": []
     },
     {
       "account": [
@@ -5275,6 +6273,19 @@
         "parts": {
           "binary": 0,
           "cache": 0,
+          "config": 307,
+          "credential": 239,
+          "extension": 215,
+          "instructions": 0,
+          "log": 8,
+          "session": 526
+        },
+        "tool": "claude_desktop"
+      },
+      {
+        "parts": {
+          "binary": 0,
+          "cache": 0,
           "config": 164,
           "credential": 907,
           "extension": 0,
@@ -5394,6 +6405,74 @@
         ]
       },
       {
+        "access": "stdio",
+        "autostart": true,
+        "dangling": false,
+        "description": "no manifest on disk",
+        "detail": "/bin/sh -c true",
+        "group": "",
+        "identity": "/bin/sh -c true",
+        "kind": "mcp",
+        "name": "local-tool",
+        "notes": "",
+        "source": "claude_desktop_config.json",
+        "tool": "claude_desktop",
+        "used_by": [
+          "Claude Desktop"
+        ]
+      },
+      {
+        "access": "stdio",
+        "autostart": true,
+        "dangling": true,
+        "description": "no manifest on disk",
+        "detail": "node <HOME>/missing/server.js",
+        "group": "",
+        "identity": "node <HOME>/missing/server.js",
+        "kind": "mcp",
+        "name": "gone",
+        "notes": "Target does not exist: whoever creates it gets code execution at startup",
+        "source": "claude_desktop_config.json",
+        "tool": "claude_desktop",
+        "used_by": [
+          "Claude Desktop"
+        ]
+      },
+      {
+        "access": "stdio",
+        "autostart": true,
+        "dangling": false,
+        "description": "Looks up the weather.",
+        "detail": "node <HOME>/Library/Application Support/Claude/Claude Extensions/ext.weather/server/index.js",
+        "group": "",
+        "identity": "node <HOME>/Library/Application Support/Claude/Claude Extensions/ext.weather/server/index.js",
+        "kind": "mcp",
+        "name": "Weather",
+        "notes": "",
+        "source": "desktop extension ext.weather",
+        "tool": "claude_desktop",
+        "used_by": [
+          "Claude Desktop"
+        ]
+      },
+      {
+        "access": "",
+        "autostart": true,
+        "dangling": false,
+        "description": "Local Code scheduled task",
+        "detail": "cron 0 9 * * *",
+        "group": "",
+        "identity": "Code:t1",
+        "kind": "scheduled-task",
+        "name": "nightly",
+        "notes": "permissionMode acceptEdits",
+        "source": "Code scheduled tasks",
+        "tool": "claude_desktop",
+        "used_by": [
+          "Claude Desktop"
+        ]
+      },
+      {
         "access": "http https://developers.example.com/mcp",
         "autostart": false,
         "dangling": false,
@@ -5482,32 +6561,32 @@
     "figures": {
       "machine": [
         {
-          "detail": "Claude Code, Codex CLI, OpenCode, pi, T3 Code",
-          "display": "5",
+          "detail": "Claude Code, Claude Desktop, Codex CLI, OpenCode, pi, T3 Code",
+          "display": "6",
           "id": "tools",
           "label": "Tools audited",
-          "value": 5
+          "value": 6
         },
         {
-          "detail": "36 from tool checks, 4 from checks of this machine",
-          "display": "40",
+          "detail": "40 from tool checks, 4 from checks of this machine",
+          "display": "44",
           "id": "signals",
           "label": "Signals to review",
-          "value": 40
+          "value": 44
         },
         {
-          "detail": "33 clear, 28 not checked because their input is not recorded for that tool (same checks as --doctor)",
-          "display": "39 of 100",
+          "detail": "40 clear, 35 not checked because their input is not recorded for that tool (same checks as --doctor)",
+          "display": "43 of 118",
           "id": "checks",
           "label": "Checks with a signal",
-          "value": 39
+          "value": 43
         },
         {
-          "detail": "provider entries in 7 locations; 3 marked readable by other local accounts",
-          "display": "8",
+          "detail": "provider entries in 9 locations; 3 marked readable by other local accounts",
+          "display": "10",
           "id": "credentials",
           "label": "Stored credentials",
-          "value": 8
+          "value": 10
         },
         {
           "detail": "distinct keys for DeepSeek; 4 OAuth logins also stored",
@@ -5517,25 +6596,25 @@
           "value": 1
         },
         {
-          "detail": "distinct within each tool's data, added across 5 tools; 22 files scanned",
+          "detail": "distinct within each tool's data, added across 6 tools; 29 files scanned",
           "display": "2",
           "id": "secrets",
           "label": "Secret values found",
           "value": 2
         },
         {
-          "detail": "22 listed locations, including 58 KB of conversations and history",
-          "display": "62 KB",
+          "detail": "31 listed locations, including 58 KB of conversations and history",
+          "display": "63 KB",
           "id": "disk",
           "label": "On disk",
-          "value": 61890
+          "value": 63185
         },
         {
-          "detail": "of 9 entries: 3 MCP servers, 1 hook, 1 plugin, 1 background service (listed as starting without being invoked)",
-          "display": "6",
+          "detail": "of 13 entries: 6 MCP servers, 1 hook, 1 scheduled task, 1 plugin, 1 background service (listed as starting without being invoked)",
+          "display": "10",
           "id": "autostart",
           "label": "Run automatically",
-          "value": 6
+          "value": 10
         }
       ],
       "tools": {
@@ -5584,6 +6663,64 @@
           },
           {
             "detail": "permissions.defaultMode = bypassPermissions",
+            "display": "found",
+            "id": "approval",
+            "label": "Approval turned off",
+            "value": "found"
+          },
+          {
+            "detail": "run ai-footprint --capture to record them",
+            "display": "not captured",
+            "id": "network",
+            "label": "Hosts reached when started",
+            "value": "not captured"
+          }
+        ],
+        "claude_desktop": [
+          {
+            "detail": "9 listed locations, including 526 B of conversations and history",
+            "display": "1 KB",
+            "id": "disk",
+            "label": "On disk",
+            "value": 1295
+          },
+          {
+            "detail": "2 session locations",
+            "display": "526 B",
+            "id": "sessions",
+            "label": "Conversations and history",
+            "value": 526
+          },
+          {
+            "detail": "provider entries in 2 locations; 0 marked readable by other local accounts",
+            "display": "2",
+            "id": "credentials",
+            "label": "Stored credentials",
+            "value": 2
+          },
+          {
+            "detail": "4 listed as starting without being invoked",
+            "display": "4",
+            "id": "extensions",
+            "label": "Extensions",
+            "value": 4
+          },
+          {
+            "detail": "4 of 18 checks returned a signal, 7 not checked",
+            "display": "4",
+            "id": "signals",
+            "label": "Signals to review",
+            "value": 4
+          },
+          {
+            "detail": "distinct values; 7 files scanned",
+            "display": "0",
+            "id": "secrets",
+            "label": "Secret values found",
+            "value": 0
+          },
+          {
+            "detail": "sessions with permissionMode=bypassPermissions = 1 of 3 sessions (1 Code); sessions with chromePermissionMode=skip_all_permission_checks = 1 of 3 sessions (1 Code)",
             "display": "found",
             "id": "approval",
             "label": "Approval turned off",
@@ -5954,6 +7091,39 @@
           "badge": "claude binary",
           "label": "✗ claude binary: not installed; cannot confirm",
           "tone": "concern"
+        }
+      ],
+      "claude_desktop:autostart": [
+        {
+          "badge": "manual step (not machine-checkable)",
+          "label": "manual step (not machine-checkable)",
+          "tone": "neutral"
+        }
+      ],
+      "claude_desktop:dangling-0": [
+        {
+          "badge": "config keys confirmed in installed binary",
+          "label": "✓ config keys confirmed in installed binary",
+          "tone": "ok"
+        }
+      ],
+      "claude_desktop:data-readable": [
+        {
+          "badge": "program 'chmod'",
+          "label": "✗ program 'chmod': not found on PATH",
+          "tone": "concern"
+        }
+      ],
+      "claude_desktop:no-approval": [
+        {
+          "badge": "config keys confirmed in installed binary",
+          "label": "✓ config keys confirmed in installed binary",
+          "tone": "ok"
+        },
+        {
+          "badge": "config keys confirmed in installed binary",
+          "label": "✓ config keys confirmed in installed binary",
+          "tone": "ok"
         }
       ],
       "codex:connected-apps": [
@@ -6421,9 +7591,9 @@
     ],
     "machine": {
       "headline": [
-        "Claude Code, Codex CLI, OpenCode, pi and T3 Code 0.1.5 hold 6 credentials for Anthropic, DeepSeek, OpenAI and T3 account (Clerk) and 58 KB of conversations and prompt history.",
+        "Claude Code, Claude Desktop 4.23118.0, Codex CLI, OpenCode, pi and T3 Code 0.1.5 hold 6 credentials for Anthropic, DeepSeek, OpenAI and T3 account (Clerk) and 58 KB of conversations and prompt history.",
         "Anything that runs as you can take all of them without a prompt, plus data files holding 2 secret-shaped values (distinct per tool).",
-        "Claude Code, Codex CLI and T3 Code skip approval prompts in some sessions, so in those sessions a web page, repo file or tool result that steers the model can become code running on this machine.",
+        "Claude Code, Claude Desktop, Codex CLI and T3 Code skip approval prompts in some sessions, so in those sessions a web page, repo file or tool result that steers the model can become code running on this machine.",
         "guest, another account on this machine, can already read or plant part of this.",
         "Related data is also kept elsewhere: work shared with provider services.",
         "6 of these credentials have no recorded expiry."
@@ -6513,6 +7683,16 @@
               "tool": "Claude Code"
             },
             {
+              "exposure_id": "claude_desktop:dangling-0",
+              "text": "Claude Desktop starts `node <HOME>/missing/server.js` at launch (claude_desktop_config.json), but that file is missing. Whoever creates it runs code every time the tool starts.",
+              "tool": "Claude Desktop"
+            },
+            {
+              "exposure_id": "claude_desktop:autostart",
+              "text": "Claude Desktop is set up to run local code automatically from 4 places (3 MCP servers and 1 scheduled task). Whoever can change those commands, or the files they run, controls code that runs as you.",
+              "tool": "Claude Desktop"
+            },
+            {
               "exposure_id": "codex:creds-plaintext",
               "text": "Codex CLI keeps credentials for OpenAI in plaintext (~/.codex/auth.json). Any program running as you can copy them.",
               "tool": "Codex CLI"
@@ -6578,6 +7758,11 @@
               "tool": "Claude Code"
             },
             {
+              "exposure_id": "claude_desktop:no-approval",
+              "text": "Claude Desktop skips approval prompts in some sessions (sessions with permissionMode=bypassPermissions: 1 of 3 sessions (1 Code) and sessions with chromePermissionMode=skip_all_permission_checks: 1 of 3 sessions (1 Code)). In those sessions, text that reaches the model (a web page, a repo file, an MCP result, an instruction file) can become commands running as you, limited only by the sandbox, deny rules and hooks that still apply.",
+              "tool": "Claude Desktop"
+            },
+            {
               "exposure_id": "codex:no-approval",
               "text": "Codex CLI skips approval prompts in some sessions (approval_policy = never and sandbox_mode = danger-full-access). In those sessions, text that reaches the model (a web page, a repo file, an MCP result, an instruction file) can become commands running as you, limited only by the sandbox, deny rules and hooks that still apply.",
               "tool": "Codex CLI"
@@ -6626,6 +7811,11 @@
               "exposure_id": "claude:data-readable",
               "text": "guest can read 5 Claude Code data stores, including global config, settings, transcripts, prompt history.",
               "tool": "Claude Code"
+            },
+            {
+              "exposure_id": "claude_desktop:data-readable",
+              "text": "guest can read 1 Claude Desktop data stores, including logs.",
+              "tool": "Claude Desktop"
             },
             {
               "exposure_id": "codex:data-readable",
@@ -6687,7 +7877,7 @@
       ],
       "proof": "This audit never writes a secret value to this report."
     },
-    "method": "The audit writes nothing but its own reports; a tool run with --version or --help may append to that tool's own log. It ran 38 commands, each by absolute path with a fixed PATH: 38 from its probe registry and 0 of installed AI-tool binaries, limited to --version and --help. Secrets were read into memory only to derive metadata. No network requests were made.",
+    "method": "The audit writes nothing but its own reports; a tool run with --version or --help may append to that tool's own log. It ran 42 commands, each by absolute path with a fixed PATH: 42 from its probe registry and 0 of installed AI-tool binaries, limited to --version and --help. Secrets were read into memory only to derive metadata. No network requests were made.",
     "network": {
       "capture_file": "",
       "how": "Run ai-footprint --capture to record it: each tool starts idle, with no prompt, in an empty folder for <DURATION> while a sudo packet capture records every packet its processes send or receive.",
@@ -6704,6 +7894,38 @@
           "summary": "Claude Code was not captured. Run ai-footprint --capture to record it: each tool starts idle, with no prompt, in an empty folder for <DURATION> while a sudo packet capture records every packet its processes send or receive.",
           "switches": [],
           "unobserved": []
+        },
+        "claude_desktop": {
+          "captured": false,
+          "command": [],
+          "local_packets": 0,
+          "lookups": [],
+          "observed": [],
+          "stopped": [],
+          "summary": "Claude Desktop was not captured. Run ai-footprint --capture to record it: each tool starts idle, with no prompt, in an empty folder for <DURATION> while a sudo packet capture records every packet its processes send or receive.",
+          "switches": [],
+          "unobserved": [
+            {
+              "host": "claude.ai",
+              "purpose": "Claude web app and sign-in"
+            },
+            {
+              "host": "api.anthropic.com",
+              "purpose": "Anthropic API"
+            },
+            {
+              "host": "mcp-proxy.anthropic.com",
+              "purpose": "MCP proxy (MCP_PROXY_URL)"
+            },
+            {
+              "host": "bridge.claudeusercontent.com",
+              "purpose": "Bridge to the Claude in Chrome extension"
+            },
+            {
+              "host": "downloads.claude.ai",
+              "purpose": "Downloads"
+            }
+          ]
         },
         "codex": {
           "captured": false,
@@ -6779,13 +8001,14 @@
       "unattributed_note": ""
     },
     "pages": {
-      "mcp": "3 servers run as local processes with your permissions, 2 are remote servers that receive what the model sends and 1 are connected apps reached with the account token. 3 start automatically, project-scoped ones only in their project folder and 2 point at a missing file, so whoever creates it runs code.",
+      "mcp": "6 servers run as local processes with your permissions, 2 are remote servers that receive what the model sends and 1 are connected apps reached with the account token. 6 start automatically, project-scoped ones only in their project folder and 3 point at a missing file, so whoever creates it runs code.",
       "plugins": "Plugins come from 1 source: demo/pi-tool. Whoever can change a source or its cache folder changes what runs next session.",
       "skills": "No skills are installed."
     },
     "signals_matrix": {
       "account": {
         "claude": 2,
+        "claude_desktop": 1,
         "codex": 1,
         "host": 1,
         "opencode": 2,
@@ -6794,6 +8017,7 @@
       },
       "code": {
         "claude": 5,
+        "claude_desktop": 2,
         "codex": 1,
         "host": 2,
         "opencode": 1,
@@ -6802,6 +8026,7 @@
       },
       "copies": {
         "claude": 1,
+        "claude_desktop": 0,
         "codex": 0,
         "host": 0,
         "opencode": 0,
@@ -6810,6 +8035,7 @@
       },
       "model": {
         "claude": 3,
+        "claude_desktop": 1,
         "codex": 2,
         "host": 1,
         "opencode": 1,
@@ -6818,6 +8044,7 @@
       },
       "remote": {
         "claude": 1,
+        "claude_desktop": 0,
         "codex": 1,
         "host": 0,
         "opencode": 0,
@@ -7207,6 +8434,329 @@
                 "tool": "Claude Code"
               }
             ]
+          }
+        ]
+      },
+      "claude_desktop": {
+        "answers": [
+          {
+            "headers": [
+              "Path",
+              "Size",
+              "Files",
+              "Modified"
+            ],
+            "links": [],
+            "question": "Where are the log files?",
+            "rows": [
+              [
+                "`~/Library/Logs/Claude`",
+                "8 B",
+                "1",
+                "<DATE>"
+              ]
+            ],
+            "text": ""
+          },
+          {
+            "headers": [
+              "Path",
+              "Size",
+              "Files",
+              "Modified"
+            ],
+            "links": [],
+            "question": "Where are my sessions stored?",
+            "rows": [
+              [
+                "`~/Library/Application Support/Claude/claude-code-sessions`",
+                "462 B",
+                "3",
+                "<DATE>"
+              ],
+              [
+                "`~/Library/Application Support/Claude/local-agent-mode-sessions`",
+                "64 B",
+                "1",
+                "<DATE>"
+              ]
+            ],
+            "text": ""
+          },
+          {
+            "headers": [
+              "Provider",
+              "Store",
+              "Location",
+              "Other accounts can read"
+            ],
+            "links": [],
+            "question": "Where is my auth token stored?",
+            "rows": [
+              [
+                "claude.ai account (OAuth)",
+                "file encrypted with a Keychain key",
+                "`~/Library/Application Support/Claude/config.json`",
+                "no"
+              ],
+              [
+                "desktop extension Weather",
+                "file encrypted with a Keychain key",
+                "`~/Library/Application Support/Claude/Claude Extensions Settings/ext.weather.json`",
+                "no"
+              ]
+            ],
+            "text": ""
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "When does it expire, what claims does it carry, and who signs it?",
+            "rows": [],
+            "text": "No tokens to describe."
+          },
+          {
+            "headers": [
+              "Path",
+              "Mode",
+              "Readable by"
+            ],
+            "links": [],
+            "question": "Who can read these files?",
+            "rows": [
+              [
+                "`~/Library/Application Support/Claude/Claude Extensions Settings`",
+                "755",
+                "any account: file names only"
+              ],
+              [
+                "`~/Library/Application Support/Claude/Claude Extensions`",
+                "755",
+                "any account: 1 of 2 files"
+              ],
+              [
+                "`~/Library/Application Support/Claude/local-agent-mode-sessions`",
+                "755",
+                "any account: file names only"
+              ],
+              [
+                "`~/Library/Application Support/Claude/claude-code-sessions`",
+                "755",
+                "any account: file names only"
+              ],
+              [
+                "`~/Library/Logs/Claude`",
+                "755",
+                "any account: 1 of 1 files"
+              ]
+            ],
+            "text": "5 locations grant read access beyond your account, and the other local accounts are guest."
+          },
+          {
+            "headers": [
+              "Host",
+              "Evidence",
+              "Count"
+            ],
+            "links": [],
+            "question": "Which hosts does it name or connect to?",
+            "rows": [
+              [
+                "claude.ai",
+                "in the binary",
+                ""
+              ],
+              [
+                "api.anthropic.com",
+                "in the binary",
+                ""
+              ],
+              [
+                "mcp-proxy.anthropic.com",
+                "in the binary",
+                ""
+              ],
+              [
+                "bridge.claudeusercontent.com",
+                "in the binary",
+                ""
+              ],
+              [
+                "downloads.claude.ai",
+                "in the binary",
+                ""
+              ]
+            ],
+            "text": "Only rows marked open now are connections; the rest are names found in the binary, the config or local logs (counted over at most the first 256 MB of logs)."
+          },
+          {
+            "headers": [
+              "Trait",
+              "Value"
+            ],
+            "links": [],
+            "question": "What does it look like on the network?",
+            "rows": [
+              [
+                "Data folder",
+                "`~/Library/Application Support/Claude`"
+              ],
+              [
+                "Account token",
+                "`oauth:tokenCacheV2 in config.json, Electron safeStorage ciphertext`"
+              ],
+              [
+                "Code session permission modes",
+                "`default, acceptEdits, plan, auto, bypassPermissions`"
+              ],
+              [
+                "Claude in Chrome modes",
+                "`ask, follow_a_plan, skip_all_permission_checks`"
+              ]
+            ],
+            "text": "Each trait was found in the installed binary, which is not code-signed."
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "Which instruction files does it load, and what could they do?",
+            "rows": [],
+            "text": "None found in the global location or in known project folders."
+          },
+          {
+            "headers": [
+              "Kind",
+              "Count",
+              "Start automatically"
+            ],
+            "links": [
+              [
+                "mcp",
+                "MCP servers"
+              ],
+              [
+                "skills",
+                "Skills"
+              ],
+              [
+                "plugins",
+                "Plugins"
+              ]
+            ],
+            "question": "Which skills, plugins and MCP servers are loaded?",
+            "rows": [
+              [
+                "mcp",
+                "3",
+                "3"
+              ],
+              [
+                "scheduled-task",
+                "1",
+                "1"
+              ]
+            ],
+            "text": "What each one says it does is on the pages linked below."
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "Which of its processes run detached or accept connections?",
+            "rows": [],
+            "text": "No process of this tool is detached from a session or listening."
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "Am I in the provider's trusted-access program?",
+            "rows": [],
+            "text": "Not applicable to this tool."
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "What does my trust list let a cloned repo do?",
+            "rows": [],
+            "text": "This tool keeps no trusted-folder list, or none are trusted."
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "Is my data used for training, and what is copied to the cloud?",
+            "rows": [],
+            "text": "No local evidence either way; check the provider's data settings."
+          },
+          {
+            "headers": [
+              "Fact",
+              "Source"
+            ],
+            "links": [],
+            "question": "How do I revoke this token, and how would I prove it?",
+            "rows": [
+              [
+                "disableRemoteControl: true in ~/.claude/settings.json stops every session on this computer, Desktop and CLI, from connecting to Remote Control.",
+                "markers in the installed app"
+              ]
+            ],
+            "text": ""
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "Would I notice if someone else used it?",
+            "rows": [],
+            "text": "Nothing on disk records use elsewhere; check the provider's session list."
+          }
+        ],
+        "headline": [
+          "Claude Desktop 4.23118.0 holds no credentials and 526 B of conversations and prompt history.",
+          "Claude Desktop skips approval prompts in some sessions, so in those sessions a web page, repo file or tool result that steers the model can become code running on this machine.",
+          "guest, another account on this machine, can already read or plant part of this."
+        ],
+        "lenses": [
+          {
+            "lens": "remote",
+            "points": []
+          },
+          {
+            "lens": "code",
+            "points": [
+              {
+                "exposure_id": "claude_desktop:dangling-0",
+                "text": "Claude Desktop starts `node <HOME>/missing/server.js` at launch (claude_desktop_config.json), but that file is missing. Whoever creates it runs code every time the tool starts.",
+                "tool": "Claude Desktop"
+              },
+              {
+                "exposure_id": "claude_desktop:autostart",
+                "text": "Claude Desktop is set up to run local code automatically from 4 places (3 MCP servers and 1 scheduled task). Whoever can change those commands, or the files they run, controls code that runs as you.",
+                "tool": "Claude Desktop"
+              }
+            ]
+          },
+          {
+            "lens": "model",
+            "points": [
+              {
+                "exposure_id": "claude_desktop:no-approval",
+                "text": "Claude Desktop skips approval prompts in some sessions (sessions with permissionMode=bypassPermissions: 1 of 3 sessions (1 Code) and sessions with chromePermissionMode=skip_all_permission_checks: 1 of 3 sessions (1 Code)). In those sessions, text that reaches the model (a web page, a repo file, an MCP result, an instruction file) can become commands running as you, limited only by the sandbox, deny rules and hooks that still apply.",
+                "tool": "Claude Desktop"
+              }
+            ]
+          },
+          {
+            "lens": "account",
+            "points": [
+              {
+                "exposure_id": "claude_desktop:data-readable",
+                "text": "guest can read 1 Claude Desktop data stores, including logs.",
+                "tool": "Claude Desktop"
+              }
+            ]
+          },
+          {
+            "lens": "copies",
+            "points": []
           }
         ]
       },

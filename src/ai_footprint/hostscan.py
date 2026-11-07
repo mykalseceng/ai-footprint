@@ -287,24 +287,6 @@ def _native_hosts(home: Path) -> list[HostFact]:
     return facts
 
 
-def _desktop_mcp(home: Path) -> list[HostFact]:
-    config = home / "Library/Application Support/Claude/claude_desktop_config.json"
-    servers = (load_json(config) or {}).get("mcpServers", {})
-    facts = []
-    for name, spec in servers.items():
-        args = [str(a) for a in spec.get("args", [])]
-        facts.append(
-            _fact(
-                "control",
-                f"Claude Desktop MCP '{name}'",
-                _clip(" ".join([str(spec.get("command", "")), *args]), 240),
-                config,
-                concern=True,
-            )
-        )
-    return facts
-
-
 def tool_words() -> tuple[str, ...]:
     """Lower-case words that mark a program as one of the audited tools or their vendors."""
     harness_words = (w for h in registry().values() for w in h.profile.process_words)
@@ -382,9 +364,7 @@ def _tcc_facts(home: Path) -> list[HostFact]:
 
 def control(home: Path, system: System) -> list[HostFact]:
     """Paths by which software can drive the browser, screen, keyboard or files."""
-    return (
-        _native_hosts(home) + _desktop_mcp(home) + _harness_control(home, system) + _tcc_facts(home)
-    )
+    return _native_hosts(home) + _harness_control(home, system) + _tcc_facts(home)
 
 
 # --- backups -----------------------------------------------------------------------------------
@@ -570,11 +550,6 @@ def _launch_agents(home: Path) -> list[HostFact]:
 # --- AI tools this audit does not analyse in depth ---------------------------------------------
 
 OTHER_TOOLS = (
-    (
-        "Claude Desktop",
-        ("Library/Application Support/Claude", "Library/Logs/Claude"),
-        "Library/Application Support/Claude/claude_desktop_config.json",
-    ),
     ("ChatGPT app", ("Library/Application Support/com.openai.chat",), ""),
     (
         "Codex desktop app",
