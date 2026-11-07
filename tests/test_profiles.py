@@ -45,7 +45,7 @@ def test_every_registered_profile_loads_and_matches_its_package():
     assert list(harnesses) == sorted(harnesses)
     for name, harness in harnesses.items():
         assert harness.profile.name == name
-        assert harness.profile.binaries
+        assert harness.profile.binaries or harness.binaries_fn, name
         assert harness.claims
 
 
@@ -156,3 +156,9 @@ def test_code_remedies_take_precedence_over_templates(tmp_path: Path):
     trust = claude.remedy(Remedy.WITHDRAW_TRUST, RemedyContext("darwin", tmp_path))
     assert trust is not None
     assert trust.commands[0].markers == ("hasTrustDialogAccepted",)
+
+
+def test_every_driven_harness_is_registered():
+    harnesses = registry()
+    for harness in harnesses.values():
+        assert set(harness.profile.drives.values()) <= set(harnesses), harness.name

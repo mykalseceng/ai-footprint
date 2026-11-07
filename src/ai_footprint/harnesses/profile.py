@@ -9,6 +9,7 @@ to one file, which a person or an agent can make:
 * ``endpoints``, ``fingerprint``, ``settings``, ``env``: names the installed binary must
   contain before the report states them (each becomes a ``Claim``);
 * ``signals`` and ``capabilities``: what the central checks read for this tool;
+* ``drives``: other harnesses this tool runs, by the tool's own provider id;
 * ``remedies``: tool-specific fix commands the central checks offer;
 * ``docs`` and ``features``: the documented feature inventory that ``--profile`` maps
   against this machine.
@@ -186,7 +187,7 @@ class Profile:
     approval_off_flagged: tuple[str, ...] = ()
     capabilities: frozenset[Capability] = frozenset()
     process_words: tuple[str, ...] = ()
-    drives: tuple[str, ...] = ()
+    drives: Mapping[str, str] = field(default_factory=dict)
     host_control: tuple[HostControl, ...] = ()
     remedies: Mapping[Remedy, FixTemplate] = field(default_factory=dict)
     docs: tuple[DocSource, ...] = ()
@@ -357,6 +358,13 @@ def _docs(where: str, raw: list[Mapping[str, Any]]) -> tuple[DocSource, ...]:
     return tuple(out)
 
 
+def _drives(where: str, raw: Mapping[str, Any]) -> dict[str, str]:
+    """The tool's own provider ids mapped to the harness each one runs."""
+    if not all(isinstance(v, str) for v in raw.values()):
+        raise ProfileError(f"{where}.drives: expected provider id = harness name")
+    return dict(raw)
+
+
 def _host_control(
     where: str, raw: list[Mapping[str, Any]], roots: Mapping[str, Root]
 ) -> tuple[HostControl, ...]:
@@ -407,7 +415,7 @@ def parse(where: str, raw: Mapping[str, Any]) -> Profile:
             _enum(f"{where}.capabilities", Capability, c) for c in raw.get("capabilities", [])
         ),
         process_words=_str_tuple(f"{where}.process_words", raw.get("process_words", [])),
-        drives=_str_tuple(f"{where}.drives", raw.get("drives", [])),
+        drives=_drives(where, raw.get("drives", {})),
         host_control=_host_control(where, raw.get("host_control", []), roots),
         remedies=_remedies(where, raw.get("remedies", {})),
         docs=_docs(where, raw.get("docs", [])),

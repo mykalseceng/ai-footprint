@@ -537,6 +537,137 @@
       "unchecked": ""
     },
     {
+      "check": "Approval not turned off by a recorded setting",
+      "exposed": true,
+      "exposures": [
+        "t3code:no-approval"
+      ],
+      "scope": "T3 Code",
+      "unchecked": ""
+    },
+    {
+      "check": "Instruction files contain nothing that steers the model",
+      "exposed": false,
+      "exposures": [],
+      "scope": "T3 Code",
+      "unchecked": ""
+    },
+    {
+      "check": "Token carries no connector scopes",
+      "exposed": false,
+      "exposures": [],
+      "scope": "T3 Code",
+      "unchecked": "no stored token records its scopes"
+    },
+    {
+      "check": "No sessions published to share links",
+      "exposed": false,
+      "exposures": [],
+      "scope": "T3 Code",
+      "unchecked": "this audit records no share setting for T3 Code"
+    },
+    {
+      "check": "Keychain item requires a prompt",
+      "exposed": false,
+      "exposures": [],
+      "scope": "T3 Code",
+      "unchecked": "no credential is stored in the Keychain"
+    },
+    {
+      "check": "Credentials in an OS-protected store",
+      "exposed": true,
+      "exposures": [
+        "t3code:creds-plaintext"
+      ],
+      "scope": "T3 Code",
+      "unchecked": ""
+    },
+    {
+      "check": "No secrets in history or logs (full audit only)",
+      "exposed": false,
+      "exposures": [],
+      "scope": "T3 Code",
+      "unchecked": ""
+    },
+    {
+      "check": "No MCP server command points at a missing file",
+      "exposed": false,
+      "exposures": [],
+      "scope": "T3 Code",
+      "unchecked": "no local MCP server command to check"
+    },
+    {
+      "check": "No automatic code execution points",
+      "exposed": true,
+      "exposures": [
+        "t3code:autostart"
+      ],
+      "scope": "T3 Code",
+      "unchecked": ""
+    },
+    {
+      "check": "No process outlives its session or accepts connections from other accounts or the network",
+      "exposed": false,
+      "exposures": [],
+      "scope": "T3 Code",
+      "unchecked": ""
+    },
+    {
+      "check": "One install per tool",
+      "exposed": false,
+      "exposures": [],
+      "scope": "T3 Code",
+      "unchecked": ""
+    },
+    {
+      "check": "Credentials not readable by other accounts",
+      "exposed": true,
+      "exposures": [
+        "t3code:creds-readable"
+      ],
+      "scope": "T3 Code",
+      "unchecked": ""
+    },
+    {
+      "check": "Data stores not readable by other accounts",
+      "exposed": true,
+      "exposures": [
+        "t3code:data-readable"
+      ],
+      "scope": "T3 Code",
+      "unchecked": ""
+    },
+    {
+      "check": "Local server requires authentication",
+      "exposed": false,
+      "exposures": [],
+      "scope": "T3 Code",
+      "unchecked": "this audit records no local server for T3 Code"
+    },
+    {
+      "check": "No broad trusted folders and none holding instruction files",
+      "exposed": false,
+      "exposures": [],
+      "scope": "T3 Code",
+      "unchecked": "no trusted folders are recorded"
+    },
+    {
+      "check": "Provider keeps no extra copies (training, cloud tasks)",
+      "exposed": true,
+      "exposures": [
+        "t3code:account-data"
+      ],
+      "scope": "T3 Code",
+      "unchecked": ""
+    },
+    {
+      "check": "No paired devices or unused stored logins",
+      "exposed": false,
+      "exposures": [],
+      "scope": "T3 Code",
+      "unchecked": ""
+    },
+    {
       "check": "PATH folders ahead of system dirs are not writable by others",
       "exposed": false,
       "exposures": [],
@@ -600,8 +731,10 @@
     },
     {
       "check": "No long-running or orphaned AI processes",
-      "exposed": false,
-      "exposures": [],
+      "exposed": true,
+      "exposures": [
+        "host:unattended"
+      ],
       "scope": "Host",
       "unchecked": ""
     },
@@ -653,6 +786,151 @@
         }
       ],
       "command": "claims about pi ?"
+    },
+    {
+      "checks": [
+        {
+          "detail": "found in binary",
+          "name": "endpoint app.t3.codes: 'app.t3.codes'",
+          "passed": true
+        },
+        {
+          "detail": "absent from binary",
+          "name": "endpoint relay.t3.codes: 'relay.t3.codes'",
+          "passed": false
+        },
+        {
+          "detail": "found in binary",
+          "name": "endpoint ingest.t3.codes: 'ingest.t3.codes'",
+          "passed": true
+        },
+        {
+          "detail": "absent from binary",
+          "name": "endpoint clerk.com: 'clerk.com'",
+          "passed": false
+        },
+        {
+          "detail": "absent from binary",
+          "name": "endpoint clerk-telemetry.com: 'clerk-telemetry.com'",
+          "passed": false
+        },
+        {
+          "detail": "found in binary",
+          "name": "signature: Data folder: 'T3CODE_HOME'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "signature: Account token: '__clerk_client_jwt'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "signature: Server keys: 'cloud-link-ed25519-key-pair'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "signature: Background service: 'com.t3tools.t3code.service'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "signature: Permission modes: 'full-access'",
+          "passed": true
+        },
+        {
+          "detail": "absent from binary",
+          "name": "setting runtime_mode: 'runtime_mode'",
+          "passed": false
+        },
+        {
+          "detail": "found in binary",
+          "name": "setting auth_sessions: 'auth_sessions'",
+          "passed": true
+        },
+        {
+          "detail": "absent from binary",
+          "name": "setting auth_pairing_links: 'auth_pairing_links'",
+          "passed": false
+        },
+        {
+          "detail": "absent from binary",
+          "name": "setting peer_environment_links: 'peer_environment_links'",
+          "passed": false
+        },
+        {
+          "detail": "absent from binary",
+          "name": "setting scheduled_tasks: 'scheduled_tasks'",
+          "passed": false
+        },
+        {
+          "detail": "found in binary",
+          "name": "env T3CODE_HOME: 'T3CODE_HOME'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "env T3CODE_TELEMETRY_ENABLED: 'T3CODE_TELEMETRY_ENABLED'",
+          "passed": true
+        },
+        {
+          "detail": "absent from binary",
+          "name": "env T3CODE_HOST: 'T3CODE_HOST'",
+          "passed": false
+        },
+        {
+          "detail": "absent from binary",
+          "name": "env T3CODE_PORT: 'T3CODE_PORT'",
+          "passed": false
+        },
+        {
+          "detail": "absent from binary",
+          "name": "env T3CODE_TAILSCALE_SERVE: 'T3CODE_TAILSCALE_SERVE'",
+          "passed": false
+        },
+        {
+          "detail": "absent from binary",
+          "name": "env T3CODE_RELAY_URL: 'T3CODE_RELAY_URL'",
+          "passed": false
+        },
+        {
+          "detail": "absent from binary",
+          "name": "env T3CODE_OTLP_TRACES_URL: 'T3CODE_OTLP_TRACES_URL'",
+          "passed": false
+        },
+        {
+          "detail": "absent from binary",
+          "name": "env T3CODE_DISABLE_AUTO_UPDATE: 'T3CODE_DISABLE_AUTO_UPDATE'",
+          "passed": false
+        },
+        {
+          "detail": "found in binary",
+          "name": "permission mode value: 'full-access'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "paired client sessions table: 'auth_sessions'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "revoke command: 't3 auth'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "settings page for access: 'Sharing & access'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "background service uninstall: 'service uninstall'",
+          "passed": true
+        }
+      ],
+      "command": "claims about T3 Code 0.1.5"
     }
   ],
   "executed": [
@@ -714,6 +992,26 @@
         "pid=,ppid=,lstart=,command="
       ],
       "purpose": "List running AI-tool processes and their launch flags",
+      "returncode": 1
+    },
+    {
+      "argv": [
+        "/bin/ps",
+        "-axww",
+        "-o",
+        "pid=,ppid=,lstart=,command="
+      ],
+      "purpose": "List running AI-tool processes and their launch flags",
+      "returncode": 1
+    },
+    {
+      "argv": [
+        "/usr/bin/codesign",
+        "-dv",
+        "--verbose=2",
+        "<HOME>/Applications/T3 Code.app/Contents/MacOS/T3 Code"
+      ],
+      "purpose": "Read code-signing identity of tool binaries; verify probe binaries",
       "returncode": 1
     },
     {
@@ -979,6 +1277,36 @@
         "/bin/sh",
         "-n",
         "-c",
+        "chmod 600 <HOME>/.t3/userdata/clerk-tokens.json"
+      ],
+      "purpose": "Syntax-check fix commands with `sh -n` (parses, never executes)",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/bin/sh",
+        "-n",
+        "-c",
+        "chmod 700 <HOME>/.t3/userdata"
+      ],
+      "purpose": "Syntax-check fix commands with `sh -n` (parses, never executes)",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/bin/sh",
+        "-n",
+        "-c",
+        "chmod 600 <HOME>/.t3/userdata/statev2.sqlite"
+      ],
+      "purpose": "Syntax-check fix commands with `sh -n` (parses, never executes)",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/bin/sh",
+        "-n",
+        "-c",
         "sudo sysadminctl -deleteUser guest"
       ],
       "purpose": "Syntax-check fix commands with `sh -n` (parses, never executes)",
@@ -1005,6 +1333,14 @@
         "name": "Time Machine",
         "path": "",
         "topic": "backup"
+      },
+      {
+        "concern": true,
+        "detail": "starts at login: <HOME>/.t3/bin/t3 serve",
+        "kind": "login-item",
+        "name": "com.t3tools.t3code.service",
+        "path": "<HOME>/Library/LaunchAgents/com.t3tools.t3code.service.plist",
+        "topic": "unattended"
       }
     ],
     "home": "<HOME>",
@@ -1081,13 +1417,49 @@
         "Anthropic: Claude Code (plaintext file, ~/.claude/.credentials.json)",
         "DeepSeek: OpenCode (plaintext file, ~/.local/share/opencode/auth.json), OpenCode (SQLite table credential, ~/.local/share/opencode/opencode.db), pi (plaintext file, ~/.pi/agent/auth.json)",
         "OpenAI: Codex CLI (plaintext file, ~/.codex/auth.json)",
-        "OpenAI: pi (plaintext file, ~/.pi/agent/auth.json)"
+        "OpenAI: pi (plaintext file, ~/.pi/agent/auth.json)",
+        "T3 Code server keys: T3 Code (plaintext file, ~/.t3/userdata/secrets)",
+        "T3 account (Clerk): T3 Code (plaintext file, ~/.t3/userdata/clerk-tokens.json)"
       ],
       "fix": null,
       "id": "host:duplicate-creds",
       "label": "One provider's credentials in several places",
       "lens": "code",
       "statement": "Credentials for one provider are held in several places (DeepSeek: 1 separate credential in 3 places, including the same credential in OpenCode (plaintext file, ~/.local/share/opencode/auth.json), OpenCode (SQLite table credential, ~/.local/share/opencode/opencode.db) and pi (plaintext file, ~/.pi/agent/auth.json); OpenAI: 2 separate credentials in 2 places). Each place is another copy to take.",
+      "tool": "host"
+    },
+    {
+      "evidence": [
+        "com.t3tools.t3code.service: starts at login: <HOME>/.t3/bin/t3 serve"
+      ],
+      "fix": {
+        "commands": [
+          {
+            "help_probe": [],
+            "manual": true,
+            "marker_tool": "",
+            "markers": [],
+            "text": "Quit listed processes you no longer use; remove login items you do not want"
+          }
+        ],
+        "summary": "Stop processes that outlived their sessions",
+        "validations": [
+          {
+            "checks": [
+              {
+                "detail": "instruction, not a command",
+                "name": "manual step",
+                "passed": true
+              }
+            ],
+            "command": "Quit listed processes you no longer use; remove login items you do not want"
+          }
+        ]
+      },
+      "id": "host:unattended",
+      "label": "Long-running or orphaned AI processes",
+      "lens": "code",
+      "statement": "These keep running as you when you are not there: 1 login item.",
       "tool": "host"
     }
   ],
@@ -3975,6 +4347,594 @@
       "trusted_folders": [
         "<HOME>/work"
       ]
+    },
+    {
+      "account": [
+        {
+          "concern": true,
+          "source": "markers in the installed app; environment and ~/.t3/service.env",
+          "text": "T3CODE_TELEMETRY_ENABLED is not set; the installed app reads it and names ingest.t3.codes. T3 Code's FAQ says usage events (provider, model, token totals) are sent unless it is false.",
+          "topic": "data"
+        },
+        {
+          "concern": false,
+          "source": "markers in the installed app",
+          "text": "Paired clients are revoked in Settings → Sharing & access or with `t3 auth`; revoking a client does not sign the T3 account out.",
+          "topic": "revoke"
+        },
+        {
+          "concern": false,
+          "source": "~/.t3/userdata/clerk-tokens.json",
+          "text": "The stored T3 account token's exp claim is <TIME>.",
+          "topic": "revoke"
+        },
+        {
+          "concern": false,
+          "source": "~/.t3/userdata/statev2.sqlite auth_sessions",
+          "text": "Paired desktop client (bearer-access-token) with 1 scope; last connected <TIME>.",
+          "topic": "detect"
+        }
+      ],
+      "artifacts": [
+        {
+          "category": "credential",
+          "description": "Clerk client JWT for the T3 account (T3 Connect sign-in), plaintext",
+          "exists": true,
+          "file_count": 1,
+          "group_readable": "wheel",
+          "group_readable_files": 0,
+          "group_writable": false,
+          "is_dir": false,
+          "label": "Account token",
+          "mode": "644",
+          "newest": "<DATE>",
+          "oldest": "<DATE>",
+          "other_readable": true,
+          "other_readable_files": 0,
+          "other_writable": false,
+          "owner": "dark_knight",
+          "path": "<HOME>/.t3/userdata/clerk-tokens.json",
+          "size_bytes": 484
+        },
+        {
+          "category": "credential",
+          "description": "Server, MCP OAuth and asset signing keys, request salt, cloud-link Ed25519 key pair",
+          "exists": true,
+          "file_count": 2,
+          "group_readable": "",
+          "group_readable_files": 0,
+          "group_writable": false,
+          "is_dir": true,
+          "label": "Server keys",
+          "mode": "700",
+          "newest": "<DATE>",
+          "oldest": "<DATE>",
+          "other_readable": false,
+          "other_readable_files": 0,
+          "other_writable": false,
+          "owner": "dark_knight",
+          "path": "<HOME>/.t3/userdata/secrets",
+          "size_bytes": 64
+        },
+        {
+          "category": "session",
+          "description": "Threads, messages and tool output, paired client sessions, pairing links, scheduled tasks",
+          "exists": true,
+          "file_count": 1,
+          "group_readable": "wheel",
+          "group_readable_files": 0,
+          "group_writable": false,
+          "is_dir": false,
+          "label": "State DB",
+          "mode": "644",
+          "newest": "<DATE>",
+          "oldest": "<DATE>",
+          "other_readable": true,
+          "other_readable_files": 0,
+          "other_writable": false,
+          "owner": "dark_knight",
+          "path": "<HOME>/.t3/userdata/statev2.sqlite",
+          "size_bytes": 36864
+        },
+        {
+          "category": "extension",
+          "description": "launchd agent that starts the T3 server at login",
+          "exists": true,
+          "file_count": 1,
+          "group_readable": "wheel",
+          "group_readable_files": 0,
+          "group_writable": false,
+          "is_dir": false,
+          "label": "Background service",
+          "mode": "644",
+          "newest": "<DATE>",
+          "oldest": "<DATE>",
+          "other_readable": true,
+          "other_readable_files": 0,
+          "other_writable": false,
+          "owner": "dark_knight",
+          "path": "<HOME>/Library/LaunchAgents/com.t3tools.t3code.service.plist",
+          "size_bytes": 339
+        }
+      ],
+      "binaries": [
+        {
+          "mode": "644",
+          "owner": "dark_knight",
+          "path": "<HOME>/Applications/T3 Code.app/Contents/MacOS/T3 Code",
+          "resolved": "<HOME>/Applications/T3 Code.app/Contents/Resources/app.asar",
+          "signer": "unsigned or not a Mach-O binary",
+          "team_id": "",
+          "version": "0.1.5",
+          "writable_dirs": []
+        }
+      ],
+      "credentials": [
+        {
+          "keychain_written": "",
+          "live_check": "",
+          "local_service": false,
+          "location": "<HOME>/.t3/userdata/clerk-tokens.json",
+          "owner": "",
+          "owner_source": "",
+          "protection": "file mode 644",
+          "provider": "T3 account (Clerk)",
+          "readable_by_others": true,
+          "silent_read_seconds": null,
+          "store": "plaintext file",
+          "tokens": [
+            {
+              "algorithm": "RS256",
+              "audience": "",
+              "claims": {
+                "exp": "<EPOCH>",
+                "sub": "user_1"
+              },
+              "description": "JWT signed with RS256",
+              "expired": false,
+              "expires_at": "<TIME>",
+              "field": "__clerk_client_jwt",
+              "fingerprint": "<HEX>",
+              "issued_at": "",
+              "issuer": "",
+              "key_id": "test-kid",
+              "kind": "jwt",
+              "last4": "",
+              "length": 458,
+              "prefix": "eyJ…",
+              "scopes": [],
+              "signature": "present, not verified (run with --live to check against the issuer's JWKS)"
+            }
+          ],
+          "tool": "t3code"
+        },
+        {
+          "keychain_written": "",
+          "live_check": "",
+          "local_service": true,
+          "location": "<HOME>/.t3/userdata/secrets",
+          "owner": "",
+          "owner_source": "",
+          "protection": "2 key files (cloud-link-ed25519-key-pair, server-signing-key); file mode 600; folder mode 700",
+          "provider": "T3 Code server keys",
+          "readable_by_others": false,
+          "silent_read_seconds": null,
+          "store": "plaintext file",
+          "tokens": [],
+          "tool": "t3code"
+        }
+      ],
+      "daemons": [],
+      "display_name": "T3 Code",
+      "endpoints": [
+        {
+          "count": 0,
+          "host": "app.t3.codes",
+          "purpose": "Web app and hosted pairing page",
+          "source": "binary",
+          "tool": "t3code"
+        },
+        {
+          "count": 0,
+          "host": "ingest.t3.codes",
+          "purpose": "Product usage events",
+          "source": "binary",
+          "tool": "t3code"
+        }
+      ],
+      "exposures": [
+        {
+          "evidence": [
+            "threads with runtime_mode=full-access = 2 of 3 threads"
+          ],
+          "fix": {
+            "commands": [
+              {
+                "help_probe": [],
+                "manual": true,
+                "marker_tool": "t3code",
+                "markers": [
+                  "Supervised",
+                  "approval-required"
+                ],
+                "text": "Set Settings → Threads → New threads → Permissions to Supervised, and switch each full-access thread to Supervised in the composer"
+              }
+            ],
+            "summary": "Require approval for new and existing threads",
+            "validations": [
+              {
+                "checks": [
+                  {
+                    "detail": "instruction, not a command",
+                    "name": "manual step",
+                    "passed": true
+                  },
+                  {
+                    "detail": "found in binary",
+                    "name": "'Supervised' known to installed t3code",
+                    "passed": true
+                  },
+                  {
+                    "detail": "found in binary",
+                    "name": "'approval-required' known to installed t3code",
+                    "passed": true
+                  }
+                ],
+                "command": "Set Settings → Threads → New threads → Permissions to Supervised, and switch each full-access thread to Supervised in the composer"
+              }
+            ]
+          },
+          "id": "t3code:no-approval",
+          "label": "Approval prompts skipped",
+          "lens": "model",
+          "statement": "T3 Code skips approval prompts in some sessions (threads with runtime_mode=full-access: 2 of 3 threads). In those sessions, text that reaches the model (a web page, a repo file, an MCP result, an instruction file) can become commands running as you, limited only by the sandbox, deny rules and hooks that still apply.",
+          "tool": "t3code"
+        },
+        {
+          "evidence": [
+            "T3 account (Clerk): ~/.t3/userdata/clerk-tokens.json [plaintext file]",
+            "T3 Code server keys: ~/.t3/userdata/secrets [plaintext file]"
+          ],
+          "fix": {
+            "commands": [
+              {
+                "help_probe": [],
+                "manual": true,
+                "marker_tool": "t3code",
+                "markers": [
+                  "Sharing & access"
+                ],
+                "text": "Sign out in Settings → Sharing & access if you do not use T3 Connect, then chmod 600 ~/.t3/userdata/clerk-tokens.json"
+              }
+            ],
+            "summary": "Sign out where you do not use T3 Connect",
+            "validations": [
+              {
+                "checks": [
+                  {
+                    "detail": "instruction, not a command",
+                    "name": "manual step",
+                    "passed": true
+                  },
+                  {
+                    "detail": "found in binary",
+                    "name": "'Sharing & access' known to installed t3code",
+                    "passed": true
+                  }
+                ],
+                "command": "Sign out in Settings → Sharing & access if you do not use T3 Connect, then chmod 600 ~/.t3/userdata/clerk-tokens.json"
+              }
+            ]
+          },
+          "id": "t3code:creds-plaintext",
+          "label": "Credentials in plaintext",
+          "lens": "code",
+          "statement": "T3 Code keeps credentials for T3 Code server keys, T3 account (Clerk) in plaintext (~/.t3/userdata/clerk-tokens.json, ~/.t3/userdata/secrets). Any program running as you can copy them.",
+          "tool": "t3code"
+        },
+        {
+          "evidence": [
+            "service: com.t3tools.t3code.service → <HOME>/.t3/bin/t3 serve"
+          ],
+          "fix": {
+            "commands": [
+              {
+                "help_probe": [],
+                "manual": true,
+                "marker_tool": "",
+                "markers": [],
+                "text": "Add the listed scripts and config files to file-integrity monitoring"
+              }
+            ],
+            "summary": "Monitor these files for changes",
+            "validations": [
+              {
+                "checks": [
+                  {
+                    "detail": "instruction, not a command",
+                    "name": "manual step",
+                    "passed": true
+                  }
+                ],
+                "command": "Add the listed scripts and config files to file-integrity monitoring"
+              }
+            ]
+          },
+          "id": "t3code:autostart",
+          "label": "Code that runs automatically",
+          "lens": "code",
+          "statement": "T3 Code is set up to run local code automatically from 1 place (1 background service). Whoever can change those commands, or the files they run, controls code that runs as you.",
+          "tool": "t3code"
+        },
+        {
+          "evidence": [
+            "T3 account (Clerk): file mode 644"
+          ],
+          "fix": {
+            "commands": [
+              {
+                "help_probe": [],
+                "manual": false,
+                "marker_tool": "",
+                "markers": [],
+                "text": "chmod 600 <HOME>/.t3/userdata/clerk-tokens.json"
+              },
+              {
+                "help_probe": [],
+                "manual": false,
+                "marker_tool": "",
+                "markers": [],
+                "text": "chmod 700 <HOME>/.t3/userdata"
+              },
+              {
+                "help_probe": [],
+                "manual": true,
+                "marker_tool": "",
+                "markers": [],
+                "text": "Rotate every credential listed: assume it was copied"
+              }
+            ],
+            "summary": "Restrict the files, then rotate the credentials",
+            "validations": [
+              {
+                "checks": [
+                  {
+                    "detail": "parses",
+                    "name": "shell syntax (sh -n)",
+                    "passed": true
+                  },
+                  {
+                    "detail": "not found on PATH",
+                    "name": "program 'chmod'",
+                    "passed": false
+                  },
+                  {
+                    "detail": "exists",
+                    "name": "target <HOME>/.t3/userdata/clerk-tokens.json",
+                    "passed": true
+                  }
+                ],
+                "command": "chmod 600 <HOME>/.t3/userdata/clerk-tokens.json"
+              },
+              {
+                "checks": [
+                  {
+                    "detail": "parses",
+                    "name": "shell syntax (sh -n)",
+                    "passed": true
+                  },
+                  {
+                    "detail": "not found on PATH",
+                    "name": "program 'chmod'",
+                    "passed": false
+                  },
+                  {
+                    "detail": "exists",
+                    "name": "target <HOME>/.t3/userdata",
+                    "passed": true
+                  }
+                ],
+                "command": "chmod 700 <HOME>/.t3/userdata"
+              },
+              {
+                "checks": [
+                  {
+                    "detail": "instruction, not a command",
+                    "name": "manual step",
+                    "passed": true
+                  }
+                ],
+                "command": "Rotate every credential listed: assume it was copied"
+              }
+            ]
+          },
+          "id": "t3code:creds-readable",
+          "label": "Credentials readable by other accounts",
+          "lens": "account",
+          "statement": "guest can read 1 T3 Code credential(s) (T3 account (Clerk)) straight from ~/.t3/userdata/clerk-tokens.json.",
+          "tool": "t3code"
+        },
+        {
+          "evidence": [
+            "~/.t3/userdata/statev2.sqlite (644): Threads, messages and tool output, paired client sessions, pairing links, scheduled tasks"
+          ],
+          "fix": {
+            "commands": [
+              {
+                "help_probe": [],
+                "manual": false,
+                "marker_tool": "",
+                "markers": [],
+                "text": "chmod 600 <HOME>/.t3/userdata/statev2.sqlite"
+              }
+            ],
+            "summary": "Restrict permissions (re-check after updates)",
+            "validations": [
+              {
+                "checks": [
+                  {
+                    "detail": "parses",
+                    "name": "shell syntax (sh -n)",
+                    "passed": true
+                  },
+                  {
+                    "detail": "not found on PATH",
+                    "name": "program 'chmod'",
+                    "passed": false
+                  },
+                  {
+                    "detail": "exists",
+                    "name": "target <HOME>/.t3/userdata/statev2.sqlite",
+                    "passed": true
+                  }
+                ],
+                "command": "chmod 600 <HOME>/.t3/userdata/statev2.sqlite"
+              }
+            ]
+          },
+          "id": "t3code:data-readable",
+          "label": "Data readable by other accounts",
+          "lens": "account",
+          "statement": "guest can read 1 T3 Code data stores, including state db.",
+          "tool": "t3code"
+        },
+        {
+          "evidence": [
+            "markers in the installed app; environment and ~/.t3/service.env"
+          ],
+          "fix": {
+            "commands": [
+              {
+                "help_probe": [],
+                "manual": true,
+                "marker_tool": "t3code",
+                "markers": [
+                  "T3CODE_TELEMETRY_ENABLED"
+                ],
+                "text": "Set T3CODE_TELEMETRY_ENABLED=false in your shell profile and in ~/.t3/service.env"
+              }
+            ],
+            "summary": "Turn off usage events",
+            "validations": [
+              {
+                "checks": [
+                  {
+                    "detail": "instruction, not a command",
+                    "name": "manual step",
+                    "passed": true
+                  },
+                  {
+                    "detail": "found in binary",
+                    "name": "'T3CODE_TELEMETRY_ENABLED' known to installed t3code",
+                    "passed": true
+                  }
+                ],
+                "command": "Set T3CODE_TELEMETRY_ENABLED=false in your shell profile and in ~/.t3/service.env"
+              }
+            ]
+          },
+          "id": "t3code:account-data",
+          "label": "Work shared with provider services",
+          "lens": "copies",
+          "statement": "T3CODE_TELEMETRY_ENABLED is not set; the installed app reads it and names ingest.t3.codes. T3 Code's FAQ says usage events (provider, model, token totals) are sent unless it is false.",
+          "tool": "t3code"
+        }
+      ],
+      "extensions": [
+        {
+          "access": "",
+          "autostart": true,
+          "dangling": false,
+          "description": "Starts the T3 server at login",
+          "detail": "<HOME>/.t3/bin/t3 serve",
+          "identity": "<HOME>/Library/LaunchAgents/com.t3tools.t3code.service.plist",
+          "kind": "service",
+          "name": "com.t3tools.t3code.service",
+          "notes": "",
+          "source": "~/Library/LaunchAgents/com.t3tools.t3code.service.plist",
+          "tool": "t3code"
+        }
+      ],
+      "fingerprint": [
+        {
+          "label": "Data folder",
+          "value": "~/.t3, or T3CODE_HOME"
+        },
+        {
+          "label": "Account token",
+          "value": "__clerk_client_jwt in userdata/clerk-tokens.json"
+        },
+        {
+          "label": "Server keys",
+          "value": "server-signing-key, cloud-link-ed25519-key-pair in userdata/secrets"
+        },
+        {
+          "label": "Background service",
+          "value": "launchd agent com.t3tools.t3code.service"
+        },
+        {
+          "label": "Permission modes",
+          "value": "approval-required, auto-accept-edits, full-access (default for new threads)"
+        }
+      ],
+      "installed": true,
+      "instructions": [],
+      "name": "t3code",
+      "processes": [],
+      "programs": [],
+      "secret_scan": {
+        "bytes_scanned": 37412,
+        "current_credential_hits": [],
+        "current_credential_values": 0,
+        "excluded": [],
+        "files_scanned": 4,
+        "kinds": [],
+        "markers": [],
+        "roots": [
+          "~/.t3/userdata"
+        ],
+        "seconds": 0.0,
+        "unreadable": []
+      },
+      "settings": [
+        {
+          "concern": true,
+          "key": "threads with runtime_mode=full-access",
+          "note": "Full access runs commands and edits without approval prompts",
+          "value": "2 of 3 threads"
+        },
+        {
+          "concern": false,
+          "key": "paired client sessions",
+          "note": "Each session can use the server with the scopes it was granted",
+          "value": "1 desktop client"
+        },
+        {
+          "concern": false,
+          "key": "agents driven",
+          "note": "T3 Code runs these harnesses with their own stored logins",
+          "value": "Claude Code (3 threads)"
+        },
+        {
+          "concern": false,
+          "key": "env.T3CODE_HOME",
+          "note": "Read by the installed app",
+          "value": "not set"
+        },
+        {
+          "concern": false,
+          "key": "env.T3CODE_TELEMETRY_ENABLED",
+          "note": "Read by the installed app",
+          "value": "not set"
+        }
+      ],
+      "stats": {
+        "messages": "0",
+        "projects": "1",
+        "threads": "3",
+        "worktrees": "0"
+      },
+      "trusted_folders": []
     }
   ],
   "views": {
@@ -4034,6 +4994,15 @@
           "plaintext file"
         ],
         "tool": "pi"
+      },
+      {
+        "lifetime": "no recorded expiry",
+        "provider": "T3 account (Clerk)",
+        "readable_by_others": true,
+        "stores": [
+          "plaintext file"
+        ],
+        "tool": "t3code"
       }
     ],
     "disk": [
@@ -4088,6 +5057,19 @@
           "session": 57
         },
         "tool": "pi"
+      },
+      {
+        "parts": {
+          "binary": 0,
+          "cache": 0,
+          "config": 0,
+          "credential": 548,
+          "extension": 339,
+          "instructions": 0,
+          "log": 0,
+          "session": 36864
+        },
+        "tool": "t3code"
       }
     ],
     "extensions": [
@@ -4226,65 +5208,82 @@
         "used_by": [
           "pi"
         ]
+      },
+      {
+        "access": "",
+        "autostart": true,
+        "dangling": false,
+        "description": "Starts the T3 server at login",
+        "detail": "<HOME>/.t3/bin/t3 serve",
+        "group": "",
+        "identity": "<HOME>/Library/LaunchAgents/com.t3tools.t3code.service.plist",
+        "kind": "service",
+        "name": "com.t3tools.t3code.service",
+        "notes": "",
+        "source": "~/Library/LaunchAgents/com.t3tools.t3code.service.plist",
+        "tool": "t3code",
+        "used_by": [
+          "T3 Code"
+        ]
       }
     ],
     "figures": {
       "machine": [
         {
-          "detail": "Claude Code, Codex CLI, OpenCode, pi",
-          "display": "4",
+          "detail": "Claude Code, Codex CLI, OpenCode, pi, T3 Code",
+          "display": "5",
           "id": "tools",
           "label": "Tools audited",
-          "value": 4
+          "value": 5
         },
         {
-          "detail": "30 from tool checks, 3 from checks of this machine",
-          "display": "33",
+          "detail": "36 from tool checks, 4 from checks of this machine",
+          "display": "40",
           "id": "signals",
           "label": "Signals to review",
-          "value": 33
+          "value": 40
         },
         {
-          "detail": "27 clear, 19 not checked because their input is not recorded for that tool (same checks as --doctor)",
-          "display": "32 of 78",
+          "detail": "31 clear, 25 not checked because their input is not recorded for that tool (same checks as --doctor)",
+          "display": "39 of 95",
           "id": "checks",
           "label": "Checks with a signal",
-          "value": 32
+          "value": 39
         },
         {
-          "detail": "provider entries in 5 locations; 2 marked readable by other local accounts",
-          "display": "6",
+          "detail": "provider entries in 7 locations; 3 marked readable by other local accounts",
+          "display": "8",
           "id": "credentials",
           "label": "Stored credentials",
-          "value": 6
+          "value": 8
         },
         {
-          "detail": "distinct keys for DeepSeek; 3 OAuth logins also stored",
+          "detail": "distinct keys for DeepSeek; 4 OAuth logins also stored",
           "display": "1",
           "id": "api_keys",
           "label": "API keys",
           "value": 1
         },
         {
-          "detail": "distinct within each tool's data, added across 4 tools; 18 files scanned",
+          "detail": "distinct within each tool's data, added across 5 tools; 22 files scanned",
           "display": "2",
           "id": "secrets",
           "label": "Secret values found",
           "value": 2
         },
         {
-          "detail": "18 listed locations, including 21 KB of conversations and history",
-          "display": "24 KB",
+          "detail": "22 listed locations, including 58 KB of conversations and history",
+          "display": "62 KB",
           "id": "disk",
           "label": "On disk",
-          "value": 24139
+          "value": 61890
         },
         {
-          "detail": "of 8 entries: 3 MCP servers, 1 hook, 1 plugin (listed as starting without being invoked)",
-          "display": "5",
+          "detail": "of 9 entries: 3 MCP servers, 1 hook, 1 plugin, 1 background service (listed as starting without being invoked)",
+          "display": "6",
           "id": "autostart",
           "label": "Run automatically",
-          "value": 5
+          "value": 6
         }
       ],
       "tools": {
@@ -4519,6 +5518,64 @@
             "label": "Hosts reached when started",
             "value": "not captured"
           }
+        ],
+        "t3code": [
+          {
+            "detail": "4 listed locations, including 37 KB of conversations and history",
+            "display": "38 KB",
+            "id": "disk",
+            "label": "On disk",
+            "value": 37751
+          },
+          {
+            "detail": "1 session location",
+            "display": "37 KB",
+            "id": "sessions",
+            "label": "Conversations and history",
+            "value": 36864
+          },
+          {
+            "detail": "provider entries in 2 locations; 1 marked readable by other local accounts",
+            "display": "2",
+            "id": "credentials",
+            "label": "Stored credentials",
+            "value": 2
+          },
+          {
+            "detail": "1 listed as starting without being invoked",
+            "display": "1",
+            "id": "extensions",
+            "label": "Extensions",
+            "value": 1
+          },
+          {
+            "detail": "6 of 17 checks returned a signal, 6 not checked",
+            "display": "6",
+            "id": "signals",
+            "label": "Signals to review",
+            "value": 6
+          },
+          {
+            "detail": "distinct values; 4 files scanned",
+            "display": "0",
+            "id": "secrets",
+            "label": "Secret values found",
+            "value": 0
+          },
+          {
+            "detail": "threads with runtime_mode=full-access = 2 of 3 threads",
+            "display": "found",
+            "id": "approval",
+            "label": "Approval turned off",
+            "value": "found"
+          },
+          {
+            "detail": "run ai-footprint --capture to record them",
+            "display": "not captured",
+            "id": "network",
+            "label": "Hosts reached when started",
+            "value": "not captured"
+          }
         ]
       }
     },
@@ -4709,6 +5766,13 @@
           "tone": "concern"
         }
       ],
+      "host:unattended": [
+        {
+          "badge": "manual step (not machine-checkable)",
+          "label": "manual step (not machine-checkable)",
+          "tone": "neutral"
+        }
+      ],
       "opencode:creds-plaintext": [
         {
           "badge": "program 'opencode'",
@@ -4829,6 +5893,58 @@
           "label": "✗ pi binary: not installed; cannot confirm",
           "tone": "concern"
         }
+      ],
+      "t3code:account-data": [
+        {
+          "badge": "config keys confirmed in installed binary",
+          "label": "✓ config keys confirmed in installed binary",
+          "tone": "ok"
+        }
+      ],
+      "t3code:autostart": [
+        {
+          "badge": "manual step (not machine-checkable)",
+          "label": "manual step (not machine-checkable)",
+          "tone": "neutral"
+        }
+      ],
+      "t3code:creds-plaintext": [
+        {
+          "badge": "config keys confirmed in installed binary",
+          "label": "✓ config keys confirmed in installed binary",
+          "tone": "ok"
+        }
+      ],
+      "t3code:creds-readable": [
+        {
+          "badge": "program 'chmod'",
+          "label": "✗ program 'chmod': not found on PATH",
+          "tone": "concern"
+        },
+        {
+          "badge": "program 'chmod'",
+          "label": "✗ program 'chmod': not found on PATH",
+          "tone": "concern"
+        },
+        {
+          "badge": "manual step (not machine-checkable)",
+          "label": "manual step (not machine-checkable)",
+          "tone": "neutral"
+        }
+      ],
+      "t3code:data-readable": [
+        {
+          "badge": "program 'chmod'",
+          "label": "✗ program 'chmod': not found on PATH",
+          "tone": "concern"
+        }
+      ],
+      "t3code:no-approval": [
+        {
+          "badge": "config keys confirmed in installed binary",
+          "label": "✓ config keys confirmed in installed binary",
+          "tone": "ok"
+        }
       ]
     },
     "host": {
@@ -4860,10 +5976,10 @@
           "topic": "backup"
         },
         {
-          "answer": "No orphaned MCP servers, AI-tool processes running a day or more, or AI login items.",
+          "answer": "These keep running as you when you are not there: 1 login item.",
           "finding_id": "host:unattended",
           "question": "What runs when I'm not there?",
-          "status": "clear",
+          "status": "review",
           "topic": "unattended"
         },
         {
@@ -4984,6 +6100,29 @@
         "used_by": [
           "pi"
         ]
+      },
+      {
+        "fingerprints": [
+          "<HEX>"
+        ],
+        "kind": "OAuth login",
+        "length": 458,
+        "lifetime": "no recorded expiry",
+        "locations": [
+          {
+            "location": "<HOME>/.t3/userdata/clerk-tokens.json",
+            "readable_by_others": true,
+            "store": "plaintext file",
+            "tool": "T3 Code"
+          }
+        ],
+        "owner": "",
+        "owner_source": "",
+        "provider": "T3 account (Clerk)",
+        "shown": "__clerk_client_jwt",
+        "used_by": [
+          "T3 Code"
+        ]
       }
     ],
     "lenses": [
@@ -5015,12 +6154,12 @@
     ],
     "machine": {
       "headline": [
-        "Claude Code, Codex CLI, OpenCode and pi hold 5 credentials for Anthropic, DeepSeek and OpenAI and 21 KB of conversations and prompt history.",
+        "Claude Code, Codex CLI, OpenCode, pi and T3 Code 0.1.5 hold 6 credentials for Anthropic, DeepSeek, OpenAI and T3 account (Clerk) and 58 KB of conversations and prompt history.",
         "Anything that runs as you can take all of them without a prompt, plus data files holding 2 secret-shaped values (distinct per tool).",
-        "Claude Code and Codex CLI skip approval prompts in some sessions, so in those sessions a web page, repo file or tool result that steers the model can become code running on this machine.",
+        "Claude Code, Codex CLI and T3 Code skip approval prompts in some sessions, so in those sessions a web page, repo file or tool result that steers the model can become code running on this machine.",
         "guest, another account on this machine, can already read or plant part of this.",
         "Related data is also kept elsewhere: work shared with provider services.",
-        "5 of these credentials have no recorded expiry."
+        "6 of these credentials have no recorded expiry."
       ],
       "lenses": [
         {
@@ -5050,6 +6189,11 @@
               "exposure_id": "",
               "text": "API keys for DeepSeek (plaintext file): no recorded expiry.",
               "tool": "pi"
+            },
+            {
+              "exposure_id": "",
+              "text": "T3 account (Clerk) login (plaintext file): no scopes recorded. No recorded expiry.",
+              "tool": "T3 Code"
             },
             {
               "exposure_id": "claude:token-reach",
@@ -5127,8 +6271,23 @@
               "tool": "pi"
             },
             {
+              "exposure_id": "t3code:creds-plaintext",
+              "text": "T3 Code keeps credentials for T3 Code server keys, T3 account (Clerk) in plaintext (~/.t3/userdata/clerk-tokens.json, ~/.t3/userdata/secrets). Any program running as you can copy them.",
+              "tool": "T3 Code"
+            },
+            {
+              "exposure_id": "t3code:autostart",
+              "text": "T3 Code is set up to run local code automatically from 1 place (1 background service). Whoever can change those commands, or the files they run, controls code that runs as you.",
+              "tool": "T3 Code"
+            },
+            {
               "exposure_id": "host:duplicate-creds",
               "text": "Credentials for one provider are held in several places (DeepSeek: 1 separate credential in 3 places, including the same credential in OpenCode (plaintext file, ~/.local/share/opencode/auth.json), OpenCode (SQLite table credential, ~/.local/share/opencode/opencode.db) and pi (plaintext file, ~/.pi/agent/auth.json); OpenAI: 2 separate credentials in 2 places). Each place is another copy to take.",
+              "tool": "Host"
+            },
+            {
+              "exposure_id": "host:unattended",
+              "text": "These keep running as you when you are not there: 1 login item.",
               "tool": "Host"
             }
           ]
@@ -5177,6 +6336,11 @@
               "tool": "pi"
             },
             {
+              "exposure_id": "t3code:no-approval",
+              "text": "T3 Code skips approval prompts in some sessions (threads with runtime_mode=full-access: 2 of 3 threads). In those sessions, text that reaches the model (a web page, a repo file, an MCP result, an instruction file) can become commands running as you, limited only by the sandbox, deny rules and hooks that still apply.",
+              "tool": "T3 Code"
+            },
+            {
               "exposure_id": "host:shared-surfaces",
               "text": "~/.claude/CLAUDE.md are loaded by more than one tool, so one planted skill or instruction steers all of them.",
               "tool": "Host"
@@ -5217,6 +6381,16 @@
               "tool": "pi"
             },
             {
+              "exposure_id": "t3code:creds-readable",
+              "text": "guest can read 1 T3 Code credential(s) (T3 account (Clerk)) straight from ~/.t3/userdata/clerk-tokens.json.",
+              "tool": "T3 Code"
+            },
+            {
+              "exposure_id": "t3code:data-readable",
+              "text": "guest can read 1 T3 Code data stores, including state db.",
+              "tool": "T3 Code"
+            },
+            {
               "exposure_id": "host:other-accounts",
               "text": "This machine has 1 other local account(s): guest. Every world-readable AI-tool file is readable by them.",
               "tool": "Host"
@@ -5235,13 +6409,18 @@
               "exposure_id": "pi:account-data",
               "text": "enableAnalytics = True; enableInstallTelemetry = not set.",
               "tool": "pi"
+            },
+            {
+              "exposure_id": "t3code:account-data",
+              "text": "T3CODE_TELEMETRY_ENABLED is not set; the installed app reads it and names ingest.t3.codes. T3 Code's FAQ says usage events (provider, model, token totals) are sent unless it is false.",
+              "tool": "T3 Code"
             }
           ]
         }
       ],
       "proof": "This audit never writes a secret value to this report."
     },
-    "method": "The audit writes nothing but its own reports; a tool run with --version or --help may append to that tool's own log. It ran 33 commands, each by absolute path with a fixed PATH: 33 from its probe registry and 0 of installed AI-tool binaries, limited to --version and --help. Secrets were read into memory only to derive metadata. No network requests were made.",
+    "method": "The audit writes nothing but its own reports; a tool run with --version or --help may append to that tool's own log. It ran 38 commands, each by absolute path with a fixed PATH: 38 from its probe registry and 0 of installed AI-tool binaries, limited to --version and --help. Secrets were read into memory only to derive metadata. No network requests were made.",
     "network": {
       "capture_file": "",
       "how": "Run ai-footprint --capture to record it: each tool starts idle, with no prompt, in an empty folder for <DURATION> while a sudo packet capture records every packet its processes send or receive.",
@@ -5291,6 +6470,26 @@
           "summary": "pi was not captured. Run ai-footprint --capture to record it: each tool starts idle, with no prompt, in an empty folder for <DURATION> while a sudo packet capture records every packet its processes send or receive.",
           "switches": [],
           "unobserved": []
+        },
+        "t3code": {
+          "captured": false,
+          "command": [],
+          "local_packets": 0,
+          "lookups": [],
+          "observed": [],
+          "stopped": [],
+          "summary": "T3 Code was not captured. Run ai-footprint --capture to record it: each tool starts idle, with no prompt, in an empty folder for <DURATION> while a sudo packet capture records every packet its processes send or receive.",
+          "switches": [],
+          "unobserved": [
+            {
+              "host": "app.t3.codes",
+              "purpose": "Web app and hosted pairing page"
+            },
+            {
+              "host": "ingest.t3.codes",
+              "purpose": "Product usage events"
+            }
+          ]
         }
       },
       "unattributed": [],
@@ -5307,35 +6506,40 @@
         "codex": 1,
         "host": 1,
         "opencode": 2,
-        "pi": 1
+        "pi": 1,
+        "t3code": 2
       },
       "code": {
         "claude": 5,
         "codex": 1,
-        "host": 1,
+        "host": 2,
         "opencode": 1,
-        "pi": 3
+        "pi": 3,
+        "t3code": 2
       },
       "copies": {
         "claude": 1,
         "codex": 0,
         "host": 0,
         "opencode": 0,
-        "pi": 1
+        "pi": 1,
+        "t3code": 1
       },
       "model": {
         "claude": 3,
         "codex": 2,
         "host": 1,
         "opencode": 1,
-        "pi": 2
+        "pi": 2,
+        "t3code": 1
       },
       "remote": {
         "claude": 1,
         "codex": 1,
         "host": 0,
         "opencode": 0,
-        "pi": 2
+        "pi": 2,
+        "t3code": 0
       }
     },
     "tools": {
@@ -6672,6 +7876,343 @@
                 "exposure_id": "pi:account-data",
                 "text": "enableAnalytics = True; enableInstallTelemetry = not set.",
                 "tool": "pi"
+              }
+            ]
+          }
+        ]
+      },
+      "t3code": {
+        "answers": [
+          {
+            "headers": [],
+            "links": [],
+            "question": "Where are the log files?",
+            "rows": [],
+            "text": "None found."
+          },
+          {
+            "headers": [
+              "Path",
+              "Size",
+              "Files",
+              "Modified"
+            ],
+            "links": [],
+            "question": "Where are my sessions stored?",
+            "rows": [
+              [
+                "`~/.t3/userdata/statev2.sqlite`",
+                "37 KB",
+                "",
+                "<DATE>"
+              ]
+            ],
+            "text": ""
+          },
+          {
+            "headers": [
+              "Provider",
+              "Store",
+              "Location",
+              "Other accounts can read"
+            ],
+            "links": [],
+            "question": "Where is my auth token stored?",
+            "rows": [
+              [
+                "T3 account (Clerk)",
+                "plaintext file",
+                "`~/.t3/userdata/clerk-tokens.json`",
+                "yes"
+              ],
+              [
+                "T3 Code server keys",
+                "plaintext file",
+                "`~/.t3/userdata/secrets`",
+                "no"
+              ]
+            ],
+            "text": ""
+          },
+          {
+            "headers": [
+              "Token",
+              "Type",
+              "Expires",
+              "Scopes",
+              "Signature"
+            ],
+            "links": [],
+            "question": "When does it expire, what claims does it carry, and who signs it?",
+            "rows": [
+              [
+                "`__clerk_client_jwt`",
+                "JWT RS256 from ``",
+                "<TIME>",
+                "none",
+                "not verified (use --live)"
+              ]
+            ],
+            "text": "Claims are listed under Credentials in the inventory."
+          },
+          {
+            "headers": [
+              "Path",
+              "Mode",
+              "Readable by"
+            ],
+            "links": [],
+            "question": "Who can read these files?",
+            "rows": [
+              [
+                "`~/.t3/userdata/clerk-tokens.json`",
+                "644",
+                "any account"
+              ],
+              [
+                "`~/.t3/userdata/statev2.sqlite`",
+                "644",
+                "any account"
+              ],
+              [
+                "`~/Library/LaunchAgents/com.t3tools.t3code.service.plist`",
+                "644",
+                "any account"
+              ]
+            ],
+            "text": "3 locations, including 1 credential store, grant read access beyond your account, and the other local accounts are guest."
+          },
+          {
+            "headers": [
+              "Host",
+              "Evidence",
+              "Count"
+            ],
+            "links": [],
+            "question": "Which hosts does it name or connect to?",
+            "rows": [
+              [
+                "app.t3.codes",
+                "in the binary",
+                ""
+              ],
+              [
+                "ingest.t3.codes",
+                "in the binary",
+                ""
+              ]
+            ],
+            "text": "Only rows marked open now are connections; the rest are names found in the binary, the config or local logs (counted over at most the first 256 MB of logs)."
+          },
+          {
+            "headers": [
+              "Trait",
+              "Value"
+            ],
+            "links": [],
+            "question": "What does it look like on the network?",
+            "rows": [
+              [
+                "Data folder",
+                "`~/.t3, or T3CODE_HOME`"
+              ],
+              [
+                "Account token",
+                "`__clerk_client_jwt in userdata/clerk-tokens.json`"
+              ],
+              [
+                "Server keys",
+                "`server-signing-key, cloud-link-ed25519-key-pair in userdata/secrets`"
+              ],
+              [
+                "Background service",
+                "`launchd agent com.t3tools.t3code.service`"
+              ],
+              [
+                "Permission modes",
+                "`approval-required, auto-accept-edits, full-access (default for new threads)`"
+              ]
+            ],
+            "text": "Each trait was found in the installed binary, which is not code-signed."
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "Which instruction files does it load, and what could they do?",
+            "rows": [],
+            "text": "None found in the global location or in known project folders."
+          },
+          {
+            "headers": [
+              "Kind",
+              "Count",
+              "Start automatically"
+            ],
+            "links": [
+              [
+                "mcp",
+                "MCP servers"
+              ],
+              [
+                "skills",
+                "Skills"
+              ],
+              [
+                "plugins",
+                "Plugins"
+              ]
+            ],
+            "question": "Which skills, plugins and MCP servers are loaded?",
+            "rows": [
+              [
+                "service",
+                "1",
+                "1"
+              ]
+            ],
+            "text": "What each one says it does is on the pages linked below."
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "Which of its processes run detached or accept connections?",
+            "rows": [],
+            "text": "No process of this tool is detached from a session or listening."
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "Am I in the provider's trusted-access program?",
+            "rows": [],
+            "text": "Not applicable to this tool."
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "What does my trust list let a cloned repo do?",
+            "rows": [],
+            "text": "This tool keeps no trusted-folder list, or none are trusted."
+          },
+          {
+            "headers": [
+              "Fact",
+              "Source"
+            ],
+            "links": [],
+            "question": "Is my data used for training, and what is copied to the cloud?",
+            "rows": [
+              [
+                "T3CODE_TELEMETRY_ENABLED is not set; the installed app reads it and names ingest.t3.codes.",
+                "markers in the installed app; environment and ~/.t3/service.env"
+              ],
+              [
+                "T3 Code's FAQ says usage events (provider, model, token totals) are sent unless it is false.",
+                "markers in the installed app; environment and ~/.t3/service.env"
+              ]
+            ],
+            "text": ""
+          },
+          {
+            "headers": [
+              "Fact",
+              "Source"
+            ],
+            "links": [],
+            "question": "How do I revoke this token, and how would I prove it?",
+            "rows": [
+              [
+                "Paired clients are revoked in Settings → Sharing & access or with `t3 auth`; revoking a client does not sign the T3 account out.",
+                "markers in the installed app"
+              ],
+              [
+                "The stored T3 account token's exp claim is <TIME>.",
+                "~/.t3/userdata/clerk-tokens.json"
+              ]
+            ],
+            "text": ""
+          },
+          {
+            "headers": [
+              "Fact",
+              "Source"
+            ],
+            "links": [],
+            "question": "Would I notice if someone else used it?",
+            "rows": [
+              [
+                "Paired desktop client (bearer-access-token) with 1 scope; last connected <TIME>.",
+                "~/.t3/userdata/statev2.sqlite auth_sessions"
+              ]
+            ],
+            "text": ""
+          }
+        ],
+        "headline": [
+          "T3 Code 0.1.5 holds 1 credential for T3 account (Clerk) and 37 KB of conversations and prompt history.",
+          "Anything that runs as you can take all of them without a prompt.",
+          "T3 Code skips approval prompts in some sessions, so in those sessions a web page, repo file or tool result that steers the model can become code running on this machine.",
+          "guest, another account on this machine, can already read or plant part of this.",
+          "Related data is also kept elsewhere: work shared with provider services.",
+          "1 of these credentials has no recorded expiry."
+        ],
+        "lenses": [
+          {
+            "lens": "remote",
+            "points": [
+              {
+                "exposure_id": "",
+                "text": "T3 account (Clerk) login (plaintext file): no scopes recorded. No recorded expiry.",
+                "tool": "T3 Code"
+              }
+            ]
+          },
+          {
+            "lens": "code",
+            "points": [
+              {
+                "exposure_id": "t3code:creds-plaintext",
+                "text": "T3 Code keeps credentials for T3 Code server keys, T3 account (Clerk) in plaintext (~/.t3/userdata/clerk-tokens.json, ~/.t3/userdata/secrets). Any program running as you can copy them.",
+                "tool": "T3 Code"
+              },
+              {
+                "exposure_id": "t3code:autostart",
+                "text": "T3 Code is set up to run local code automatically from 1 place (1 background service). Whoever can change those commands, or the files they run, controls code that runs as you.",
+                "tool": "T3 Code"
+              }
+            ]
+          },
+          {
+            "lens": "model",
+            "points": [
+              {
+                "exposure_id": "t3code:no-approval",
+                "text": "T3 Code skips approval prompts in some sessions (threads with runtime_mode=full-access: 2 of 3 threads). In those sessions, text that reaches the model (a web page, a repo file, an MCP result, an instruction file) can become commands running as you, limited only by the sandbox, deny rules and hooks that still apply.",
+                "tool": "T3 Code"
+              }
+            ]
+          },
+          {
+            "lens": "account",
+            "points": [
+              {
+                "exposure_id": "t3code:creds-readable",
+                "text": "guest can read 1 T3 Code credential(s) (T3 account (Clerk)) straight from ~/.t3/userdata/clerk-tokens.json.",
+                "tool": "T3 Code"
+              },
+              {
+                "exposure_id": "t3code:data-readable",
+                "text": "guest can read 1 T3 Code data stores, including state db.",
+                "tool": "T3 Code"
+              }
+            ]
+          },
+          {
+            "lens": "copies",
+            "points": [
+              {
+                "exposure_id": "t3code:account-data",
+                "text": "T3CODE_TELEMETRY_ENABLED is not set; the installed app reads it and names ingest.t3.codes. T3 Code's FAQ says usage events (provider, model, token totals) are sent unless it is false.",
+                "tool": "T3 Code"
               }
             ]
           }

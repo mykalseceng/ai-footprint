@@ -12,6 +12,7 @@ import pytest
 
 from ai_footprint import cli, fsinfo
 from ai_footprint.audit import detect_tools, run_audit
+from ai_footprint.harnesses import registry
 from ai_footprint.model import (
     Artifact,
     AuditReport,
@@ -421,4 +422,4 @@ def test_collect_detects_by_itself_when_no_presence_is_given(tmp_path: Path):
     (tmp_path / ".claude").mkdir()
     audit, _checklist = run_audit(system=QuietFakeSystem(), home=tmp_path, scan=False)
     installed = {t.name: t.installed for t in audit.tools}
-    assert installed == {"claude": True, "codex": False, "opencode": False, "pi": False}
+    assert installed == {name: name == "claude" for name in registry()}

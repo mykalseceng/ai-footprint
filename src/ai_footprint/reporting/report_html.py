@@ -706,18 +706,27 @@ def _keys_view(audit: AuditReport, views: Views) -> str:
 
 
 def _checklist_view(checklist: Checklist) -> str:
-    rows = [
-        [
-            e(c.scope),
-            _check_status(c),
-            e(c.check),
-            e(" ".join(x.statement for x in c.found)[:260] or c.unchecked),
+    """One table per scope (each tool, then the host), so the page grows with harnesses."""
+    scopes = list(dict.fromkeys(c.scope for c in checklist))
+    tables = []
+    for scope in scopes:
+        rows = [
+            [
+                _check_status(c),
+                e(c.check),
+                breakable(" ".join(x.statement for x in c.found)[:260] or c.unchecked),
+            ]
+            for c in checklist
+            if c.scope == scope
         ]
-        for c in checklist
-    ]
+        tables.append(f"<p class='sub'>{e(scope)}</p>")
+        tables.append(
+            table(["Status", "Check", "What was found, or why not checked"], rows, raw=True)
+        )
+    body = "\n".join(tables)
     return f"""<section class="view" id="checklist">
 <header><div class="eyebrow">Same checks as ai-footprint --doctor</div><h1>Checklist</h1></header>
-{table(["Scope", "Status", "Check", "What was found, or why not checked"], rows, raw=True)}
+{body}
 </section>"""
 
 

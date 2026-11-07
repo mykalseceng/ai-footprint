@@ -59,7 +59,8 @@ def _no_code_remedy(action: Remedy, where: RemedyContext, args: Mapping[str, str
 def resolve_roots(ctx: Context, profile: Profile) -> dict[str, Path]:
     """Each root as a path: the environment override when set, else the default.
 
-    ``~`` means the audited home, so tests and ``--home`` audit a different folder.
+    ``~`` means the audited home, so tests and ``--home`` audit a different folder, and an
+    absolute default is read under the system's root, so tests never see this machine's apps.
     """
     out = {}
     for name, root in profile.roots.items():
@@ -67,6 +68,8 @@ def resolve_roots(ctx: Context, profile: Profile) -> dict[str, Path]:
         if base == "~" or base.startswith("~/"):
             base = str(ctx.home) + base[1:]
         path = Path(base)
+        if path.is_absolute() and base == root.default:
+            path = ctx.system.root / path.relative_to("/")
         out[name] = path / root.child if root.child else path
     return out
 

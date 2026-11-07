@@ -258,6 +258,62 @@ pi
              → Check active sessions and devices, then revoke what you do not recognise
                Review signed-in sessions and paired devices in the provider's security settings
                  manual step (not machine-checkable)
+T3 Code
+  REVIEW   Approval not turned off by a recorded setting
+             T3 Code skips approval prompts in some sessions (threads with runtime_mode=full-access:
+             2 of 3 threads). In those sessions, text that reaches the model (a web page, a repo
+             file, an MCP result, an instruction file) can become commands running as you, limited
+             only by the sandbox, deny rules and hooks that still apply.
+             → Require approval for new and existing threads
+               Set Settings → Threads → New threads → Permissions to Supervised, and switch each full-access thread to Supervised in the composer
+                 ✓ config keys confirmed in installed binary
+  clear    Instruction files contain nothing that steers the model
+  not checked  Token carries no connector scopes (no stored token records its scopes)
+  not checked  No sessions published to share links (this audit records no share setting for T3 Code)
+  not checked  Keychain item requires a prompt (no credential is stored in the Keychain)
+  REVIEW   Credentials in an OS-protected store
+             T3 Code keeps credentials for T3 Code server keys, T3 account (Clerk) in plaintext
+             (~/.t3/userdata/clerk-tokens.json, ~/.t3/userdata/secrets). Any program running as you
+             can copy them.
+             → Sign out where you do not use T3 Connect
+               Sign out in Settings → Sharing & access if you do not use T3 Connect, then chmod 600 ~/.t3/userdata/clerk-tokens.json
+                 ✓ config keys confirmed in installed binary
+  clear    No secrets in history or logs (full audit only)
+  not checked  No MCP server command points at a missing file (no local MCP server command to check)
+  REVIEW   No automatic code execution points
+             T3 Code is set up to run local code automatically from 1 place (1 background service).
+             Whoever can change those commands, or the files they run, controls code that runs as
+             you.
+             → Monitor these files for changes
+               Add the listed scripts and config files to file-integrity monitoring
+                 manual step (not machine-checkable)
+  clear    No process outlives its session or accepts connections from other accounts or the network
+  clear    One install per tool
+  REVIEW   Credentials not readable by other accounts
+             guest can read 1 T3 Code credential(s) (T3 account (Clerk)) straight from
+             ~/.t3/userdata/clerk-tokens.json.
+             → Restrict the files, then rotate the credentials
+               $ chmod 600 <HOME>/.t3/userdata/clerk-tokens.json
+                 ✗ program 'chmod': not found on PATH
+               $ chmod 700 <HOME>/.t3/userdata
+                 ✗ program 'chmod': not found on PATH
+               Rotate every credential listed: assume it was copied
+                 manual step (not machine-checkable)
+  REVIEW   Data stores not readable by other accounts
+             guest can read 1 T3 Code data stores, including state db.
+             → Restrict permissions (re-check after updates)
+               $ chmod 600 <HOME>/.t3/userdata/statev2.sqlite
+                 ✗ program 'chmod': not found on PATH
+  not checked  Local server requires authentication (this audit records no local server for T3 Code)
+  not checked  No broad trusted folders and none holding instruction files (no trusted folders are recorded)
+  REVIEW   Provider keeps no extra copies (training, cloud tasks)
+             T3CODE_TELEMETRY_ENABLED is not set; the installed app reads it and names
+             ingest.t3.codes. T3 Code's FAQ says usage events (provider, model, token totals) are
+             sent unless it is false.
+             → Turn off usage events
+               Set T3CODE_TELEMETRY_ENABLED=false in your shell profile and in ~/.t3/service.env
+                 ✓ config keys confirmed in installed binary
+  clear    No paired devices or unused stored logins
 Host
   clear    PATH folders ahead of system dirs are not writable by others
   clear    Tool binaries are in folders only you can write
@@ -279,13 +335,17 @@ Host
   clear    Agents inherit no other credentials
   clear    Nothing else can drive the computer
   clear    AI-tool history is not copied into backups
-  clear    No long-running or orphaned AI processes
+  REVIEW   No long-running or orphaned AI processes
+             These keep running as you when you are not there: 1 login item.
+             → Stop processes that outlived their sessions
+               Quit listed processes you no longer use; remove login items you do not want
+                 manual step (not machine-checkable)
   clear    No other AI tools keep data here
 
 Probe binaries: 0/0 verified (absolute path, not group/other-writable, Apple-signed on macOS)
-Fix commands:   14/43 validated (syntax, programs, targets, subcommands, config keys)
-Tool claims:    0/4 found in the installed binaries (endpoints, signature traits, config keys, log and behaviour markers)
-Commands run by this audit: 33 (probes and --version/--help runs)
+Fix commands:   18/50 validated (syntax, programs, targets, subcommands, config keys)
+Tool claims:    15/32 found in the installed binaries (endpoints, signature traits, config keys, log and behaviour markers)
+Commands run by this audit: 38 (probes and --version/--help runs)
   ✗ claude mcp remove ghost -s user → program 'claude': not found on PATH; claude installed: binary not found; cannot confirm
   ✗ Add cli_auth_credentials_store = "keyring" to ~/.codex/config.toml → codex binary: not installed; cannot confirm
   ✗ codex logout → program 'codex': not found on PATH; codex installed: binary not found; cannot confirm
@@ -314,10 +374,14 @@ Commands run by this audit: 33 (probes and --version/--help runs)
   ✗ chmod 600 <HOME>/.pi/agent/settings.json → program 'chmod': not found on PATH
   ✗ chmod 600 <HOME>/.pi/agent/trust.json → program 'chmod': not found on PATH
   ✗ chmod 700 <HOME>/.pi/agent/sessions → program 'chmod': not found on PATH
+  ✗ chmod 600 <HOME>/.t3/userdata/clerk-tokens.json → program 'chmod': not found on PATH
+  ✗ chmod 700 <HOME>/.t3/userdata → program 'chmod': not found on PATH
+  ✗ chmod 600 <HOME>/.t3/userdata/statev2.sqlite → program 'chmod': not found on PATH
   ✗ sudo sysadminctl -deleteUser guest → program 'sysadminctl': not found on PATH
   ✗ claims about Claude Code ? → binary on PATH: not found; claims unchecked
   ✗ claims about Codex CLI ? → binary on PATH: not found; claims unchecked
   ✗ claims about OpenCode ? → binary on PATH: not found; claims unchecked
   ✗ claims about pi ? → binary on PATH: not found; claims unchecked
-Result: 32 to review · 27 clear · 19 not checked  (exit 1)
+  ✗ claims about T3 Code 0.1.5 → endpoint relay.t3.codes: 'relay.t3.codes': absent from binary; endpoint clerk.com: 'clerk.com': absent from binary; endpoint clerk-telemetry.com: 'clerk-telemetry.com': absent from binary; setting runtime_mode: 'runtime_mode': absent from binary; setting auth_pairing_links: 'auth_pairing_links': absent from binary; setting peer_environment_links: 'peer_environment_links': absent from binary; setting scheduled_tasks: 'scheduled_tasks': absent from binary; env T3CODE_HOST: 'T3CODE_HOST': absent from binary; env T3CODE_PORT: 'T3CODE_PORT': absent from binary; env T3CODE_TAILSCALE_SERVE: 'T3CODE_TAILSCALE_SERVE': absent from binary; env T3CODE_RELAY_URL: 'T3CODE_RELAY_URL': absent from binary; env T3CODE_OTLP_TRACES_URL: 'T3CODE_OTLP_TRACES_URL': absent from binary; env T3CODE_DISABLE_AUTO_UPDATE: 'T3CODE_DISABLE_AUTO_UPDATE': absent from binary
+Result: 39 to review · 31 clear · 25 not checked  (exit 1)
 Secret scan skipped in doctor mode; run without --doctor for the full audit.

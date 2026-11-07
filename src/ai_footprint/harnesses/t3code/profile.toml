@@ -1,0 +1,307 @@
+# t3code: what ai-footprint knows about this harness. Schema: harnesses/profile.py.
+#
+# T3 Code is a desktop app (Electron) and local server that drives other coding agents
+# (Claude Code, Codex, OpenCode, pi and others) with their own logins. Its CLI, `t3`, is
+# the same app run as Node: ~/.t3/bin/t3 execs the bundle's apps/server/dist/bin.mjs.
+name = "t3code"
+display_name = "T3 Code"
+binaries = []
+process = "T3 Code|t3code|apps/server/dist/bin\\.mjs|/\\.t3/bin/t3"
+presence = ["{home}"]
+process_words = ["t3code", "t3 code", "/.t3/"]
+capabilities = ["account-signals"]
+settings = ["runtime_mode", "auth_sessions", "auth_pairing_links", "peer_environment_links", "scheduled_tasks"]
+env = [
+  "T3CODE_HOME",
+  "T3CODE_TELEMETRY_ENABLED",
+  "T3CODE_HOST",
+  "T3CODE_PORT",
+  "T3CODE_TAILSCALE_SERVE",
+  "T3CODE_RELAY_URL",
+  "T3CODE_OTLP_TRACES_URL",
+  "T3CODE_DISABLE_AUTO_UPDATE",
+]
+
+[roots]
+home = { env = "T3CODE_HOME", default = "~/.t3" }
+support = { default = "~/Library/Application Support/t3code-v2" }
+launch_agents = { default = "~/Library/LaunchAgents" }
+user_apps = { default = "~/Applications" }
+system_apps = { default = "/Applications" }
+
+[drives]
+claudeAgent = "claude"
+codex = "codex"
+opencode = "opencode"
+pi = "pi"
+
+[signals]
+approval_off_flagged = ["threads with runtime_mode=full-access"]
+
+[[artifacts]]
+label = "Account token"
+path = "{home}/userdata/clerk-tokens.json"
+category = "credential"
+description = "Clerk client JWT for the T3 account (T3 Connect sign-in), plaintext"
+
+[[artifacts]]
+label = "Server keys"
+path = "{home}/userdata/secrets"
+category = "credential"
+description = "Server, MCP OAuth and asset signing keys, request salt, cloud-link Ed25519 key pair"
+
+[[artifacts]]
+label = "State DB"
+path = "{home}/userdata/statev2.sqlite"
+category = "session"
+description = "Threads, messages and tool output, paired client sessions, pairing links, scheduled tasks"
+
+[[artifacts]]
+label = "Server owner DB"
+path = "{home}/userdata/server-owner.sqlite"
+category = "session"
+description = "Which process owns the local server"
+
+[[artifacts]]
+label = "Attachments"
+path = "{home}/userdata/attachments"
+category = "session"
+description = "Files attached to prompts"
+
+[[artifacts]]
+label = "Logs"
+path = "{home}/userdata/logs"
+category = "log"
+description = "Server and desktop traces, provider and terminal logs"
+
+[[artifacts]]
+label = "Client settings"
+path = "{home}/userdata/client-settings.json"
+category = "config"
+description = "App preferences, browser profiles, notifications"
+
+[[artifacts]]
+label = "Desktop settings"
+path = "{home}/userdata/desktop-settings.json"
+category = "config"
+description = "Window state"
+
+[[artifacts]]
+label = "Install identifiers"
+path = "{home}/userdata/anonymous-id"
+category = "config"
+description = "Stable anonymous id sent with usage events"
+
+[[artifacts]]
+label = "Environment id"
+path = "{home}/userdata/environment-id"
+category = "config"
+description = "Id of this machine as a T3 environment"
+
+[[artifacts]]
+label = "Model manifest"
+path = "{home}/userdata/model-manifest.json"
+category = "cache"
+description = "Models each provider offers"
+
+[[artifacts]]
+label = "Provider caches"
+path = "{home}/caches"
+category = "cache"
+description = "Per-provider model catalogs and pull-request cache"
+
+[[artifacts]]
+label = "Worktrees"
+path = "{home}/worktrees"
+category = "session"
+description = "Git worktrees threads work in"
+
+[[artifacts]]
+label = "Service environment"
+path = "{home}/service.env"
+category = "config"
+description = "Variables for the background service; may hold credentials"
+
+[[artifacts]]
+label = "CLI launcher"
+path = "{home}/bin"
+category = "binary"
+description = "t3 launcher that runs the desktop app's bundled CLI"
+
+[[artifacts]]
+label = "Background service"
+path = "{launch_agents}/com.t3tools.t3code.service.plist"
+category = "extension"
+description = "launchd agent that starts the T3 server at login"
+
+[[artifacts]]
+label = "Browser profile"
+path = "{support}"
+category = "session"
+description = "Electron profile: cookies, local storage, IndexedDB"
+
+[[endpoints]]
+host = "app.t3.codes"
+purpose = "Web app and hosted pairing page"
+
+[[endpoints]]
+host = "relay.t3.codes"
+purpose = "T3 Connect relay (sets up remote connections)"
+
+[[endpoints]]
+host = "ingest.t3.codes"
+purpose = "Product usage events"
+
+[[endpoints]]
+host = "clerk.com"
+purpose = "T3 account sign-in (Clerk)"
+
+[[endpoints]]
+host = "clerk-telemetry.com"
+purpose = "Clerk SDK telemetry"
+
+[[fingerprint]]
+label = "Data folder"
+value = "~/.t3, or T3CODE_HOME"
+marker = "T3CODE_HOME"
+
+[[fingerprint]]
+label = "Account token"
+value = "__clerk_client_jwt in userdata/clerk-tokens.json"
+marker = "__clerk_client_jwt"
+
+[[fingerprint]]
+label = "Server keys"
+value = "server-signing-key, cloud-link-ed25519-key-pair in userdata/secrets"
+marker = "cloud-link-ed25519-key-pair"
+
+[[fingerprint]]
+label = "Background service"
+value = "launchd agent com.t3tools.t3code.service"
+marker = "com.t3tools.t3code.service"
+
+[[fingerprint]]
+label = "Permission modes"
+value = "approval-required, auto-accept-edits, full-access (default for new threads)"
+marker = "full-access"
+
+[remedies.require-approval]
+summary = "Require approval for new and existing threads"
+commands = [
+  { manual = "Set Settings → Threads → New threads → Permissions to Supervised, and switch each full-access thread to Supervised in the composer", markers = ["Supervised", "approval-required"] },
+]
+
+[remedies.stop-daemons]
+summary = "Stop the background service and remove it from login"
+commands = [
+  { manual = "Run ~/.t3/bin/t3 service uninstall", markers = ["service uninstall"] },
+]
+
+[remedies.protect-credentials]
+summary = "Sign out where you do not use T3 Connect"
+commands = [
+  { manual = "Sign out in Settings → Sharing & access if you do not use T3 Connect, then chmod 600 ~/.t3/userdata/clerk-tokens.json", markers = ["Sharing & access"] },
+]
+
+[remedies.data-controls]
+summary = "Turn off usage events"
+commands = [
+  { manual = "Set T3CODE_TELEMETRY_ENABLED=false in your shell profile and in ~/.t3/service.env", markers = ["T3CODE_TELEMETRY_ENABLED"] },
+]
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/README.md"
+topic = "overview, supported providers, install"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/permission-modes.md"
+topic = "permission modes"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/remote-access.md"
+topic = "T3 Connect, network access, Tailscale, SSH, pairing, scopes"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/background-service.md"
+topic = "launchd service, service.env"
+
+[[docs]]
+url = "https://github.com/pingdotgg/t3code/blob/main/docs/user/faq.md"
+topic = "telemetry, where code and prompts go"
+
+[[features]]
+kind = "setting"
+name = "runtime_mode"
+summary = "Per-thread permission mode; full-access runs commands and edits without approval and is the default"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/permission-modes.md"
+marker = "full-access"
+checks = ["no-approval"]
+
+[[features]]
+kind = "integration"
+name = "pairing"
+summary = "One-time pairing links issue bearer sessions; without --scope they carry every permission"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/remote-access.md"
+marker = "auth_pairing_links"
+checks = ["account-signals"]
+
+[[features]]
+kind = "integration"
+name = "T3 Connect"
+summary = "Links this machine to a T3 account so paired devices reach it through a Cloudflare tunnel"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/remote-access.md"
+marker = "relay.t3.codes"
+checks = ["account-signals"]
+
+[[features]]
+kind = "env"
+name = "T3CODE_TAILSCALE_SERVE"
+summary = "Serves the T3 server over Tailscale HTTPS"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/remote-access.md"
+marker = "T3CODE_TAILSCALE_SERVE"
+
+[[features]]
+kind = "env"
+name = "T3CODE_HOST"
+summary = "Address the server listens on; a LAN address exposes it to the network"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/background-service.md"
+marker = "T3CODE_HOST"
+checks = ["daemons"]
+
+[[features]]
+kind = "path"
+name = "~/Library/LaunchAgents/com.t3tools.t3code.service.plist"
+summary = "Background service that starts the server at login"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/background-service.md"
+marker = "com.t3tools.t3code.service"
+checks = ["autostart", "daemons"]
+
+[[features]]
+kind = "path"
+name = "~/.t3/service.env"
+summary = "Environment for the background service; the docs say to chmod 600 it if it holds credentials"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/background-service.md"
+marker = "service.env"
+checks = ["data-readable"]
+
+[[features]]
+kind = "env"
+name = "T3CODE_TELEMETRY_ENABLED"
+summary = "false turns off product usage events"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/faq.md"
+marker = "T3CODE_TELEMETRY_ENABLED"
+checks = ["account-data"]
+
+[[features]]
+kind = "subcommand"
+name = "auth"
+summary = "Inspect sessions, manage pairing credentials, revoke access"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/remote-access.md"
+marker = "t3 auth"
+
+[[features]]
+kind = "integration"
+name = "scheduled tasks"
+summary = "Prompts that run on a schedule or from a webhook, without anyone at the keyboard"
+marker = "scheduled_tasks"
+checks = ["autostart"]

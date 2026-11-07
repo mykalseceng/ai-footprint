@@ -24,6 +24,7 @@ from tests.conftest import (
     build_codex_home,
     build_opencode_home,
     build_pi_home,
+    build_t3code_home,
 )
 
 GOLDEN = Path(__file__).parent / "golden"
@@ -70,6 +71,7 @@ def outputs(home: Path) -> dict[str, str]:
     build_codex_home(home)
     build_opencode_home(home)
     build_pi_home(home)
+    build_t3code_home(home)
     system = QuietFakeSystem(other_users=("guest",))
     audit, checklist = run_audit(system=system, home=home, scan=True, workers=1)
     data = document.build(audit, checklist)

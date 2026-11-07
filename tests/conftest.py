@@ -30,7 +30,10 @@ class FakeSystem(System):
         self, *, path: str = "", platform: str = "darwin", other_users: tuple[str, ...] = ()
     ) -> None:
         super().__init__(
-            platform=platform, env={"PATH": path, "HOME": "/nonexistent"}, verify_signatures=False
+            platform=platform,
+            env={"PATH": path, "HOME": "/nonexistent"},
+            verify_signatures=False,
+            root=Path("/nonexistent-root"),
         )
         self.other_users = other_users
         self.responders: list[Responder] = []
@@ -252,3 +255,93 @@ def build_pi_home(home: Path) -> None:
     (session / "2026-04-28T21-31-55-615Z_abc.jsonl").write_text(
         json.dumps({"type": "session", "cwd": str(home / "elsewhere")}) + "\n"
     )
+
+
+T3_MARKERS = (
+    "T3CODE_HOME",
+    "T3CODE_TELEMETRY_ENABLED",
+    "__clerk_client_jwt",
+    "cloud-link-ed25519-key-pair",
+    "com.t3tools.t3code.service",
+    "full-access",
+    "approval-required",
+    "Supervised",
+    "auth_sessions",
+    "t3 auth",
+    "Sharing & access",
+    "service uninstall",
+    "ingest.t3.codes",
+    "app.t3.codes",
+)
+
+
+def _t3_db(path: Path, *, threads: list[str], sessions: list[tuple[str, str]]) -> None:
+    """A state DB with the tables and columns the T3 Code collector reads."""
+    with sqlite3.connect(path) as conn:
+        conn.executescript(
+            "CREATE TABLE orchestration_v2_projection_threads"
+            " (thread_id text, runtime_mode text, deleted_at text);"
+            "CREATE TABLE orchestration_v2_projection_messages (message_id text);"
+            "CREATE TABLE projection_projects (project_id text, deleted_at text);"
+            "CREATE TABLE auth_sessions (client_device_type text, method text, scopes text,"
+            " last_connected_at text, revoked_at text, expires_at text);"
+            "CREATE TABLE auth_pairing_links"
+            " (consumed_at text, revoked_at text, expires_at text);"
+            "CREATE TABLE peer_environment_links (environment_id text);"
+            "CREATE TABLE scheduled_tasks (title text, enabled integer);"
+            "CREATE TABLE provider_session_runtime (provider_name text);"
+        )
+        conn.executemany(
+            "INSERT INTO orchestration_v2_projection_threads VALUES (?, ?, NULL)",
+            [(f"t{i}", mode) for i, mode in enumerate(threads)],
+        )
+        conn.executemany(
+            "INSERT INTO provider_session_runtime VALUES ('claudeAgent')", [()] * len(threads)
+        )
+        conn.executemany(
+            "INSERT INTO auth_sessions VALUES (?, 'bearer-access-token', ?,"
+            " '2026-11-01T10:00:00Z', NULL, '2999-01-01')",
+            sessions,
+        )
+        conn.execute("INSERT INTO projection_projects VALUES ('p1', NULL)")
+
+
+def build_t3code_home(
+    home: Path,
+    *,
+    threads: tuple[str, ...] = ("full-access", "full-access", "approval-required"),
+    sessions: tuple[tuple[str, str], ...] = (("desktop", '["orchestration:read"]'),),
+) -> Path:
+    """T3 Code data folder, an app bundle in ~/Applications and its launchd agent.
+
+    Returns:
+        The app bundle's JavaScript archive, where markers are searched.
+    """
+    import plistlib  # noqa: PLC0415 - only this fixture writes property lists
+
+    userdata = home / ".t3" / "userdata"
+    (userdata / "secrets").mkdir(parents=True)
+    (userdata / "secrets").chmod(0o700)
+    for name in ("server-signing-key", "cloud-link-ed25519-key-pair"):
+        key = userdata / "secrets" / f"{name}.bin"
+        key.write_bytes(b"\x01" * 32)
+        key.chmod(0o600)
+    token = make_jwt({"sub": "user_1", "exp": int(time.time()) + 3600}, sign=False)
+    (userdata / "clerk-tokens.json").write_text(json.dumps({"__clerk_client_jwt": token}))
+    (userdata / "clerk-tokens.json").chmod(0o644)
+    _t3_db(userdata / "statev2.sqlite", threads=list(threads), sessions=list(sessions))
+    app = home / "Applications" / "T3 Code.app" / "Contents"
+    (app / "Resources").mkdir(parents=True)
+    (app / "MacOS").mkdir()
+    (app / "MacOS" / "T3 Code").write_text("#!/bin/sh\n")
+    (app / "Info.plist").write_bytes(
+        plistlib.dumps({"CFBundleExecutable": "T3 Code", "CFBundleShortVersionString": "0.1.5"})
+    )
+    asar = app / "Resources" / "app.asar"
+    asar.write_bytes(b"\0".join(m.encode() for m in T3_MARKERS))
+    agents = home / "Library" / "LaunchAgents"
+    agents.mkdir(parents=True)
+    (agents / "com.t3tools.t3code.service.plist").write_bytes(
+        plistlib.dumps({"ProgramArguments": [str(home / ".t3/bin/t3"), "serve"], "RunAtLoad": True})
+    )
+    return asar
