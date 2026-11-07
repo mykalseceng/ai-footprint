@@ -197,3 +197,15 @@ def test_version_note_ignores_the_node_version_in_a_launcher_path():
     assert daemons._notes(
         proc, "/Users/me/.nvm/versions/node/v24.14.1/bin/opencode.exe", report
     ) == ["runs /Users/me/.nvm/versions/node/v24.14.1/bin/opencode.exe, not the binary on PATH"]
+
+
+def test_an_installed_app_started_by_launchd_is_the_app_not_a_daemon():
+    app = "/Applications/Demo.app/Contents/MacOS/Demo"
+    report = ToolReport(name="demo", display_name="Demo", installed=True)
+    report.binaries = [BinaryInfo(app, "/Applications/Demo.app/Contents/Resources/app.asar")]
+    report.processes = [
+        ProcessInfo(pid=10, started="Mon Oct 12 09:00:00 2026", command=app, ppid=1),
+        ProcessInfo(pid=11, started="Mon Oct 12 09:00:00 2026", command="/x/server.js", ppid=1),
+    ]
+    found = daemons.collect(Context(home=Path("/none"), system=FakeSystem(), now=0), report)
+    assert [d.pid for d in found] == [11]

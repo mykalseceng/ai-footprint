@@ -49,6 +49,15 @@ def _notes(proc: ProcessInfo, binary: str, report: ToolReport) -> list[str]:
     return notes
 
 
+def _app_executables(report: ToolReport) -> tuple[str, ...]:
+    """Main executables of the tool's installed app bundles.
+
+    macOS starts every app through launchd, so the running app itself has no session
+    parent; it is the app, not a process left behind.
+    """
+    return tuple(b.path for b in report.binaries if ".app/Contents/MacOS/" in b.path)
+
+
 def collect(ctx: Context, report: ToolReport) -> list[Daemon]:
     """Daemons among the tool's processes, newest listeners attached."""
     if not report.processes:
@@ -58,8 +67,9 @@ def collect(ctx: Context, report: ToolReport) -> list[Daemon]:
         by_pid.setdefault(pid, []).append(listener)
     now = datetime.datetime.now()
     out = []
+    apps = _app_executables(report)
     for proc in report.processes:
-        detached = proc.ppid == 1
+        detached = proc.ppid == 1 and not proc.command.startswith(apps)
         if not detached and proc.pid not in by_pid:
             continue
         started = started_at(proc)
