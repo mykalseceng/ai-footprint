@@ -116,6 +116,18 @@ TOOL_RULES: tuple[Rule, ...] = (
         needs.needs_data_notes,
     ),
     Rule(
+        "usage-data",
+        "No usage data sent to the vendor",
+        provider_copies.rule_usage_data,
+        needs.needs_usage_notes,
+    ),
+    Rule(
+        "other-logins",
+        "Usage data carries no id read from another tool's login",
+        provider_copies.rule_other_logins,
+        needs.needs_usage_notes,
+    ),
+    Rule(
         "remote-control",
         "Remote control of this machine is off",
         stolen_token.rule_remote_control,

@@ -519,6 +519,50 @@ commands = [
   { manual = "Turn off model training at claude.ai/settings/data-privacy-controls and disconnect unused connectors" },
 ]
 
+[remedies.telemetry-off]
+summary = "Turn off usage metrics and error reports"
+commands = [
+  { manual = "Add \"DISABLE_TELEMETRY\": \"1\" and \"DISABLE_ERROR_REPORTING\": \"1\" to the env block of ~/.claude/settings.json; DISABLE_TELEMETRY also stops feature flags, which can make Remote Control unavailable", markers = ["DISABLE_TELEMETRY", "DISABLE_ERROR_REPORTING"] },
+]
+
+[[telemetry]]
+label = "Usage metrics"
+host = "api.anthropic.com and Datadog"
+sends = "latency, reliability and usage patterns, which Anthropic's docs say never include code, prompts or file paths"
+identity = "a random device id and, when signed in, your Claude account and organization UUIDs, plan and organization role"
+default = "on"
+markers = ["/api/event_logging/", "organizationUUID", "DISABLE_TELEMETRY"]
+switches = [
+  { name = "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", off = ["*"] },
+  { name = "DISABLE_TELEMETRY", off = ["*"] },
+  { name = "DO_NOT_TRACK", off = ["1", "true", "yes", "on"] },
+  { name = "CLAUDE_CODE_USE_BEDROCK", off = ["1", "true", "yes", "on"] },
+  { name = "CLAUDE_CODE_USE_VERTEX", off = ["1", "true", "yes", "on"] },
+  { name = "CLAUDE_CODE_USE_FOUNDRY", off = ["1", "true", "yes", "on"] },
+  { name = "CLAUDE_CODE_USE_ANTHROPIC_AWS", off = ["1", "true", "yes", "on"] },
+]
+doc = "https://code.claude.com/docs/en/data-usage"
+
+[[telemetry]]
+label = "Error reports"
+host = "a third-party error tracker"
+sends = "error messages and stack traces from Claude Code's own code, with known secret patterns, file paths and email addresses redacted first"
+identity = "not stated in Anthropic's docs"
+default = "off"
+markers = ["DISABLE_ERROR_REPORTING", "claude_max"]
+switches = [
+  { name = "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", off = ["*"] },
+  { name = "DISABLE_ERROR_REPORTING", off = ["*"] },
+  { name = "CLAUDE_CODE_USE_BEDROCK", off = ["1", "true", "yes", "on"] },
+  { name = "CLAUDE_CODE_USE_VERTEX", off = ["1", "true", "yes", "on"] },
+  { name = "CLAUDE_CODE_USE_FOUNDRY", off = ["1", "true", "yes", "on"] },
+  { name = "CLAUDE_CODE_USE_ANTHROPIC_AWS", off = ["1", "true", "yes", "on"] },
+  { name = "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD", off = ["1", "true", "yes", "on"] },
+  { name = "CLAUDE_CODE_USE_MANTLE", off = ["1", "true", "yes", "on"] },
+  { name = "oauthAccount.organizationType", on = ["claude_pro", "claude_max"] },
+]
+doc = "https://code.claude.com/docs/en/data-usage"
+
 [[docs]]
 url = "https://code.claude.com/docs/en/settings"
 topic = "settings files, scopes and precedence"
@@ -954,6 +998,7 @@ name = "DISABLE_TELEMETRY"
 summary = "Opts out of telemetry and feature-flag fetching"
 doc = "https://code.claude.com/docs/en/env-vars"
 marker = "DISABLE_TELEMETRY"
+checks = ["usage-data"]
 
 [[features]]
 kind = "env"
@@ -961,6 +1006,7 @@ name = "DISABLE_ERROR_REPORTING"
 summary = "Opts out of error reporting"
 doc = "https://code.claude.com/docs/en/env-vars"
 marker = "DISABLE_ERROR_REPORTING"
+checks = ["usage-data"]
 
 [[features]]
 kind = "env"
@@ -968,6 +1014,7 @@ name = "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
 summary = "Turns off updates, telemetry, error reporting and other nonessential traffic"
 doc = "https://code.claude.com/docs/en/env-vars"
 marker = "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
+checks = ["usage-data"]
 
 [[features]]
 kind = "subcommand"

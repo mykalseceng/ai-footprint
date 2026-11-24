@@ -155,12 +155,18 @@ def default_binaries(ctx: Context, profile: Profile) -> list[BinaryInfo]:
 
 
 def profile_claims(profile: Profile) -> tuple[Claim, ...]:
-    """Claims every profile makes: endpoints, fingerprint, settings and env vars."""
+    """Claims every profile makes: endpoints, fingerprint, settings, env vars and telemetry."""
     return (
         *(Claim(f"endpoint {e.host}", e.marker) for e in profile.endpoints),
         *(Claim(f"signature: {r.label}", r.marker) for r in profile.fingerprint),
         *(Claim(f"setting {s.name}", s.marker) for s in profile.settings),
         *(Claim(f"env {v.name}", v.marker) for v in profile.env),
+        *(Claim(f"telemetry {t.label}", m) for t in profile.telemetry for m in t.markers),
+        *(
+            Claim(f"telemetry {t.label} reads {r.path}", r.marker)
+            for t in profile.telemetry
+            for r in t.reads
+        ),
     )
 
 

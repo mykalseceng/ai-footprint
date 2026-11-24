@@ -1,8 +1,9 @@
-"""Codex CLI account notes: data use, token revocation, remote control, signs of use."""
+"""Codex CLI account notes: data use, usage data, revocation, remote control, signs of use."""
 
 from pathlib import Path
 from typing import Any
 
+from ai_footprint.harnesses import telemetry
 from ai_footprint.harnesses.account_notes import log_markers, marker_text, note, token_claims
 from ai_footprint.harnesses.codex import collector as codex_cli
 from ai_footprint.harnesses.common import Context, binary_path, load_json
@@ -175,8 +176,10 @@ def notes(
 ) -> list[AccountNote]:
     """Account evidence for Codex CLI."""
     binary = binary_path(report)
+    sources = [(ctx.display(str(root / "config.toml")), config)]
     return (
         data_notes(report, root, config)
+        + telemetry.notes(ctx, codex_cli.PROFILE, report, sources)
         + revoke_notes(ctx, report, binary)
         + detect_notes(ctx, report, root, binary)
         + remote_notes(config, root)

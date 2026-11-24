@@ -141,9 +141,10 @@ def test_faq_answers_every_original_question(audited):
     claude = next(t for t in audit.tools if t.name == "claude")
     answered = answers.for_tool(claude, audit.host)
     questions = [a.question for a in answered]
-    assert len(questions) == 15
+    assert len(questions) == 16
     assert questions[0] == "Where are the log files?"
     assert "How do I revoke this token, and how would I prove it?" in questions
+    assert "What usage data does it send, and with which id?" in questions
     assert questions[-1] == "Would I notice if someone else used it?"
     sessions = answered[1]
     assert sessions.headers == ("Path", "Size", "Files", "Modified")

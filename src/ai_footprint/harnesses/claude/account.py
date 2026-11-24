@@ -1,10 +1,11 @@
-"""Claude Code account notes: data use, token revocation, and signs of use elsewhere."""
+"""Claude Code account notes: data use, usage data, token revocation, signs of use."""
 
 from typing import Any
 
+from ai_footprint.harnesses import telemetry
 from ai_footprint.harnesses.account_notes import log_markers, marker_text, note
 from ai_footprint.harnesses.claude import collector as claude_cli
-from ai_footprint.harnesses.common import Context, binary_path
+from ai_footprint.harnesses.common import Context, binary_path, load_json
 from ai_footprint.model import AccountNote, StoreKind, ToolReport
 from ai_footprint.tokens import iso_time
 
@@ -143,11 +144,23 @@ def detect_notes(ctx: Context, report: ToolReport, config: dict[str, Any]) -> li
     return notes
 
 
+def usage_notes(ctx: Context, report: ToolReport, config: dict[str, Any]) -> list[AccountNote]:
+    """Usage metrics and error reports; settings.json's env block overrides the shell's."""
+    settings = load_json(ctx.home / ".claude" / "settings.json") or {}
+    sources = [
+        ("the env block of ~/.claude/settings.json", settings.get("env") or {}),
+        ("the environment", ctx.system.env),
+        ("~/.claude.json", config),
+    ]
+    return telemetry.notes(ctx, claude_cli.PROFILE, report, sources)
+
+
 def notes(ctx: Context, report: ToolReport, config: dict[str, Any]) -> list[AccountNote]:
     """Account evidence for Claude Code."""
     binary = binary_path(report)
     return (
         data_notes(ctx, config, binary)
+        + usage_notes(ctx, report, config)
         + revoke_notes(ctx, report, binary)
         + detect_notes(ctx, report, config)
     )

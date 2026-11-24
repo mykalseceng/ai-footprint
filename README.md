@@ -2,7 +2,8 @@
 
 Audits what Claude Code, Claude Desktop, Codex CLI, OpenCode, pi and T3 Code leave on your Mac and what that exposes:
 stored credentials and who can read them, sessions and logs, secrets in history, instruction
-files, MCP servers and hooks that run automatically, and where each tool connects. Each run
+files, MCP servers and hooks that run automatically, where each tool connects, and what usage
+data each tool sends its vendor, including ids it reads from another tool's login. Each run
 writes a single-file HTML dashboard.
 
 ## Usage
@@ -33,7 +34,9 @@ processes reached from the TLS server name, HTTP Host header or DNS answer in th
 
 Each tool is a package under `src/ai_footprint/harnesses/<tool>/`. Its `profile.toml` holds
 everything that is data: folders and the variables that move them, files and what they hold,
-hosts, binary markers, approval signals, fix commands and the documented feature inventory.
+hosts, binary markers, approval signals, fix commands, the usage data the tool sends (where,
+its default, the settings that switch it, other tools' logins it reads) and the documented
+feature inventory.
 `collector.py` reads what needs code. The registry finds packages on its own, the checks in
 `checks/` and the outputs in `reporting/` never name a tool, and `tests/test_architecture.py`
 fails if they do.

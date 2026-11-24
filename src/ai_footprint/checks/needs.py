@@ -8,6 +8,7 @@ says so.
 from ai_footprint.checks.base import RuleContext
 from ai_footprint.checks.steering import approval_keys
 from ai_footprint.model import (
+    USAGE,
     StoreKind,
     ToolReport,
 )
@@ -97,6 +98,15 @@ def needs_data_notes(report: ToolReport, ctx: RuleContext) -> str:
     if any(n.topic == "data" for n in report.account):
         return ""
     return "no data-use setting is recorded"
+
+
+def needs_usage_notes(report: ToolReport, ctx: RuleContext) -> str:
+    """Why the check cannot run without the tool's usage data confirmed here, or ""."""
+    if any(n.topic == USAGE for n in report.account):
+        return ""
+    if not ctx.knows_telemetry(report):
+        return "no usage data this tool sends its vendor is known to this audit"
+    return "the installed binary does not confirm the usage data its profile lists"
 
 
 def needs_remote_control_state(report: ToolReport, ctx: RuleContext) -> str:

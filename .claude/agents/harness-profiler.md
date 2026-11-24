@@ -39,7 +39,14 @@ express (`collector.py`, `account.py`, `remedies.py`).
      none does; report that gap, do not paper over it;
    - an endpoint the binary names → `[[endpoints]]`; a variable → `env`;
    - a fix the tool offers for a check → `[remedies.<id>]` (ids in `Remedy`), with `help`
-     only for CLIs and `markers` for config keys and UI labels.
+     only for CLIs and `markers` for config keys and UI labels;
+   - usage data the tool sends its vendor (product analytics, metrics, error reports, install
+     pings) → `[[telemetry]]` with `sends`, `identity`, the `default` the docs or the code
+     state, `markers`, and `switches` in the order the code checks them, plus
+     `[remedies.telemetry-off]`. Search the binary for paths of other tools' login files
+     (`~/.codex/auth.json`, `~/.claude.json`, `auth.json` under other tools' folders); when
+     the code reads an identifier from one for its own analytics, add `[[telemetry.reads]]`.
+     A file read only to import config, or listed to keep agents away from it, is not one.
    Skip what is cosmetic (themes, fonts, window state) unless it stores data.
 4. Validate: `uv run pytest -q tests/test_profiles.py tests/test_profiling.py tests/test_architecture.py`,
    then `uv run ai-footprint <tool> --profile` (every marker `in binary`) and

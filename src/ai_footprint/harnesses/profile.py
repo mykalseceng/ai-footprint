@@ -13,6 +13,8 @@ to one file, which a person or an agent can make:
 * ``signals`` and ``capabilities``: what the central checks read for this tool;
 * ``drives``: other harnesses this tool runs, by the tool's own provider id;
 * ``remedies``: tool-specific fix commands the central checks offer;
+* ``telemetry``: usage data the tool sends its vendor: where, whether it is on by default,
+  the settings and variables that switch it, and any other tool's login it reads an id from;
 * ``docs`` and ``features``: the documented feature inventory that ``--profile`` maps
   against this machine, and ``env_prefixes``, which it uses to find variables the installed
   binary reads that the inventory does not list yet.
@@ -47,6 +49,7 @@ class Remedy(StrEnum):
     WITHDRAW_TRUST = "withdraw-trust"
     DATA_CONTROLS = "data-controls"
     DISABLE_SHARE = "disable-share"
+    TELEMETRY_OFF = "telemetry-off"
 
 
 class Capability(StrEnum):
@@ -141,6 +144,72 @@ class FixTemplate:
     commands: tuple[CommandTemplate, ...]
 
 
+ANY_VALUE = "*"
+"""A switch value that matches any non-empty value."""
+
+
+@dataclass(frozen=True)
+class Switch:
+    """A setting or variable that turns a telemetry stream off or on.
+
+    Attributes:
+        name: Environment variable or setting key, as the harness reports its value.
+        off: Values (case-insensitive) that turn the stream off; ``*`` is any non-empty value.
+        on: Values that turn it on.
+    """
+
+    name: str
+    off: tuple[str, ...] = ()
+    on: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class LoginRead:
+    """Another tool's login file a telemetry stream reads an identifier from.
+
+    Attributes:
+        tool: The harness whose file it is.
+        path: The file, as ``~/relative`` to the audited home.
+        fields: Dotted JSON keys it reads; the report names those present on this machine.
+        sends: What reaches the vendor from those keys.
+        marker: String the installed binary contains when it reads the file.
+    """
+
+    tool: str
+    path: str
+    fields: tuple[str, ...]
+    sends: str
+    marker: str
+
+
+@dataclass(frozen=True)
+class Telemetry:
+    """Usage data a tool sends its vendor unless a switch turns it off.
+
+    Attributes:
+        label: What the tool calls the stream.
+        host: Where it goes ("" when the vendor does not say).
+        sends: What it carries, from the vendor's docs or the installed code.
+        identity: Which identifier the data carries.
+        default_on: Whether it is sent when no switch is set.
+        markers: Strings the installed binary must contain before the stream is reported.
+        switches: Settings and variables in the order the tool checks them; the first one set
+            to a listed value decides.
+        reads: Other tools' login files the stream reads an identifier from.
+        doc: Official page that documents it.
+    """
+
+    label: str
+    sends: str
+    identity: str
+    default_on: bool
+    markers: tuple[str, ...]
+    host: str = ""
+    switches: tuple[Switch, ...] = ()
+    reads: tuple[LoginRead, ...] = ()
+    doc: str = ""
+
+
 @dataclass(frozen=True)
 class HostControl:
     """Apps in a tool's folder that can drive the screen and input, reported as host facts."""
@@ -205,6 +274,7 @@ class Profile:
     drives: Mapping[str, str] = field(default_factory=dict)
     host_control: tuple[HostControl, ...] = ()
     remedies: Mapping[Remedy, FixTemplate] = field(default_factory=dict)
+    telemetry: tuple[Telemetry, ...] = ()
     docs: tuple[DocSource, ...] = ()
     features: tuple[Feature, ...] = ()
 
@@ -229,6 +299,7 @@ _TOP = {
     "capabilities",
     "host_control",
     "remedies",
+    "telemetry",
     "docs",
     "features",
 }
@@ -385,6 +456,63 @@ def _features(where: str, raw: list[Mapping[str, Any]]) -> tuple[Feature, ...]:
     return tuple(out)
 
 
+def _switch(where: str, raw: Mapping[str, Any]) -> Switch:
+    _keys(where, raw, {"name", "off", "on"}, {"name"})
+    if "off" not in raw and "on" not in raw:
+        raise ProfileError(f"{where}: give the values that turn it off, on, or both")
+    return Switch(
+        raw["name"],
+        off=_str_tuple(f"{where}.off", raw.get("off", [])),
+        on=_str_tuple(f"{where}.on", raw.get("on", [])),
+    )
+
+
+def _login_read(where: str, raw: Mapping[str, Any]) -> LoginRead:
+    keys = {"tool", "path", "fields", "sends", "marker"}
+    _keys(where, raw, keys, keys)
+    if not raw["path"].startswith("~/"):
+        raise ProfileError(f"{where}: path {raw['path']!r} must start with ~/")
+    return LoginRead(
+        raw["tool"],
+        raw["path"],
+        _str_tuple(f"{where}.fields", raw["fields"]),
+        raw["sends"],
+        raw["marker"],
+    )
+
+
+def _telemetry(where: str, raw: list[Mapping[str, Any]]) -> tuple[Telemetry, ...]:
+    out = []
+    required = {"label", "sends", "identity", "default", "markers"}
+    allowed = required | {"host", "switches", "reads", "doc"}
+    for index, spec in enumerate(raw):
+        at = f"{where}.telemetry[{index}]"
+        _keys(at, spec, allowed, required)
+        if spec["default"] not in {"on", "off"}:
+            raise ProfileError(f"{at}.default: {spec['default']!r} is not one of on, off")
+        if not spec["markers"]:
+            raise ProfileError(f"{at}.markers: name at least one string the binary must contain")
+        out.append(
+            Telemetry(
+                label=spec["label"],
+                host=spec.get("host", ""),
+                sends=spec["sends"],
+                identity=spec["identity"],
+                default_on=spec["default"] == "on",
+                markers=_str_tuple(f"{at}.markers", spec["markers"]),
+                switches=tuple(
+                    _switch(f"{at}.switches[{i}]", s)
+                    for i, s in enumerate(spec.get("switches", []))
+                ),
+                reads=tuple(
+                    _login_read(f"{at}.reads[{i}]", r) for i, r in enumerate(spec.get("reads", []))
+                ),
+                doc=spec.get("doc", ""),
+            )
+        )
+    return tuple(out)
+
+
 def _docs(where: str, raw: list[Mapping[str, Any]]) -> tuple[DocSource, ...]:
     out = []
     for index, spec in enumerate(raw):
@@ -455,6 +583,7 @@ def parse(where: str, raw: Mapping[str, Any]) -> Profile:
         drives=_drives(where, raw.get("drives", {})),
         host_control=_host_control(where, raw.get("host_control", []), roots),
         remedies=_remedies(where, raw.get("remedies", {})),
+        telemetry=_telemetry(where, raw.get("telemetry", [])),
         docs=_docs(where, raw.get("docs", [])),
         features=_features(where, raw.get("features", [])),
     )
