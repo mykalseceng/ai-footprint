@@ -157,6 +157,35 @@ commands = [
   { manual = "Set those projects' decision to false in ~/.pi/agent/trust.json, or delete the entry", markers = ["trust.json"] },
 ]
 
+[remedies.telemetry-off]
+summary = "Turn off install pings and analytics"
+commands = [
+  { manual = "Set \"enableInstallTelemetry\": false and \"enableAnalytics\": false in ~/.pi/agent/settings.json, or export PI_TELEMETRY=0", markers = ["enableInstallTelemetry", "PI_TELEMETRY"] },
+]
+
+[[telemetry]]
+label = "Install pings"
+host = "pi.dev"
+sends = "pi's version after each update, and the same switch adds provider attribution headers to model requests"
+identity = "none; the request carries only the version and pi's user agent"
+default = "on"
+markers = ["report-install", "enableInstallTelemetry"]
+switches = [
+  { name = "PI_OFFLINE", off = ["*"] },
+  { name = "PI_TELEMETRY", on = ["1", "true", "yes"], off = ["*"] },
+  { name = "enableInstallTelemetry", on = ["true"], off = ["false"] },
+]
+doc = "https://docs.pi.dev/latest/settings.md"
+
+[[telemetry]]
+label = "Analytics"
+sends = "data pi's docs do not describe; they say only the experimental first-run setup uses it"
+identity = "a random trackingId kept in settings.json"
+default = "off"
+markers = ["enableAnalytics", "trackingId"]
+switches = [{ name = "enableAnalytics", on = ["true"], off = ["false"] }]
+doc = "https://docs.pi.dev/latest/settings.md"
+
 [[docs]]
 url = "https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent"
 topic = "README: settings, files, environment variables, extensions"

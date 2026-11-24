@@ -397,6 +397,22 @@ commands = [
   { manual = "Review Data controls at platform.openai.com and chatgpt.com, and remove cloud repos you do not need" },
 ]
 
+[remedies.telemetry-off]
+summary = "Turn off Codex analytics"
+commands = [
+  { manual = "Add an [analytics] table with enabled = false to ~/.codex/config.toml", markers = ["analytics_enabled"] },
+]
+
+[[telemetry]]
+label = "Analytics"
+host = "chatgpt.com/backend-api/codex/analytics-events"
+sends = "usage and health data, which OpenAI's docs call anonymous and free of personal data"
+identity = "not stated in OpenAI's docs; the events go to the same ChatGPT backend your login uses"
+default = "on"
+markers = ["/codex/analytics-events/events", "analytics_enabled"]
+switches = [{ name = "analytics.enabled", on = ["true"], off = ["false"] }]
+doc = "https://developers.openai.com/codex/config-advanced"
+
 [[docs]]
 url = "https://learn.chatgpt.com/docs/config-file/config-reference"
 topic = "config.toml and requirements.toml keys"

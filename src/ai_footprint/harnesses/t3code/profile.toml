@@ -107,7 +107,7 @@ description = "Window state"
 label = "Install identifiers"
 path = "{home}/userdata/anonymous-id"
 category = "config"
-description = "Stable anonymous id sent with usage events"
+description = "Random install id; usage events are keyed to its hash only when no Codex or Claude Code login is found"
 
 [[artifacts]]
 label = "Environment id"
@@ -244,12 +244,52 @@ commands = [
   { manual = "chmod 600 ~/.t3/service.env if it holds credentials", markers = ["service.env"] },
 ]
 
-[remedies.data-controls]
-summary = "Turn off usage events and agent activity publishing"
+[remedies.telemetry-off]
+summary = "Turn off usage events, relay traces and agent activity publishing"
 commands = [
-  { manual = "Set T3CODE_TELEMETRY_ENABLED=false in your shell profile and in ~/.t3/service.env", markers = ["T3CODE_TELEMETRY_ENABLED"] },
-  { manual = "Turn off Publish agent activity in Settings → Sharing & access", markers = ["Publish agent activity"] },
+  { manual = "Add export T3CODE_TELEMETRY_ENABLED=false to your shell profile, which the desktop app reads, and T3CODE_TELEMETRY_ENABLED=false to ~/.t3/service.env, then restart T3 Code; the web and mobile apps still send their own relay traces and have no switch for them", markers = ["T3CODE_TELEMETRY_ENABLED"] },
+  { manual = "Turn off Publish agent activity in Settings → Sharing & access; the telemetry variable does not cover it", markers = ["Publish agent activity"] },
 ]
+
+[[telemetry]]
+label = "Usage events"
+host = "ingest.t3.codes"
+sends = "each turn's provider, model, reasoning effort, permission mode, results, duration and token counts, which T3 forwards to PostHog"
+identity = "an unsalted SHA-256 of your Codex account_id, else of Claude Code's userID, else of a random install id"
+default = "on"
+markers = ["T3CODE_TELEMETRY_ENABLED", "ingest.t3.codes", "hashTelemetryId"]
+switches = [
+  { name = "T3CODE_TELEMETRY_ENABLED", on = ["true", "yes", "on", "1", "y"], off = ["false", "no", "off", "0", "n"] },
+]
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/telemetry.md"
+
+[[telemetry.reads]]
+tool = "codex"
+path = "~/.codex/auth.json"
+fields = ["tokens.account_id", "tokens.id_token"]
+sends = "unsalted SHA-256 hashes of your ChatGPT workspace id and of the OpenAI user id in id_token"
+marker = "install.owner_observed"
+
+[[telemetry.reads]]
+tool = "claude"
+path = "~/.claude.json"
+fields = ["userID", "oauthAccount.accountUuid"]
+sends = "unsalted SHA-256 hashes of your Claude account UUID and, without a Codex login, of userID"
+marker = "install.owner_observed"
+
+[[telemetry]]
+label = "Relay connection traces"
+host = "us-east-1.aws.edge.axiom.co"
+sends = "T3 Connect connection timings, environment ids, this machine's name and, when a connection fails, error messages and stack traces"
+identity = "environment ids and the machine's name"
+default = "on"
+markers = ["us-east-1.aws.edge.axiom.co", "T3CODE_OTEL_SDK_DISABLED"]
+switches = [
+  { name = "T3CODE_TELEMETRY_ENABLED", off = ["false", "no", "off", "0", "n"] },
+  { name = "T3CODE_OTEL_SDK_DISABLED", on = ["false", "no", "off", "0", "n"], off = ["true", "yes", "on", "1", "y"] },
+  { name = "OTEL_SDK_DISABLED", off = ["true", "yes", "on", "1", "y"] },
+]
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/telemetry.md"
 
 [[docs]]
 url = "https://github.com/pingdotgg/t3code/blob/main/README.md"
@@ -385,10 +425,10 @@ checks = ["data-readable"]
 [[features]]
 kind = "env"
 name = "T3CODE_TELEMETRY_ENABLED"
-summary = "false turns off product usage events"
-doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/faq.md"
+summary = "false turns off product usage events and the server's relay traces; there is no Settings toggle"
+doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/telemetry.md"
 marker = "T3CODE_TELEMETRY_ENABLED"
-checks = ["account-data"]
+checks = ["usage-data", "other-logins"]
 
 [[features]]
 kind = "subcommand"
@@ -542,9 +582,10 @@ marker = "Publish agent activity"
 [[features]]
 kind = "env"
 name = "T3CODE_OTEL_SDK_DISABLED"
-summary = "Turns off OpenTelemetry export, which also stops relay connection traces"
+summary = "Turns off OpenTelemetry export and the server's relay traces; web and mobile clients still send theirs"
 doc = "https://github.com/pingdotgg/t3code/blob/main/docs/user/telemetry.md"
 marker = "T3CODE_OTEL_SDK_DISABLED"
+checks = ["usage-data"]
 
 [[features]]
 kind = "integration"

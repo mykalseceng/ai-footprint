@@ -49,6 +49,11 @@ class RuleContext:
         harness = harnesses.get(report.name)
         return harness.profile.approval_off_flagged if harness else ()
 
+    def knows_telemetry(self, report: ToolReport) -> bool:
+        """The audited tool's profile lists usage data it sends its vendor."""
+        harness = harnesses.get(report.name)
+        return harness is not None and bool(harness.profile.telemetry)
+
     def records_remote_control(self, report: ToolReport) -> bool:
         """The tool's harness records whether another device can drive it here."""
         harness = harnesses.get(report.name)
@@ -123,6 +128,8 @@ LABELS = {
     "duplicate-creds": "One provider's credentials in several places",
     "trust": "Trusted folders",
     "account-data": "Work shared with provider services",
+    "usage-data": "Usage data sent to the vendor",
+    "other-logins": "Ids read from another tool's login",
     "remote-control": "Remote control is turned on",
     "unused-logins": "Logins kept but no longer used",
     "inherited-creds": "Other credentials an agent inherits",

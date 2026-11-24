@@ -10,7 +10,15 @@ from dataclasses import dataclass, field
 
 from ai_footprint import daemons
 from ai_footprint.fsinfo import human_size, tilde
-from ai_footprint.model import AD_HOC, Artifact, Category, HostReport, TokenInfo, ToolReport
+from ai_footprint.model import (
+    AD_HOC,
+    USAGE,
+    Artifact,
+    Category,
+    HostReport,
+    TokenInfo,
+    ToolReport,
+)
 from ai_footprint.text import plural, sentences, when
 
 EVIDENCE = {
@@ -306,6 +314,12 @@ def _answers(tool: ToolReport, host: HostReport) -> list[Answer]:
             "Is my data used for training, and what is copied to the cloud?",
             "data",
             "No local evidence either way; check the provider's data settings.",
+        ),
+        _notes(
+            tool,
+            "What usage data does it send, and with which id?",
+            USAGE,
+            "No usage data this tool sends its vendor is known to this audit.",
         ),
         _notes(
             tool,

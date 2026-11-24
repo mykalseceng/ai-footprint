@@ -95,6 +95,8 @@ Claude Code
              → Review the provider's data settings
                Turn off model training at claude.ai/settings/data-privacy-controls and disconnect unused connectors
                  manual step (not machine-checkable)
+  not checked  No usage data sent to the vendor (the installed binary does not confirm the usage data its profile lists)
+  not checked  Usage data carries no id read from another tool's login (the installed binary does not confirm the usage data its profile lists)
   not checked  Remote control of this machine is off (Claude Code keeps no remote-control state on disk)
   clear    No stored login left unused
 Claude Desktop
@@ -141,6 +143,8 @@ Claude Desktop
   not checked  Local server requires authentication (this audit records no local server for Claude Desktop)
   not checked  No broad trusted folders and none holding instruction files (no trusted folders are recorded)
   not checked  Provider keeps no extra copies (training, cloud tasks) (no data-use setting is recorded)
+  not checked  No usage data sent to the vendor (no usage data this tool sends its vendor is known to this audit)
+  not checked  Usage data carries no id read from another tool's login (no usage data this tool sends its vendor is known to this audit)
   clear    Remote control of this machine is off
   not checked  No stored login left unused (no stored login records when it expires)
 Codex CLI
@@ -195,6 +199,8 @@ Codex CLI
   not checked  Local server requires authentication (this audit records no local server for Codex CLI)
   clear    No broad trusted folders and none holding instruction files
   not checked  Provider keeps no extra copies (training, cloud tasks) (no data-use setting is recorded)
+  not checked  No usage data sent to the vendor (the installed binary does not confirm the usage data its profile lists)
+  not checked  Usage data carries no id read from another tool's login (the installed binary does not confirm the usage data its profile lists)
   clear    Remote control of this machine is off
   clear    No stored login left unused
 OpenCode
@@ -240,6 +246,8 @@ OpenCode
   not checked  Local server requires authentication (this audit records no local server for OpenCode)
   not checked  No broad trusted folders and none holding instruction files (no trusted folders are recorded)
   clear    Provider keeps no extra copies (training, cloud tasks)
+  not checked  No usage data sent to the vendor (no usage data this tool sends its vendor is known to this audit)
+  not checked  Usage data carries no id read from another tool's login (no usage data this tool sends its vendor is known to this audit)
   not checked  Remote control of this machine is off (OpenCode keeps no remote-control state on disk)
   not checked  No stored login left unused (no stored login records when it expires)
 pi
@@ -301,11 +309,9 @@ pi
              → Withdraw trust from folders you do not own or no longer use
                Set those projects' decision to false in ~/.pi/agent/trust.json, or delete the entry
                  ✗ pi binary: not installed; cannot confirm
-  REVIEW   Provider keeps no extra copies (training, cloud tasks)
-             enableAnalytics = True; enableInstallTelemetry = not set.
-             → Review the provider's data settings
-               Review the provider's data settings
-                 manual step (not machine-checkable)
+  not checked  Provider keeps no extra copies (training, cloud tasks) (no data-use setting is recorded)
+  not checked  No usage data sent to the vendor (the installed binary does not confirm the usage data its profile lists)
+  not checked  Usage data carries no id read from another tool's login (the installed binary does not confirm the usage data its profile lists)
   not checked  Remote control of this machine is off (pi keeps no remote-control state on disk)
   REVIEW   No stored login left unused
              Stored pi logins whose access token expired and was not replaced: OpenAI access token
@@ -365,15 +371,21 @@ T3 Code
                  ✗ program 'chmod': not found on PATH
   not checked  Local server requires authentication (this audit records no local server for T3 Code)
   not checked  No broad trusted folders and none holding instruction files (no trusted folders are recorded)
-  REVIEW   Provider keeps no extra copies (training, cloud tasks)
-             T3CODE_TELEMETRY_ENABLED is not set; the installed app reads it and names
-             ingest.t3.codes. T3 Code's FAQ says usage events (provider, model, token totals) are
-             sent unless it is false.
-             → Turn off usage events and agent activity publishing
-               Set T3CODE_TELEMETRY_ENABLED=false in your shell profile and in ~/.t3/service.env
+  not checked  Provider keeps no extra copies (training, cloud tasks) (no data-use setting is recorded)
+  REVIEW   No usage data sent to the vendor
+             Usage events to ingest.t3.codes: on by default. Sends each turn's provider, model,
+             reasoning effort, permission mode, results, duration and token counts, which T3
+             forwards to PostHog. Identifier: an unsalted SHA-256 of your Codex account_id, else of
+             Claude Code's userID, else of a random install id. Relay connection traces to us-
+             east-1.aws.edge.axiom.co: on by default. Sends T3 Connect connection timings,
+             environment ids, this machine's name and, when a connection fails, error messages and
+             stack traces. Identifier: environment ids and the machine's name.
+             → Turn off usage events, relay traces and agent activity publishing
+               Add export T3CODE_TELEMETRY_ENABLED=false to your shell profile, which the desktop app reads, and T3CODE_TELEMETRY_ENABLED=false to ~/.t3/service.env, then restart T3 Code; the web and mobile apps still send their own relay traces and have no switch for them
                  ✓ config keys confirmed in installed binary
-               Turn off Publish agent activity in Settings → Sharing & access
+               Turn off Publish agent activity in Settings → Sharing & access; the telemetry variable does not cover it
                  ✓ config keys confirmed in installed binary
+  clear    Usage data carries no id read from another tool's login
   clear    Remote control of this machine is off
   clear    No stored login left unused
 Host
@@ -405,8 +417,8 @@ Host
   clear    No other AI tools keep data here
 
 Probe binaries: 0/0 verified (absolute path, not group/other-writable, Apple-signed on macOS)
-Fix commands:   24/57 validated (syntax, programs, targets, subcommands, config keys)
-Tool claims:    65/69 found in the installed binaries (endpoints, signature traits, config keys, log and behaviour markers)
+Fix commands:   23/56 validated (syntax, programs, targets, subcommands, config keys)
+Tool claims:    72/76 found in the installed binaries (endpoints, signature traits, config keys, log and behaviour markers)
 Commands run by this audit: 42 (probes and --version/--help runs)
   ✗ claude mcp remove ghost -s user → program 'claude': not found on PATH; claude installed: binary not found; cannot confirm
   ✗ Add cli_auth_credentials_store = "keyring" to ~/.codex/config.toml → codex binary: not installed; cannot confirm
@@ -445,5 +457,5 @@ Commands run by this audit: 42 (probes and --version/--help runs)
   ✗ claims about Codex CLI ? → binary on PATH: not found; claims unchecked
   ✗ claims about OpenCode ? → binary on PATH: not found; claims unchecked
   ✗ claims about pi ? → binary on PATH: not found; claims unchecked
-Result: 43 to review · 40 clear · 35 not checked  (exit 1)
+Result: 42 to review · 41 clear · 47 not checked  (exit 1)
 Secret scan skipped in doctor mode; run without --doctor for the full audit.

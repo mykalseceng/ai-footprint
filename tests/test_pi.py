@@ -9,9 +9,9 @@ import pytest
 from ai_footprint.harnesses import registry
 from ai_footprint.harnesses.common import Context, search_file
 from ai_footprint.harnesses.pi import collector as pi
-from ai_footprint.model import AuditReport, HostReport
+from ai_footprint.model import USAGE, AuditReport, HostReport
 from ai_footprint.validate import validate_claims
-from tests.conftest import FakeSystem, build_pi_home
+from tests.conftest import FakeSystem, build_pi_home, bundle_markers
 
 PI = registry()["pi"]
 
@@ -74,7 +74,6 @@ def test_credentials_trust_sessions_and_extensions_come_from_the_agent_dir(tmp_p
     local = next(x for x in report.extensions if x.name == "local")
     assert local.dangling and local.source.startswith("project ")
     assert report.stats["sessions"] == "1" and report.stats["first session"] == "2026-04-28"
-    assert any(n.text.startswith("enableAnalytics = True") for n in report.account)
     settings = {s.key: s.value for s in report.settings}
     assert settings["packages"] == "npm:@demo/pi-tool"
     assert settings["trusted projects"].startswith("1 in ")
@@ -214,3 +213,22 @@ def test_model_catalog_cache_is_a_cache_not_a_credential_store(tmp_path: Path):
     assert "catalog" not in {c.provider for c in report.credentials}
     [cache] = [a for a in report.artifacts if a.path == str(store)]
     assert cache.category.value == "cache"
+
+
+def test_install_pings_are_on_by_default_and_opted_in_analytics_is_reported(tmp_path: Path):
+    build_pi_home(tmp_path)
+    fake_install(tmp_path, bundle_markers("pi"))
+    [pings, analytics] = [n for n in PI.collect(context(tmp_path)).account if n.topic == USAGE]
+    assert pings.concern and pings.text.startswith("Install pings to pi.dev: on by default.")
+    assert analytics.concern
+    assert analytics.text.startswith("Analytics: on (enableAnalytics=true in ~/.pi/agent/")
+
+
+@pytest.mark.parametrize("env", [{"PI_TELEMETRY": "0"}, {"PI_OFFLINE": "1", "PI_TELEMETRY": "1"}])
+def test_pi_telemetry_and_offline_mode_stop_install_pings(tmp_path: Path, env: dict[str, str]):
+    build_pi_home(tmp_path)
+    fake_install(tmp_path, bundle_markers("pi"))
+    ctx = context(tmp_path)
+    ctx.system.env.update(env)
+    [pings, _analytics] = [n for n in PI.collect(ctx).account if n.topic == USAGE]
+    assert not pings.concern

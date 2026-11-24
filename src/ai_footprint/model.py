@@ -385,13 +385,18 @@ class AccountNote:
     source: str
     concern: bool = False
     signal: str = ""
-    """Which check reads this note when it is a concern: ``REMOTE_CONTROL`` or ``UNUSED_LOGIN``."""
+    """Which check reads this note when it is a concern: ``REMOTE_CONTROL``, ``UNUSED_LOGIN``
+    or ``OTHER_TOOL_LOGIN``."""
 
 
 REMOTE_CONTROL = "remote-control"
 """Account-note signal: another device can drive this machine's agent."""
 UNUSED_LOGIN = "unused-login"
 """Account-note signal: a stored login that is no longer refreshed."""
+OTHER_TOOL_LOGIN = "other-tool-login"
+"""Account-note signal: the tool sends an identifier it read from another tool's login."""
+USAGE = "usage"
+"""Account-note topic: usage data the tool sends its vendor."""
 
 
 class FactKind(StrEnum):

@@ -22,6 +22,16 @@ roots = { home = { env = "DEMO_HOME", default = "~/.demo" } }
 """
 
 
+STREAM = """
+[[telemetry]]
+label = "Usage"
+sends = "counts"
+identity = "a random id"
+default = "on"
+markers = ["m"]
+"""
+
+
 def load(extra: str = "") -> Profile:
     return parse("demo/profile.toml", tomllib.loads(MINIMAL + extra))
 
@@ -66,6 +76,15 @@ def test_every_registered_profile_loads_and_matches_its_package():
             "duplicate feature env:X",
         ),
         ('capabilities = ["telepathy"]\n', "not one of"),
+        (STREAM.replace('default = "on"', 'default = "sometimes"'), "is not one of on, off"),
+        (STREAM.replace('markers = ["m"]', "markers = []"), "name at least one string"),
+        (STREAM + 'switches = [{ name = "X" }]\n', "turn it off, on, or both"),
+        (
+            STREAM + '[[telemetry.reads]]\ntool = "t"\npath = "/abs/auth.json"\n'
+            'fields = ["a"]\nsends = "s"\nmarker = "m"\n',
+            "must start with ~/",
+        ),
+        (STREAM + '[[telemetry.reads]]\ntool = "t"\npath = "~/a.json"\n', "missing key(s)"),
     ],
 )
 def test_malformed_profiles_name_the_file_and_the_problem(extra: str, message: str):
@@ -162,3 +181,18 @@ def test_every_driven_harness_is_registered():
     harnesses = registry()
     for harness in harnesses.values():
         assert set(harness.profile.drives.values()) <= set(harnesses), harness.name
+
+
+def test_every_login_a_stream_reads_belongs_to_a_registered_harness():
+    harnesses = registry()
+    for harness in harnesses.values():
+        for stream in harness.profile.telemetry:
+            assert {r.tool for r in stream.reads} <= set(harnesses), harness.name
+
+
+def test_a_stream_without_a_host_or_switches_loads_with_empty_defaults():
+    [stream] = load(STREAM).telemetry
+    assert stream.host == ""
+    assert stream.switches == ()
+    assert stream.reads == ()
+    assert stream.default_on

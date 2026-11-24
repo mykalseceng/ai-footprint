@@ -137,6 +137,20 @@
       "unchecked": ""
     },
     {
+      "check": "No usage data sent to the vendor",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Code",
+      "unchecked": "the installed binary does not confirm the usage data its profile lists"
+    },
+    {
+      "check": "Usage data carries no id read from another tool's login",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Code",
+      "unchecked": "the installed binary does not confirm the usage data its profile lists"
+    },
+    {
       "check": "Remote control of this machine is off",
       "exposed": false,
       "exposures": [],
@@ -269,6 +283,20 @@
       "exposures": [],
       "scope": "Claude Desktop",
       "unchecked": "no data-use setting is recorded"
+    },
+    {
+      "check": "No usage data sent to the vendor",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": "no usage data this tool sends its vendor is known to this audit"
+    },
+    {
+      "check": "Usage data carries no id read from another tool's login",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Claude Desktop",
+      "unchecked": "no usage data this tool sends its vendor is known to this audit"
     },
     {
       "check": "Remote control of this machine is off",
@@ -407,6 +435,20 @@
       "unchecked": "no data-use setting is recorded"
     },
     {
+      "check": "No usage data sent to the vendor",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Codex CLI",
+      "unchecked": "the installed binary does not confirm the usage data its profile lists"
+    },
+    {
+      "check": "Usage data carries no id read from another tool's login",
+      "exposed": false,
+      "exposures": [],
+      "scope": "Codex CLI",
+      "unchecked": "the installed binary does not confirm the usage data its profile lists"
+    },
+    {
       "check": "Remote control of this machine is off",
       "exposed": false,
       "exposures": [],
@@ -539,6 +581,20 @@
       "exposures": [],
       "scope": "OpenCode",
       "unchecked": ""
+    },
+    {
+      "check": "No usage data sent to the vendor",
+      "exposed": false,
+      "exposures": [],
+      "scope": "OpenCode",
+      "unchecked": "no usage data this tool sends its vendor is known to this audit"
+    },
+    {
+      "check": "Usage data carries no id read from another tool's login",
+      "exposed": false,
+      "exposures": [],
+      "scope": "OpenCode",
+      "unchecked": "no usage data this tool sends its vendor is known to this audit"
     },
     {
       "check": "Remote control of this machine is off",
@@ -675,12 +731,24 @@
     },
     {
       "check": "Provider keeps no extra copies (training, cloud tasks)",
-      "exposed": true,
-      "exposures": [
-        "pi:account-data"
-      ],
+      "exposed": false,
+      "exposures": [],
       "scope": "pi",
-      "unchecked": ""
+      "unchecked": "no data-use setting is recorded"
+    },
+    {
+      "check": "No usage data sent to the vendor",
+      "exposed": false,
+      "exposures": [],
+      "scope": "pi",
+      "unchecked": "the installed binary does not confirm the usage data its profile lists"
+    },
+    {
+      "check": "Usage data carries no id read from another tool's login",
+      "exposed": false,
+      "exposures": [],
+      "scope": "pi",
+      "unchecked": "the installed binary does not confirm the usage data its profile lists"
     },
     {
       "check": "Remote control of this machine is off",
@@ -815,10 +883,24 @@
     },
     {
       "check": "Provider keeps no extra copies (training, cloud tasks)",
+      "exposed": false,
+      "exposures": [],
+      "scope": "T3 Code",
+      "unchecked": "no data-use setting is recorded"
+    },
+    {
+      "check": "No usage data sent to the vendor",
       "exposed": true,
       "exposures": [
-        "t3code:account-data"
+        "t3code:usage-data"
       ],
+      "scope": "T3 Code",
+      "unchecked": ""
+    },
+    {
+      "check": "Usage data carries no id read from another tool's login",
+      "exposed": false,
+      "exposures": [],
       "scope": "T3 Code",
       "unchecked": ""
     },
@@ -1256,6 +1338,41 @@
         {
           "detail": "found in binary",
           "name": "env T3CODE_DISABLE_AUTO_UPDATE: 'T3CODE_DISABLE_AUTO_UPDATE'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "telemetry Usage events: 'T3CODE_TELEMETRY_ENABLED'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "telemetry Usage events: 'ingest.t3.codes'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "telemetry Usage events: 'hashTelemetryId'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "telemetry Relay connection traces: 'us-east-1.aws.edge.axiom.co'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "telemetry Relay connection traces: 'T3CODE_OTEL_SDK_DISABLED'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "telemetry Usage events reads ~/.codex/auth.json: 'install.owner_observed'",
+          "passed": true
+        },
+        {
+          "detail": "found in binary",
+          "name": "telemetry Usage events reads ~/.claude.json: 'install.owner_observed'",
           "passed": true
         },
         {
@@ -4610,13 +4727,6 @@
     {
       "account": [
         {
-          "concern": true,
-          "signal": "",
-          "source": "~/.pi/agent/settings.json",
-          "text": "enableAnalytics = True; enableInstallTelemetry = not set.",
-          "topic": "data"
-        },
-        {
           "concern": false,
           "signal": "",
           "source": "pi credential model",
@@ -5256,40 +5366,6 @@
         },
         {
           "evidence": [
-            "~/.pi/agent/settings.json"
-          ],
-          "fix": {
-            "commands": [
-              {
-                "help_probe": [],
-                "manual": true,
-                "marker_tool": "",
-                "markers": [],
-                "text": "Review the provider's data settings"
-              }
-            ],
-            "summary": "Review the provider's data settings",
-            "validations": [
-              {
-                "checks": [
-                  {
-                    "detail": "instruction, not a command",
-                    "name": "manual step",
-                    "passed": true
-                  }
-                ],
-                "command": "Review the provider's data settings"
-              }
-            ]
-          },
-          "id": "pi:account-data",
-          "label": "Work shared with provider services",
-          "lens": "copies",
-          "statement": "enableAnalytics = True; enableInstallTelemetry = not set.",
-          "tool": "pi"
-        },
-        {
-          "evidence": [
             "access-token issue and expiry claims"
           ],
           "fix": {
@@ -5439,9 +5515,16 @@
         {
           "concern": true,
           "signal": "",
-          "source": "markers in the installed app; environment and ~/.t3/service.env",
-          "text": "T3CODE_TELEMETRY_ENABLED is not set; the installed app reads it and names ingest.t3.codes. T3 Code's FAQ says usage events (provider, model, token totals) are sent unless it is false.",
-          "topic": "data"
+          "source": "markers in the installed binary; the environment and ~/.t3/service.env",
+          "text": "Usage events to ingest.t3.codes: on by default. Sends each turn's provider, model, reasoning effort, permission mode, results, duration and token counts, which T3 forwards to PostHog. Identifier: an unsalted SHA-256 of your Codex account_id, else of Claude Code's userID, else of a random install id.",
+          "topic": "usage"
+        },
+        {
+          "concern": true,
+          "signal": "",
+          "source": "markers in the installed binary; the environment and ~/.t3/service.env",
+          "text": "Relay connection traces to us-east-1.aws.edge.axiom.co: on by default. Sends T3 Connect connection timings, environment ids, this machine's name and, when a connection fails, error messages and stack traces. Identifier: environment ids and the machine's name.",
+          "topic": "usage"
         },
         {
           "concern": false,
@@ -5966,7 +6049,8 @@
         },
         {
           "evidence": [
-            "markers in the installed app; environment and ~/.t3/service.env"
+            "markers in the installed binary; the environment and ~/.t3/service.env",
+            "markers in the installed binary; the environment and ~/.t3/service.env"
           ],
           "fix": {
             "commands": [
@@ -5977,7 +6061,7 @@
                 "markers": [
                   "T3CODE_TELEMETRY_ENABLED"
                 ],
-                "text": "Set T3CODE_TELEMETRY_ENABLED=false in your shell profile and in ~/.t3/service.env"
+                "text": "Add export T3CODE_TELEMETRY_ENABLED=false to your shell profile, which the desktop app reads, and T3CODE_TELEMETRY_ENABLED=false to ~/.t3/service.env, then restart T3 Code; the web and mobile apps still send their own relay traces and have no switch for them"
               },
               {
                 "help_probe": [],
@@ -5986,10 +6070,10 @@
                 "markers": [
                   "Publish agent activity"
                 ],
-                "text": "Turn off Publish agent activity in Settings → Sharing & access"
+                "text": "Turn off Publish agent activity in Settings → Sharing & access; the telemetry variable does not cover it"
               }
             ],
-            "summary": "Turn off usage events and agent activity publishing",
+            "summary": "Turn off usage events, relay traces and agent activity publishing",
             "validations": [
               {
                 "checks": [
@@ -6004,7 +6088,7 @@
                     "passed": true
                   }
                 ],
-                "command": "Set T3CODE_TELEMETRY_ENABLED=false in your shell profile and in ~/.t3/service.env"
+                "command": "Add export T3CODE_TELEMETRY_ENABLED=false to your shell profile, which the desktop app reads, and T3CODE_TELEMETRY_ENABLED=false to ~/.t3/service.env, then restart T3 Code; the web and mobile apps still send their own relay traces and have no switch for them"
               },
               {
                 "checks": [
@@ -6019,14 +6103,14 @@
                     "passed": true
                   }
                 ],
-                "command": "Turn off Publish agent activity in Settings → Sharing & access"
+                "command": "Turn off Publish agent activity in Settings → Sharing & access; the telemetry variable does not cover it"
               }
             ]
           },
-          "id": "t3code:account-data",
-          "label": "Work shared with provider services",
+          "id": "t3code:usage-data",
+          "label": "Usage data sent to the vendor",
           "lens": "copies",
-          "statement": "T3CODE_TELEMETRY_ENABLED is not set; the installed app reads it and names ingest.t3.codes. T3 Code's FAQ says usage events (provider, model, token totals) are sent unless it is false.",
+          "statement": "Usage events to ingest.t3.codes: on by default. Sends each turn's provider, model, reasoning effort, permission mode, results, duration and token counts, which T3 forwards to PostHog. Identifier: an unsalted SHA-256 of your Codex account_id, else of Claude Code's userID, else of a random install id. Relay connection traces to us-east-1.aws.edge.axiom.co: on by default. Sends T3 Connect connection timings, environment ids, this machine's name and, when a connection fails, error messages and stack traces. Identifier: environment ids and the machine's name.",
           "tool": "t3code"
         }
       ],
@@ -6568,18 +6652,18 @@
           "value": 6
         },
         {
-          "detail": "40 from tool checks, 4 from checks of this machine",
-          "display": "44",
+          "detail": "39 from tool checks, 4 from checks of this machine",
+          "display": "43",
           "id": "signals",
           "label": "Signals to review",
-          "value": 44
+          "value": 43
         },
         {
-          "detail": "40 clear, 35 not checked because their input is not recorded for that tool (same checks as --doctor)",
-          "display": "43 of 118",
+          "detail": "41 clear, 47 not checked because their input is not recorded for that tool (same checks as --doctor)",
+          "display": "42 of 130",
           "id": "checks",
           "label": "Checks with a signal",
-          "value": 43
+          "value": 42
         },
         {
           "detail": "provider entries in 9 locations; 3 marked readable by other local accounts",
@@ -6648,7 +6732,7 @@
             "value": 4
           },
           {
-            "detail": "11 of 18 checks returned a signal, 4 not checked",
+            "detail": "11 of 20 checks returned a signal, 6 not checked",
             "display": "12",
             "id": "signals",
             "label": "Signals to review",
@@ -6706,7 +6790,7 @@
             "value": 4
           },
           {
-            "detail": "4 of 18 checks returned a signal, 7 not checked",
+            "detail": "4 of 20 checks returned a signal, 9 not checked",
             "display": "4",
             "id": "signals",
             "label": "Signals to review",
@@ -6764,7 +6848,7 @@
             "value": 1
           },
           {
-            "detail": "5 of 18 checks returned a signal, 5 not checked",
+            "detail": "5 of 20 checks returned a signal, 7 not checked",
             "display": "5",
             "id": "signals",
             "label": "Signals to review",
@@ -6822,7 +6906,7 @@
             "value": 0
           },
           {
-            "detail": "4 of 18 checks returned a signal, 8 not checked",
+            "detail": "4 of 20 checks returned a signal, 10 not checked",
             "display": "4",
             "id": "signals",
             "label": "Signals to review",
@@ -6880,11 +6964,11 @@
             "value": 3
           },
           {
-            "detail": "9 of 18 checks returned a signal, 5 not checked",
-            "display": "9",
+            "detail": "8 of 20 checks returned a signal, 8 not checked",
+            "display": "8",
             "id": "signals",
             "label": "Signals to review",
-            "value": 9
+            "value": 8
           },
           {
             "detail": "distinct values; 7 files scanned",
@@ -6938,7 +7022,7 @@
             "value": 1
           },
           {
-            "detail": "6 of 18 checks returned a signal, 6 not checked",
+            "detail": "6 of 20 checks returned a signal, 7 not checked",
             "display": "6",
             "id": "signals",
             "label": "Signals to review",
@@ -7238,13 +7322,6 @@
           "tone": "neutral"
         }
       ],
-      "pi:account-data": [
-        {
-          "badge": "manual step (not machine-checkable)",
-          "label": "manual step (not machine-checkable)",
-          "tone": "neutral"
-        }
-      ],
       "pi:autostart": [
         {
           "badge": "manual step (not machine-checkable)",
@@ -7316,18 +7393,6 @@
           "tone": "neutral"
         }
       ],
-      "t3code:account-data": [
-        {
-          "badge": "config keys confirmed in installed binary",
-          "label": "✓ config keys confirmed in installed binary",
-          "tone": "ok"
-        },
-        {
-          "badge": "config keys confirmed in installed binary",
-          "label": "✓ config keys confirmed in installed binary",
-          "tone": "ok"
-        }
-      ],
       "t3code:autostart": [
         {
           "badge": "manual step (not machine-checkable)",
@@ -7377,6 +7442,18 @@
         }
       ],
       "t3code:no-approval": [
+        {
+          "badge": "config keys confirmed in installed binary",
+          "label": "✓ config keys confirmed in installed binary",
+          "tone": "ok"
+        }
+      ],
+      "t3code:usage-data": [
+        {
+          "badge": "config keys confirmed in installed binary",
+          "label": "✓ config keys confirmed in installed binary",
+          "tone": "ok"
+        },
         {
           "badge": "config keys confirmed in installed binary",
           "label": "✓ config keys confirmed in installed binary",
@@ -7595,7 +7672,7 @@
         "Anything that runs as you can take all of them without a prompt, plus data files holding 2 secret-shaped values (distinct per tool).",
         "Claude Code, Claude Desktop, Codex CLI and T3 Code skip approval prompts in some sessions, so in those sessions a web page, repo file or tool result that steers the model can become code running on this machine.",
         "guest, another account on this machine, can already read or plant part of this.",
-        "Related data is also kept elsewhere: work shared with provider services.",
+        "Related data is also kept elsewhere: usage data sent to the vendor and work shared with provider services.",
         "6 of these credentials have no recorded expiry."
       ],
       "lenses": [
@@ -7863,13 +7940,8 @@
               "tool": "Claude Code"
             },
             {
-              "exposure_id": "pi:account-data",
-              "text": "enableAnalytics = True; enableInstallTelemetry = not set.",
-              "tool": "pi"
-            },
-            {
-              "exposure_id": "t3code:account-data",
-              "text": "T3CODE_TELEMETRY_ENABLED is not set; the installed app reads it and names ingest.t3.codes. T3 Code's FAQ says usage events (provider, model, token totals) are sent unless it is false.",
+              "exposure_id": "t3code:usage-data",
+              "text": "Usage events to ingest.t3.codes: on by default. Sends each turn's provider, model, reasoning effort, permission mode, results, duration and token counts, which T3 forwards to PostHog. Identifier: an unsalted SHA-256 of your Codex account_id, else of Claude Code's userID, else of a random install id. Relay connection traces to us-east-1.aws.edge.axiom.co: on by default. Sends T3 Connect connection timings, environment ids, this machine's name and, when a connection fails, error messages and stack traces. Identifier: environment ids and the machine's name.",
               "tool": "T3 Code"
             }
           ]
@@ -8030,7 +8102,7 @@
         "codex": 0,
         "host": 0,
         "opencode": 0,
-        "pi": 1,
+        "pi": 0,
         "t3code": 1
       },
       "model": {
@@ -8300,6 +8372,13 @@
               ]
             ],
             "text": ""
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "What usage data does it send, and with which id?",
+            "rows": [],
+            "text": "No usage data this tool sends its vendor is known to this audit."
           },
           {
             "headers": [
@@ -8687,6 +8766,13 @@
             "text": "No local evidence either way; check the provider's data settings."
           },
           {
+            "headers": [],
+            "links": [],
+            "question": "What usage data does it send, and with which id?",
+            "rows": [],
+            "text": "No usage data this tool sends its vendor is known to this audit."
+          },
+          {
             "headers": [
               "Fact",
               "Source"
@@ -8961,6 +9047,13 @@
             "question": "Is my data used for training, and what is copied to the cloud?",
             "rows": [],
             "text": "No local evidence either way; check the provider's data settings."
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "What usage data does it send, and with which id?",
+            "rows": [],
+            "text": "No usage data this tool sends its vendor is known to this audit."
           },
           {
             "headers": [
@@ -9244,6 +9337,13 @@
               ]
             ],
             "text": ""
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "What usage data does it send, and with which id?",
+            "rows": [],
+            "text": "No usage data this tool sends its vendor is known to this audit."
           },
           {
             "headers": [
@@ -9571,19 +9671,18 @@
             "text": "1 folder is trusted."
           },
           {
-            "headers": [
-              "Fact",
-              "Source"
-            ],
+            "headers": [],
             "links": [],
             "question": "Is my data used for training, and what is copied to the cloud?",
-            "rows": [
-              [
-                "enableAnalytics = True; enableInstallTelemetry = not set.",
-                "~/.pi/agent/settings.json"
-              ]
-            ],
-            "text": ""
+            "rows": [],
+            "text": "No local evidence either way; check the provider's data settings."
+          },
+          {
+            "headers": [],
+            "links": [],
+            "question": "What usage data does it send, and with which id?",
+            "rows": [],
+            "text": "No usage data this tool sends its vendor is known to this audit."
           },
           {
             "headers": [
@@ -9628,7 +9727,6 @@
           "pi holds 2 credentials for DeepSeek and OpenAI and 57 B of conversations and prompt history.",
           "Anything that runs as you can take all of them without a prompt.",
           "guest, another account on this machine, can already read or plant part of this.",
-          "Related data is also kept elsewhere: work shared with provider services.",
           "2 of these credentials have no recorded expiry."
         ],
         "lenses": [
@@ -9704,13 +9802,7 @@
           },
           {
             "lens": "copies",
-            "points": [
-              {
-                "exposure_id": "pi:account-data",
-                "text": "enableAnalytics = True; enableInstallTelemetry = not set.",
-                "tool": "pi"
-              }
-            ]
+            "points": []
           }
         ]
       },
@@ -9947,20 +10039,43 @@
             "text": "This tool keeps no trusted-folder list, or none are trusted."
           },
           {
+            "headers": [],
+            "links": [],
+            "question": "Is my data used for training, and what is copied to the cloud?",
+            "rows": [],
+            "text": "No local evidence either way; check the provider's data settings."
+          },
+          {
             "headers": [
               "Fact",
               "Source"
             ],
             "links": [],
-            "question": "Is my data used for training, and what is copied to the cloud?",
+            "question": "What usage data does it send, and with which id?",
             "rows": [
               [
-                "T3CODE_TELEMETRY_ENABLED is not set; the installed app reads it and names ingest.t3.codes.",
-                "markers in the installed app; environment and ~/.t3/service.env"
+                "Usage events to ingest.t3.codes: on by default.",
+                "markers in the installed binary; the environment and ~/.t3/service.env"
               ],
               [
-                "T3 Code's FAQ says usage events (provider, model, token totals) are sent unless it is false.",
-                "markers in the installed app; environment and ~/.t3/service.env"
+                "Sends each turn's provider, model, reasoning effort, permission mode, results, duration and token counts, which T3 forwards to PostHog.",
+                "markers in the installed binary; the environment and ~/.t3/service.env"
+              ],
+              [
+                "Identifier: an unsalted SHA-256 of your Codex account_id, else of Claude Code's userID, else of a random install id.",
+                "markers in the installed binary; the environment and ~/.t3/service.env"
+              ],
+              [
+                "Relay connection traces to us-east-1.aws.edge.axiom.co: on by default.",
+                "markers in the installed binary; the environment and ~/.t3/service.env"
+              ],
+              [
+                "Sends T3 Connect connection timings, environment ids, this machine's name and, when a connection fails, error messages and stack traces.",
+                "markers in the installed binary; the environment and ~/.t3/service.env"
+              ],
+              [
+                "Identifier: environment ids and the machine's name.",
+                "markers in the installed binary; the environment and ~/.t3/service.env"
               ]
             ],
             "text": ""
@@ -10005,7 +10120,7 @@
           "Anything that runs as you can take all of them without a prompt.",
           "T3 Code skips approval prompts in some sessions, so in those sessions a web page, repo file or tool result that steers the model can become code running on this machine.",
           "guest, another account on this machine, can already read or plant part of this.",
-          "Related data is also kept elsewhere: work shared with provider services.",
+          "Related data is also kept elsewhere: usage data sent to the vendor.",
           "1 of these credentials has no recorded expiry."
         ],
         "lenses": [
@@ -10063,8 +10178,8 @@
             "lens": "copies",
             "points": [
               {
-                "exposure_id": "t3code:account-data",
-                "text": "T3CODE_TELEMETRY_ENABLED is not set; the installed app reads it and names ingest.t3.codes. T3 Code's FAQ says usage events (provider, model, token totals) are sent unless it is false.",
+                "exposure_id": "t3code:usage-data",
+                "text": "Usage events to ingest.t3.codes: on by default. Sends each turn's provider, model, reasoning effort, permission mode, results, duration and token counts, which T3 forwards to PostHog. Identifier: an unsalted SHA-256 of your Codex account_id, else of Claude Code's userID, else of a random install id. Relay connection traces to us-east-1.aws.edge.axiom.co: on by default. Sends T3 Connect connection timings, environment ids, this machine's name and, when a connection fails, error messages and stack traces. Identifier: environment ids and the machine's name.",
                 "tool": "T3 Code"
               }
             ]
